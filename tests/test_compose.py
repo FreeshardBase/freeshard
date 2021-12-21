@@ -4,14 +4,14 @@ from pathlib import Path
 import gconf
 import yaml
 
-from portal_core.database import get_db
+from portal_core.database import apps_table
 from portal_core.model import InstallationReason
 from portal_core.service import compose
 
 
 def test_template(tempfile_path_config):
-	with get_db() as db:
-		db.table('apps').insert({
+	with apps_table() as apps:
+		apps.insert({
 			'name': 'foo-app',
 			'image': 'foo-app:latest',
 			'version': '1.2.3',
@@ -25,7 +25,7 @@ def test_template(tempfile_path_config):
 			},
 			'reason': InstallationReason.CUSTOM,
 		})
-		db.table('apps').insert({
+		apps.insert({
 			'name': 'bar-app',
 			'image': 'bar-app:latest',
 			'version': '4.5.6',
@@ -36,7 +36,7 @@ def test_template(tempfile_path_config):
 			},
 			'reason': InstallationReason.CUSTOM,
 		})
-		db.table('apps').insert({
+		apps.insert({
 			'name': 'baz-app',
 			'image': 'baz-app:latest',
 			'version': '1.2.3',

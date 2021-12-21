@@ -5,12 +5,12 @@ import requests
 from jinja2 import Template
 
 from portal_core.model import InstalledApp
-from portal_core.database import get_db
+from portal_core.database import apps_table
 
 
 def refresh_docker_compose():
-	with get_db() as db:
-		apps = [InstalledApp(**a) for a in db.table('apps').all()]
+	with apps_table() as apps:
+		apps = [InstalledApp(**a) for a in apps.all()]
 
 	for app in apps:
 		app_data_dir = Path(gconf.get('apps.app_data_dir')) / app.name

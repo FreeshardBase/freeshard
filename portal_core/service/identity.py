@@ -1,8 +1,10 @@
 import logging
 
+import gconf
 from tinydb import Query
 
 from portal_core import get_db, Identity
+from portal_core.database import identities_table
 
 log = logging.getLogger(__name__)
 
@@ -19,3 +21,13 @@ def init_default_identity():
 		else:
 			default_identity = db.table('identities').get(Query().is_default)
 		return default_identity
+
+
+def get_own_domain():
+	zone = gconf.get('dns.zone')
+	with identities_table() as identities:
+		default_identity = identities.get(Query.is_default)
+	prefix_length = gconf.get('dns.prefix length')
+	subdomain = default_identity.id[:prefix_length].lower()
+	domain = f'{subdomain}.{zone}'
+	return domain

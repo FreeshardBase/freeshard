@@ -3,6 +3,7 @@ from pathlib import Path
 
 import gconf
 from tinydb import TinyDB
+from tinydb.table import Table
 
 
 def init_database():
@@ -18,3 +19,15 @@ def init_database():
 def get_db() -> TinyDB:
 	with TinyDB(gconf.get('database.filename'), sort_keys=True, indent=2) as db_:
 		yield db_
+
+
+@contextmanager
+def apps_table() -> Table:
+	with get_db() as db:
+		yield db.table('apps')
+
+
+@contextmanager
+def identities_table() -> Table:
+	with get_db() as db:
+		yield db.table('identities')

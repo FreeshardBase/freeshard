@@ -10,7 +10,7 @@ import gconf
 from gitlab import Gitlab
 from tinydb import where
 
-from portal_core.database import get_db
+from portal_core.database import apps_table
 from portal_core.model import StoreApp, InstallationReason, AppToInstall
 from . import compose
 
@@ -28,8 +28,8 @@ def get_store_app(name) -> StoreApp:
 	app_dir = sync_dir / name
 	if not app_dir.exists():
 		raise KeyError(f'no app named {name}')
-	with get_db() as db:
-		is_installed = db.table('apps').contains(where('name') == name)
+	with apps_table() as apps:
+		is_installed = apps.contains(where('name') == name)
 	with open(app_dir / 'app.json') as f:
 		app = json.load(f)
 		assert (a := app['name']) == (d := app_dir.name), f'app with name {a} in directory with name {d}'
@@ -38,8 +38,8 @@ def get_store_app(name) -> StoreApp:
 
 def install_store_app(name: str):
 	app = get_store_app(name)
-	with get_db() as db:
-		db.table('apps').insert(AppToInstall(
+	with apps_table() as apps:
+		apps.insert(AppToInstall(
 			**app.dict(),
 			installation_reason=InstallationReason.STORE,
 		).dict())
