@@ -1,0 +1,82 @@
+image: docker:19.03.12
+
+stages:
+  - unittest
+  - build
+  - inttest
+  - release
+
+variables:
+  IMAGE_TAG_REF: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
+  IMAGE_TAG_VERSION: $CI_REGISTRY_IMAGE:$CI_COMMIT_TAG
+
+unittest:
+  stage: unittest
+  image: python:latest
+  services:
+    - name: rabbitmq:3-management-alpine
+      alias: rabbitmq
+    - name: registry.gitlab.com/ptl/identity_handler:develop
+      alias: identity_handler
+  variables:
+    GCONF_SERVICES_RABBITMQ_HOST: rabbitmq
+    GCONF_SERVICES_IDENTITY_HANDLER_HOST: identity_handler
+  script:
+    - pip install virtualenv
+    - virtualenv venv
+    - source venv/bin/activate
+    - pip install ".[dev]"
+    - cd tests
+    - pytest
+  tags:
+    - portal
+
+build:
+  stage: build
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker build --pull -t $IMAGE_TAG_REF .
+    - docker push $IMAGE_TAG_REF
+  tags:
+    - portal
+
+# todo: fix and enable
+# integration-test:
+#   stage: inttest
+#   image: curlimages/curl:7.74.0
+#   services:
+#     - name: $IMAGE_TAG_REF
+#       alias: ac
+#     - name: registry.gitlab.com/ptl/identity_handler:develop
+#       alias: identity_handler
+#   script:
+#     - curl -f ac/public/health
+
+release-image:
+  stage: release
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker pull $IMAGE_TAG_REF
+    - docker tag $IMAGE_TAG_REF $IMAGE_TAG_VERSION
+    - docker push $IMAGE_TAG_VERSION
+  rules:
+    - if: $CI_COMMIT_TAG
+  tags:
+    - portal
+
+pages:
+  stage: release
+  image: node:latest
+  services:
+    - name: $IMAGE_TAG_REF
+      alias: ac
+  script:
+    - npm install -g redoc-cli
+    - redoc-cli bundle -o public/index.html http://ac/openapi.json
+  artifacts:
+    paths:
+      - public
+  rules:
+      - if: $CI_COMMIT_TAG
+  tags:
+    - portal

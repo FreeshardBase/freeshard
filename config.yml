@@ -1,0 +1,22 @@
+database:
+  filename: /core/portal_core_db.json
+
+docker_compose:
+  compose_filename: /core/docker-compose-apps.yml
+
+apps:
+  app_data_dir: /app_data
+  app_store:
+    project_id: 25524454
+    sync_dir: /core/appstore
+  initial_apps:
+    filebrowser:
+      image: portalapps.azurecr.io/ptl-apps/filebrowser:master
+      port: 80
+      data_dirs:
+        - /data
+      authentication:
+        default_access: private
+
+log:
+  portal_core: debug

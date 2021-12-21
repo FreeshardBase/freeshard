@@ -1,0 +1,15 @@
+log:
+  app_controller: debug
+
+apps:
+  app_store:
+    project_id: 25524454
+  initial_apps:
+    app-foo:
+      image: bar
+      port: 80
+      data_dirs:
+        - /data
+        - /config
+      authentication:
+        default_access: private

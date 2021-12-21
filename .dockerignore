@@ -1,0 +1,6 @@
+.gitignore
+.gitlab-ci.yml
+Dockerfile
+*.sh
+venv
+tests

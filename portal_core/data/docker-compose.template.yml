@@ -1,0 +1,66 @@
+version: "3.5"
+
+networks:
+  portal:
+    name: portal
+
+{% macro router(suffix, paths, middleware, app) -%}
+      - traefik.http.routers.{{ app.name }}_{{ suffix }}.entrypoints=https
+      - traefik.http.routers.{{ app.name }}_{{ suffix }}.rule=Host(`{{ app.name }}.{{ portal.domain }}`){% if paths %} && (Host(`invalid`){% for path in paths %} || PathPrefix(`{{ path }}`){% endfor %}){% endif %}
+      - traefik.http.routers.{{ app.name }}_{{ suffix }}.tls=true
+      - traefik.http.routers.{{ app.name }}_{{ suffix }}.tls.certresolver=letsencrypt
+      - traefik.http.routers.{{ app.name }}_{{ suffix }}.tls.domains[0].main={{ portal.domain }}
+      - traefik.http.routers.{{ app.name }}_{{ suffix }}.tls.domains[0].sans=*.{{ portal.domain }}
+      - traefik.http.routers.{{ app.name }}_{{ suffix }}.middlewares={{ middleware }}@file
+      - traefik.http.routers.{{ app.name }}_{{ suffix }}.service={{ app.name }}
+{%- endmacro %}
+
+services:
+  {% for app in apps %}
+  {{ app.name }}:
+    image: {{ app.image }}
+    container_name: {{ app.name }}
+    restart: always
+
+    {% if app.data_dirs %}
+    volumes:
+      {% for data_dir in app.data_dirs %}
+      - /home/portal/user_data/app_data/{{ app.name }}/{{ data_dir }}:{{ data_dir }}
+      {% endfor %}
+    {% endif %}
+
+    {% if app.env_vars %}
+    environment:
+      {% for key, value in app.env_vars.items() %}
+      - {{ key }}={{ value }}
+      {% endfor %}
+    {% endif %}
+
+    networks:
+      - portal
+    labels:
+      - traefik.enable=true
+      - traefik.http.services.{{ app.name }}.loadbalancer.server.port={{ app.port }}
+
+      {% if not app.authentication or not app.authentication.default_access or app.authentication.default_access == 'private' %}
+
+      {{ router('private', [], 'auth-private', app) }}
+      {% if app.authentication and app.authentication.public_paths %}
+      {{ router('public', app.authentication.public_paths, 'auth-public', app) }}
+      {% endif %}
+      {% if app.authentication and app.authentication.peer_paths %}
+      {{ router('peer', app.authentication.peer_paths, 'auth-peer', app) }}
+      {% endif %}
+
+      {% elif app.authentication.default_access == 'public' %}
+
+      {{ router('public', [], 'auth-public', app) }}
+      {% if app.authentication.private_paths %}
+      {{ router('private', app.authentication.private_paths, 'auth-private', app) }}
+      {% endif %}
+      {% if app.authentication.peer_paths %}
+      {{ router('peer', app.authentication.peer_paths, 'auth-peer', app) }}
+      {% endif %}
+
+      {% endif %}
+  {% endfor %}
