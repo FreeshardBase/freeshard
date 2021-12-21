@@ -9,7 +9,7 @@ from portal_core.model import InstallationReason
 from portal_core.service import compose
 
 
-def test_template(tempfile_path_config, identity_handler_service):
+def test_template(tempfile_path_config):
 	with get_db() as db:
 		db.table('apps').insert({
 			'name': 'foo-app',

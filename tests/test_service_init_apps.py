@@ -1,7 +1,8 @@
 import gconf
 import pytest
 
-from portal_core import service, database, model
+from portal_core import database, model
+from portal_core.service import init_apps
 
 pytestmark = pytest.mark.usefixtures('init_db')
 
@@ -31,7 +32,7 @@ def test_add_init_app(init_db):
 		})
 
 	with gconf.override_conf(init_app_conf):
-		service.refresh_init_apps()
+		init_apps.refresh_init_apps()
 
 	with database.get_db() as db:
 		app_names = {a['name'] for a in db.table('apps').all()}

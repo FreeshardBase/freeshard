@@ -10,9 +10,9 @@ import gconf
 from gitlab import Gitlab
 from tinydb import where
 
-from portal_core import service
 from portal_core.database import get_db
 from portal_core.model import StoreApp, InstallationReason, AppToInstall
+from . import compose
 
 log = logging.getLogger(__name__)
 
@@ -43,12 +43,12 @@ def install_store_app(name: str):
 			**app.dict(),
 			installation_reason=InstallationReason.STORE,
 		).dict())
-		app_store.refresh_docker_compose()
-	service.refresh_docker_compose()
+		compose.refresh_docker_compose()
+	compose.refresh_docker_compose()
 
 
 def refresh_app_store(ref: str = None):
-	log.info(f'refreshing app store with ref {ref}')
+	log.debug(f'refreshing app store with ref {ref}')
 	fs_sync_dir = Path(gconf.get('apps.app_store.sync_dir'))
 
 	apps_project = Gitlab('https://gitlab.com').projects.get(gconf.get('apps.app_store.project_id'))

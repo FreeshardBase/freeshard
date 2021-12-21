@@ -18,6 +18,7 @@ setup(
 		'tinydb',
 		'uvicorn',
 		'fastapi',
+		'pydantic',
 		'Jinja2',
 		'docker',
 		'python-gitlab',

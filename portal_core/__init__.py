@@ -28,12 +28,12 @@ def create_app():
 	compose.refresh_docker_compose()
 	log.debug('launched docker-compose')
 
-	app_meta = metadata('app_controller')
+	app_meta = metadata('portal_core')
 	app = FastAPI(
-		title='App Controller',
+		title='Portal Core',
 		description=app_meta['summary'],
 		version=app_meta['version'],
-		redoc_url='/',
+		redoc_url='/redoc',
 	)
 	app.include_router(public.router)
 	app.include_router(protected.router)
