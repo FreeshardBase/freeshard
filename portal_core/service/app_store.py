@@ -11,7 +11,7 @@ from gitlab import Gitlab
 from tinydb import where
 
 from portal_core.database import apps_table
-from portal_core.model import StoreApp, InstallationReason, AppToInstall
+from portal_core.model.app import StoreApp, InstallationReason, AppToInstall
 from . import compose
 
 log = logging.getLogger(__name__)

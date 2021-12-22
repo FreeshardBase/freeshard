@@ -1,5 +1,9 @@
+dns:
+  zone: p.getportal.org
+  prefix length: 6
+
 log:
-  app_controller: debug
+  portal_core: debug
 
 apps:
   app_store:

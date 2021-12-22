@@ -2,7 +2,7 @@ import gconf
 from tinydb import where
 
 from portal_core.database import apps_table
-from portal_core.model import InstallationReason, InstalledApp, AppToInstall
+from portal_core.model.app import InstallationReason, InstalledApp, AppToInstall
 
 
 def refresh_init_apps():

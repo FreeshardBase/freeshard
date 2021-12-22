@@ -2,7 +2,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import gconf
-from tinydb import TinyDB
+from tinydb import TinyDB, Query
 from tinydb.table import Table
 
 
@@ -31,3 +31,31 @@ def apps_table() -> Table:
 def identities_table() -> Table:
 	with get_db() as db:
 		yield db.table('identities')
+
+
+@contextmanager
+def terminals_table() -> Table:
+	with get_db() as db:
+		yield db.table('terminals')
+
+
+def get_value(key: str):
+	with get_db() as db:
+		if result := db.get(Query.key == key):
+			return result
+		else:
+			raise KeyError(key)
+
+
+def set_value(key: str, value):
+	with get_db() as db:
+		db.upsert({
+			'key': key,
+			'value': value,
+		}, Query.key == key)
+
+
+def remove_value(key: str):
+	with get_db() as db:
+		removed_ids = db.remove(Query.key == key)
+	return len(removed_ids) > 0

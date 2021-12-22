@@ -1,11 +1,12 @@
 from pathlib import Path
 
 import gconf
-import requests
 from jinja2 import Template
+from tinydb import Query
 
-from portal_core.model import InstalledApp
-from portal_core.database import apps_table
+from portal_core.database import apps_table, identities_table
+from portal_core.model.app import InstalledApp
+from portal_core.model.identity import Identity
 
 
 def refresh_docker_compose():
@@ -27,8 +28,13 @@ def root_path():
 
 
 def write_docker_compose(apps, output_path: Path):
-	ih_host = gconf.get('services.identity_handler.host')
-	portal = requests.get(f'http://{ih_host}/public/meta/whoareyou').json()
+	with identities_table() as identities:
+		default_identity = Identity(**identities.get(Query().is_default == True))
+	portal = {
+		'domain': default_identity.domain,
+		'id': default_identity.id,
+		'public_key_pem': default_identity.public_key_pem,
+	}
 
 	template_path = root_path() / 'data' / 'docker-compose.template.yml'
 	template = Template(template_path.read_text())

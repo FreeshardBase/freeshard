@@ -15,7 +15,7 @@ from tinydb import where
 
 from portal_core.service import compose
 from portal_core.database import apps_table
-from portal_core.model import InstallationReason, InstalledApp, App
+from portal_core.model.app import InstallationReason, InstalledApp, App
 
 log = logging.getLogger(__name__)
 

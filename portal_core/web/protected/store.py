@@ -5,7 +5,7 @@ from fastapi import APIRouter, status
 from pydantic import BaseModel
 
 from portal_core import service
-from portal_core.model import StoreApp, StoreAppOverview
+from portal_core.model.app import StoreApp, StoreAppOverview
 
 log = logging.getLogger(__name__)
 

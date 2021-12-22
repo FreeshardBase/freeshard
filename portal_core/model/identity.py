@@ -1,3 +1,6 @@
+from typing import Optional
+
+import gconf
 from common_py import crypto
 from pydantic import BaseModel
 
@@ -5,7 +8,7 @@ from pydantic import BaseModel
 class Identity(BaseModel):
 	id: str
 	name: str
-	description: str
+	description: Optional[str]
 	private_key: str
 	is_default: bool = False
 
@@ -33,3 +36,12 @@ class Identity(BaseModel):
 	@property
 	def public_key_pem(self) -> str:
 		return self.public_key.to_bytes().decode()
+
+	@property
+	def domain(self) -> str:
+		zone = gconf.get('dns.zone')
+		prefix_length = gconf.get('dns.prefix length')
+		subdomain = self.id[:prefix_length].lower()
+		domain = f'{subdomain}.{zone}'
+		return domain
+

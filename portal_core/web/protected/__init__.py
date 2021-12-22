@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from . import apps, store
+from . import apps, identities, store
 
 router = APIRouter(
 	prefix='/protected',
@@ -8,4 +8,5 @@ router = APIRouter(
 )
 
 router.include_router(apps.router)
+router.include_router(identities.router)
 router.include_router(store.router)

@@ -26,7 +26,7 @@ class OutputWhoAreYou(BaseModel):
 @router.get('/whoareyou', response_model=OutputWhoAreYou)
 def who_are_you():
 	with identities_table() as identities:
-		default_identity = identities.get(Query.is_default)
+		default_identity = identities.get(Query().is_default)
 	return OutputWhoAreYou(
 		status='OK',
 		domain=identity.get_own_domain(),
