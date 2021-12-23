@@ -2,15 +2,19 @@ from typing import Optional
 
 import gconf
 from common_py import crypto
-from pydantic import BaseModel
+
+from portal_core.model.util import PropertyBaseModel
 
 
-class Identity(BaseModel):
+class Identity(PropertyBaseModel):
 	id: str
 	name: str
 	description: Optional[str]
 	private_key: str
 	is_default: bool = False
+
+	class Config:
+		fields = {'public_key': {'exclude': True}}
 
 	def __str__(self):
 		return f'Identity[{self.short_id}, {self.name}]'
@@ -26,7 +30,7 @@ class Identity(BaseModel):
 		)
 
 	@property
-	def short_id(self):
+	def short_id(self) -> str:
 		return self.id[0:6]
 
 	@property

@@ -1,6 +1,7 @@
 import pytest
 
 from portal_core.model.identity import Identity
+from portal_core.web.protected.identities import OutputIdentity
 
 pytestmark = pytest.mark.usefixtures('tempfile_path_config')
 
@@ -13,7 +14,7 @@ def test_add_and_get(api_client):
 	assert response.status_code == 200
 	result = response.json()
 	assert len(result) == 2
-	result_i = Identity(**(result[1]))
+	result_i = OutputIdentity(**(result[1]))
 	assert result_i.name == i.name
 
 
