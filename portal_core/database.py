@@ -39,6 +39,12 @@ def terminals_table() -> Table:
 		yield db.table('terminals')
 
 
+@contextmanager
+def peers_table() -> Table:
+	with get_db() as db:
+		yield db.table('peers')
+
+
 def get_value(key: str):
 	with get_db() as db:
 		if result := db.get(Query.key == key):
