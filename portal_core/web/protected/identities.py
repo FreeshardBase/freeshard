@@ -8,6 +8,7 @@ from tinydb.table import Table
 
 from portal_core.database import identities_table
 from portal_core.model.identity import Identity
+from portal_core.service import identity as identity_service
 
 log = logging.getLogger(__name__)
 
@@ -38,6 +39,21 @@ def list_all_identities(name: str = None):
 			return identities.all()
 
 
+@router.get('/default', response_model=OutputIdentity)
+def get_default_identity():
+	with identities_table() as identities:
+		return identities.get(Query().is_default == True)
+
+
+@router.get('/{name}', response_model=OutputIdentity)
+def get_identity_by_name(name):
+	with identities_table() as identities:
+		if i := identities.get(Query().name == name):
+			return i
+		else:
+			raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+
 @router.post('', response_model=OutputIdentity, status_code=status.HTTP_201_CREATED)
 def add_identity(i: InputIdentity):
 	with identities_table() as identities:  # type: Table
@@ -50,19 +66,9 @@ def add_identity(i: InputIdentity):
 			return new_identity
 
 
-@router.get('/default', response_model=OutputIdentity)
-def get_default_identity():
-	return persistence.get_default_identity()
-
-
-@router.get('/{name_prefix}', response_model=OutputIdentity)
-def get_identity_by_name(name_prefix: str):
-	return persistence.find_identity_by_name(name_prefix)
-
-
 @router.post('/{name}/make-default', status_code=status.HTTP_204_NO_CONTENT)
 def make_identity_default(name):
-	i = persistence.find_identity_by_name(name)
-	persistence.make_identity_default(i)
-	pubsub.publish('identity.modify', i, as_=OutputIdentity)
-	log.info(f'set as default {i}')
+	try:
+		identity_service.make_default(name)
+	except KeyError:
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
