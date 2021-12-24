@@ -14,7 +14,7 @@ def load_gconf():
 def tempfile_path_config(tmp_path):
 	print(f'\nUsing temp path: {tmp_path}')
 	override = {
-		'database': {'filename': tmp_path / 'app_controller_db.json'},
+		'database': {'filename': tmp_path / 'portal_core_db.json'},
 		'apps': {
 			'app_data_dir': tmp_path / 'app_data',
 			'app_store': {'sync_dir': tmp_path / 'app_store'},

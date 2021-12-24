@@ -16,8 +16,11 @@ setup(
 	install_requires=[
 		'gconf',
 		'tinydb',
+		'tinydb-serialization',
 		'uvicorn',
 		'fastapi',
+		'pyjwt',
+		'pydantic',
 		'Jinja2',
 		'docker',
 		'python-gitlab',

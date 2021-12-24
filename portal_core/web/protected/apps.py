@@ -13,9 +13,9 @@ from fastapi import APIRouter, status, HTTPException
 from fastapi.responses import StreamingResponse
 from tinydb import where
 
-from portal_core import service
-from portal_core.database import get_db
-from portal_core.model import InstallationReason, InstalledApp, App
+from portal_core.service import compose
+from portal_core.database import apps_table
+from portal_core.model.app import InstallationReason, InstalledApp, App
 
 log = logging.getLogger(__name__)
 
@@ -26,8 +26,8 @@ router = APIRouter(
 
 @router.get('', response_model=List[InstalledApp])
 def list_all_apps():
-	with get_db() as db:
-		apps = [InstalledApp(**a) for a in db.table('apps').all()]
+	with apps_table() as apps:
+		apps = [InstalledApp(**a) for a in apps.all()]
 	docker_client = DockerClient(base_url='unix://var/run/docker.sock')
 	containers = {c.name: c for c in docker_client.containers.list(all=True)}
 	for app in apps:
@@ -68,19 +68,19 @@ def get_app_icon(name: str):
 
 @router.post('', status_code=status.HTTP_201_CREATED)
 def install_app(input_app: App):
-	with get_db() as db:
-		db.table('apps').insert({
+	with apps_table() as apps:
+		apps.insert({
 			**input_app.dict(),
 			'reason': InstallationReason.CUSTOM,
 		})
-		service.refresh_docker_compose()
+		compose.refresh_docker_compose()
 
 
 @router.delete('/{name}', status_code=status.HTTP_204_NO_CONTENT)
 def uninstall_app(name: str):
-	with get_db() as db:
-		db.table('apps').remove(where('name') == name)
-	service.refresh_docker_compose()
+	with apps_table() as apps:
+		apps.remove(where('name') == name)
+	compose.refresh_docker_compose()
 
 
 def _get_metadata_tar(name) -> tarfile.TarFile:

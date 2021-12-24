@@ -2,7 +2,7 @@ import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
-pytestmark = pytest.mark.usefixtures('tempfile_path_config', 'identity_handler_service')
+pytestmark = pytest.mark.usefixtures('tempfile_path_config')
 
 
 def test_get_initial_apps(api_client: TestClient):
