@@ -2,11 +2,14 @@ import logging
 from datetime import datetime
 from typing import List
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, status, HTTPException
 from pydantic import BaseModel
+from tinydb import Query
+from tinydb.table import Table
 
-from identity_handler import persistence, service
-from identity_handler.service import pubsub
+from portal_core.database import terminals_table
+from portal_core.service import pairing
+from portal_core.model.terminal import Terminal
 
 log = logging.getLogger(__name__)
 
@@ -15,46 +18,35 @@ router = APIRouter(
 )
 
 
-class Terminal(BaseModel):
-	id: str
-	name: str
-	description: str = None
-
-	class Config:
-		orm_mode = True
-		getter_dict = persistence.util.PeeweeGetterDict
-
-
 class PairingCode(BaseModel):
 	code: str
 	created: datetime
 	valid_until: datetime
 
-	class Config:
-		orm_mode = True
-
 
 @router.get('', response_model=List[Terminal])
 def list_all_terminals():
-	return list(persistence.get_all_terminals())
+	with terminals_table() as terminals:  # type: Table
+		return terminals.all()
 
 
 @router.get('/name/{name}', response_model=Terminal)
 def get_terminal_by_name(name: str):
-	t = persistence.find_terminal_by_name(name)
-	return t
+	with terminals_table() as terminals:
+		if t := terminals.get(Query().name == name):
+			return t
+		else:
+			raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
 
-@router.delete('/id/{id}', status_code=status.HTTP_204_NO_CONTENT)
-def delete_terminal_by_id(id: str):
-	deleted_terminal = persistence.delete_terminal_by_id(id)
-	pubsub.publish('terminal.delete', deleted_terminal, as_=Terminal)
-	log.info(f'deleted {deleted_terminal}')
+@router.delete('/id/{id_}', status_code=status.HTTP_204_NO_CONTENT)
+def delete_terminal_by_id(id_: str):
+	with terminals_table() as terminals:  # type: Table
+		terminals.remove(Query().id == id_)
 
 
 @router.get('/pairing-code', response_model=PairingCode, status_code=status.HTTP_201_CREATED)
 def new_pairing_code(deadline: int = None):
-	pairing_code = service.make_pairing_code(deadline=deadline)
-	pubsub.publish('pairing_code.new', '')
+	pairing_code = pairing.make_pairing_code(deadline=deadline)
 	log.info('created new terminal pairing code')
 	return pairing_code

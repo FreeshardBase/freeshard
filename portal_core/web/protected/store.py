@@ -4,8 +4,8 @@ from typing import List, Optional
 from fastapi import APIRouter, status
 from pydantic import BaseModel
 
-from portal_core import service
 from portal_core.model.app import StoreApp, StoreAppOverview
+from portal_core.service import app_store
 
 log = logging.getLogger(__name__)
 
@@ -23,17 +23,17 @@ class AppOverview(BaseModel):
 
 @router.get('/apps', response_model=List[StoreAppOverview])
 def get_apps():
-	return service.get_store_apps()
+	return app_store.get_store_apps()
 
 
 @router.get('/apps/{name}', response_model=StoreApp)
 def get_app_details(name: str):
-	return service.get_store_app(name)
+	return app_store.get_store_app(name)
 
 
 @router.post('/apps/{name}', status_code=status.HTTP_201_CREATED)
 def install_app(name: str):
-	service.install_store_app(name)
+	app_store.install_store_app(name)
 
 
 @router.post('/ref')
@@ -42,4 +42,4 @@ def switch_store_ref(ref: Optional[str] = None):
 	Refresh the local app store at a certain ref of the underlying git repo.
 	If ref is missing, use `master`.
 	"""
-	service.refresh_app_store(ref=ref)
+	app_store.refresh_app_store(ref=ref)

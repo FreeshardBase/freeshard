@@ -2,8 +2,10 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import gconf
-from tinydb import TinyDB, Query
+from tinydb import TinyDB, Query, JSONStorage
 from tinydb.table import Table
+from tinydb_serialization import SerializationMiddleware
+from tinydb_serialization.serializers import DateTimeSerializer
 
 
 def init_database():
@@ -17,7 +19,10 @@ def init_database():
 
 @contextmanager
 def get_db() -> TinyDB:
-	with TinyDB(gconf.get('database.filename'), sort_keys=True, indent=2) as db_:
+	serialization = SerializationMiddleware(JSONStorage)
+	serialization.register_serializer(DateTimeSerializer(), 'TinyDate')
+
+	with TinyDB(gconf.get('database.filename'), storage=serialization, sort_keys=True, indent=2) as db_:
 		yield db_
 
 
@@ -47,8 +52,8 @@ def peers_table() -> Table:
 
 def get_value(key: str):
 	with get_db() as db:
-		if result := db.get(Query.key == key):
-			return result
+		if result := db.get(Query().key == key):
+			return result['value']
 		else:
 			raise KeyError(key)
 
@@ -58,10 +63,10 @@ def set_value(key: str, value):
 		db.upsert({
 			'key': key,
 			'value': value,
-		}, Query.key == key)
+		}, Query().key == key)
 
 
 def remove_value(key: str):
 	with get_db() as db:
-		removed_ids = db.remove(Query.key == key)
+		removed_ids = db.remove(Query().key == key)
 	return len(removed_ids) > 0

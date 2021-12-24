@@ -38,7 +38,7 @@ def make_pairing_code(deadline: int = None):
 
 def redeem_pairing_code(incoming_code: str):
 	try:
-		existing_pairing_code: PairingCode = database.get_value(STORE_KEY_PAIRING_CODE)
+		existing_pairing_code = PairingCode(**database.get_value(STORE_KEY_PAIRING_CODE))
 	except KeyError:
 		raise InvalidPairingCode('no pairing code was issued yet')
 	if existing_pairing_code.code != incoming_code:

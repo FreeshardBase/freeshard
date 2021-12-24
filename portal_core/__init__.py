@@ -11,7 +11,7 @@ from . import database
 from .database import get_db
 from .model.identity import Identity
 from .service import app_store, init_apps, compose, identity
-from .web import public, protected
+from .web import internal, public, protected
 
 log = logging.getLogger(__name__)
 
@@ -42,6 +42,7 @@ def create_app():
 		version=app_meta['version'],
 		redoc_url='/redoc',
 	)
+	app.include_router(internal.router)
 	app.include_router(public.router)
 	app.include_router(protected.router)
 

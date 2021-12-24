@@ -1,8 +1,7 @@
 import logging
 
 from fastapi import HTTPException, APIRouter, Cookie, Response, status
-
-from identity_handler import service
+from portal_core.service import pairing
 
 log = logging.getLogger(__name__)
 
@@ -15,8 +14,8 @@ def authenticate_terminal(response: Response, authorization: str = Cookie(None))
 		raise HTTPException(status.HTTP_401_UNAUTHORIZED)
 
 	try:
-		terminal = service.verify_terminal_jwt(authorization)
-	except service.InvalidJwt:
+		terminal = pairing.verify_terminal_jwt(authorization)
+	except pairing.InvalidJwt:
 		raise HTTPException(status.HTTP_401_UNAUTHORIZED)
 	else:
 		response.headers['X-Ptl-Client-Type'] = 'terminal'

@@ -16,6 +16,7 @@ setup(
 	install_requires=[
 		'gconf',
 		'tinydb',
+		'tinydb-serialization',
 		'uvicorn',
 		'fastapi',
 		'pyjwt',

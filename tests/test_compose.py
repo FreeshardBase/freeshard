@@ -5,7 +5,7 @@ import gconf
 import yaml
 
 from portal_core.database import apps_table
-from portal_core.model import InstallationReason
+from portal_core.model.app import InstallationReason
 from portal_core.service import compose
 
 
