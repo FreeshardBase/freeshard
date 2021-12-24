@@ -2,7 +2,9 @@ import gconf
 import pytest
 
 from portal_core import database, model
+from portal_core.database import apps_table
 from portal_core.service import init_apps
+from portal_core.model.app import InstallationReason
 
 pytestmark = pytest.mark.usefixtures('init_db')
 
@@ -20,7 +22,7 @@ def test_add_init_app(init_db):
 				'description': f'this is {name}',
 				'image': f'image-{name}',
 				'port': 1,
-				'installation_reason': model.InstallationReason.CONFIG,
+				'installation_reason': InstallationReason.CONFIG,
 			})
 
 		apps.insert({
@@ -28,12 +30,12 @@ def test_add_init_app(init_db):
 			'description': 'this is app-boo',
 			'image': 'image-app-boo',
 			'port': 1,
-			'installation_reason': model.InstallationReason.CUSTOM,
+			'installation_reason': InstallationReason.CUSTOM,
 		})
 
 	with gconf.override_conf(init_app_conf):
 		init_apps.refresh_init_apps()
 
-	with database.get_db() as db:
+	with apps_table() as apps:
 		app_names = {a['name'] for a in apps.all()}
 	assert app_names == {'app-foo', 'app-bar', 'app-boo'}

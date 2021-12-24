@@ -5,9 +5,10 @@ from pydantic import BaseModel
 
 from tinydb import Query
 
-from ..dependencies import AuthValues
+from portal_core.web.dependencies import AuthValues
 from portal_core.database import identities_table
-from ...service import identity
+from portal_core.model.identity import Identity
+from portal_core.service import identity
 
 log = logging.getLogger(__name__)
 
@@ -26,10 +27,10 @@ class OutputWhoAreYou(BaseModel):
 @router.get('/whoareyou', response_model=OutputWhoAreYou)
 def who_are_you():
 	with identities_table() as identities:
-		default_identity = identities.get(Query().is_default)
+		default_identity = Identity(**identities.get(Query().is_default == True))
 	return OutputWhoAreYou(
 		status='OK',
-		domain=identity.get_own_domain(),
+		domain=default_identity.domain,
 		id=default_identity.id,
 		public_key_pem=default_identity.public_key_pem,
 	)

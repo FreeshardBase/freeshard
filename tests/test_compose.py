@@ -2,14 +2,18 @@ import re
 from pathlib import Path
 
 import gconf
+import pytest
 import yaml
 
 from portal_core.database import apps_table
 from portal_core.model.app import InstallationReason
-from portal_core.service import compose
+from portal_core.service import compose, identity
+
+pytestmark = pytest.mark.usefixtures('tempfile_path_config')
 
 
-def test_template(tempfile_path_config):
+def test_template():
+	identity.init_default_identity()
 	with apps_table() as apps:
 		apps.insert({
 			'name': 'foo-app',
@@ -54,7 +58,7 @@ def test_template(tempfile_path_config):
 	assert (Path(gconf.get('apps.app_data_dir')) / 'foo-app' / 'user_data' / 'bar').is_dir()
 
 	with open(gconf.get('docker_compose.compose_filename'), 'r') as f:
-		output = yaml.load(f)
+		output = yaml.safe_load(f)
 		baz_app = output['services']['baz-app']
 		assert 'baz-env=foo' in baz_app['environment']
 		assert any(re.search('url=https://.*\.p\.getportal\.org/baz', e) for e in baz_app['environment'])
