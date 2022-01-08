@@ -13,14 +13,6 @@ variables:
 unittest:
   stage: unittest
   image: python:latest
-  services:
-    - name: rabbitmq:3-management-alpine
-      alias: rabbitmq
-    - name: registry.gitlab.com/ptl/identity_handler:develop
-      alias: identity_handler
-  variables:
-    GCONF_SERVICES_RABBITMQ_HOST: rabbitmq
-    GCONF_SERVICES_IDENTITY_HANDLER_HOST: identity_handler
   script:
     - pip install virtualenv
     - virtualenv venv
@@ -69,10 +61,10 @@ pages:
   image: node:latest
   services:
     - name: $IMAGE_TAG_REF
-      alias: ac
+      alias: ptlcore
   script:
     - npm install -g redoc-cli
-    - redoc-cli bundle -o public/index.html http://ac/openapi.json
+    - redoc-cli bundle -o public/index.html http://ptlcore/openapi.json
   artifacts:
     paths:
       - public
