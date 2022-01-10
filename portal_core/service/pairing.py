@@ -12,6 +12,7 @@ from tinydb.table import Table
 
 from portal_core import database
 from portal_core.database import terminals_table
+from portal_core.model.terminal import Terminal
 
 STORE_KEY_JWT_SECRET = 'terminal_jwt_secret'
 STORE_KEY_PAIRING_CODE = 'pairing_code'
@@ -77,7 +78,7 @@ def verify_terminal_jwt(token: str):
 
 	with terminals_table() as terminals:  # type: Table
 		if terminal := terminals.get(Query().id == decoded_token['sub']):
-			return terminal
+			return Terminal(**terminal)
 		else:
 			raise InvalidJwt
 

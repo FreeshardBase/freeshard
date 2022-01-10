@@ -8,7 +8,7 @@ from tinydb import Query
 from portal_core.web.dependencies import AuthValues
 from portal_core.database import identities_table
 from portal_core.model.identity import Identity
-from portal_core.service import identity
+from portal_core.service import pairing
 
 log = logging.getLogger(__name__)
 
@@ -52,8 +52,8 @@ def who_am_i(authorization: str = Cookie(None)):
 		return OutputWhoAmI.anonymous()
 
 	try:
-		terminal = service.verify_terminal_jwt(authorization)
-	except service.InvalidJwt:
+		terminal = pairing.verify_terminal_jwt(authorization)
+	except pairing.InvalidJwt:
 		return OutputWhoAmI.anonymous()
 	else:
 		return OutputWhoAmI(
