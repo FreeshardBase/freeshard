@@ -40,7 +40,6 @@ def test_add_delete(api_client):
 	assert len(response.json()) == 0
 
 
-@pytest.mark.skip
 def test_pairing_happy(api_client):
 	# get a pairing code
 	pairing_code = _get_pairing_code(api_client)
@@ -145,25 +144,23 @@ def test_authorization_wrong_header_prefix(api_client):
 	assert response.status_code == 401
 
 
-@pytest.mark.skip
 def test_authorization_invalid_token(api_client):
 	pairing_code = _get_pairing_code(api_client)
 	response = _add_terminal(api_client, pairing_code['code'], 'T1')
 	assert response.status_code == 201
 	token = response.cookies['authorization']
 	invalid_token = token[:-1]
-	response = api_client.get('internal/authenticate', cookies={'authorization': invalid_token})
+	response = api_client.get('internal/authenticate_terminal', cookies={'authorization': invalid_token})
 	assert response.status_code == 401
 
 
-@pytest.mark.skip
 def test_authorization_deleted_terminal(api_client):
 	t_name = 'T1'
 	pairing_code = _get_pairing_code(api_client)
 	response = _add_terminal(api_client, pairing_code['code'], t_name)
 	assert response.status_code == 201
 
-	response = api_client.get('internal/authenticate')
+	response = api_client.get('internal/authenticate_terminal')
 	assert response.status_code == status.HTTP_200_OK
 
 	response = api_client.get(f'protected/terminals/name/{t_name}')
@@ -171,5 +168,5 @@ def test_authorization_deleted_terminal(api_client):
 	t_id = response.json()['id']
 	_delete_terminal(api_client, t_id)
 
-	response = api_client.get('internal/authenticate')
+	response = api_client.get('internal/authenticate_terminal')
 	assert response.status_code == 401

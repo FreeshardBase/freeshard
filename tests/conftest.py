@@ -32,4 +32,10 @@ def init_db(tempfile_path_config):
 
 @pytest.fixture
 def api_client(init_db) -> TestClient:
-	yield TestClient(portal_core.create_app())
+	app = portal_core.create_app()
+
+	# Cookies are scoped for the domain, so we have configure the TestClient with it.
+	# This way, the TestClient remembers cookies
+	whoareyou = TestClient(app).get('public/meta/whoareyou').json()
+	domain = whoareyou['domain'][:6].lower()
+	yield TestClient(app, base_url=f'https://{domain}.p.getportal.org')
