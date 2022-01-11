@@ -50,6 +50,12 @@ def peers_table() -> Table:
 		yield db.table('peers')
 
 
+@contextmanager
+def tours_table() -> Table:
+	with get_db() as db:
+		yield db.table('tours')
+
+
 def get_value(key: str):
 	with get_db() as db:
 		if result := db.get(Query().key == key):
