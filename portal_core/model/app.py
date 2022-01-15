@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Union
 
 from pydantic import BaseModel
 
@@ -21,6 +21,12 @@ class Status(str, Enum):
 	RUNNING = 'running'
 
 
+class DataDir(BaseModel):
+	path: str
+	uid: int
+	gid: int
+
+
 class Authentication(BaseModel):
 	default_access: DefaultAccess = DefaultAccess.PRIVATE
 	public_paths: Optional[List[str]]
@@ -33,7 +39,7 @@ class App(BaseModel):
 	description: str = 'n/a'
 	image: str
 	port: int
-	data_dirs: Optional[List[str]]
+	data_dirs: Optional[List[Union[str, DataDir]]]
 	env_vars: Optional[Dict[str, str]]
 	authentication: Optional[Authentication]
 
@@ -54,4 +60,3 @@ class StoreAppOverview(BaseModel):
 	name: str
 	description: str
 	is_installed: bool
-

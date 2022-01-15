@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 
 import gconf
@@ -16,8 +17,13 @@ def refresh_docker_compose():
 	for app in apps:
 		app_data_dir = Path(gconf.get('apps.app_data_dir')) / app.name
 		for data_dir in app.data_dirs or []:
-			dir_ = (app_data_dir / str(data_dir).strip('/ '))
-			dir_.mkdir(exist_ok=True, parents=True)
+			if isinstance(data_dir, str):
+				dir_ = (app_data_dir / str(data_dir).strip('/ '))
+				dir_.mkdir(exist_ok=True, parents=True)
+			else:
+				dir_ = (app_data_dir / str(data_dir.path).strip('/ '))
+				dir_.mkdir(exist_ok=True, parents=True)
+				shutil.chown(dir_, user=data_dir.uid, group=data_dir.gid)
 
 	docker_compose_filename = gconf.get('docker_compose.compose_filename')
 	write_docker_compose(apps, docker_compose_filename)
