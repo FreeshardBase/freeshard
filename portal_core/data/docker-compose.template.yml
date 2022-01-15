@@ -25,7 +25,11 @@ services:
     {% if app.data_dirs %}
     volumes:
       {% for data_dir in app.data_dirs %}
+      {% if data_dir is string %}
       - /home/portal/user_data/app_data/{{ app.name }}/{{ data_dir }}:{{ data_dir }}
+      {% else %}
+      - /home/portal/user_data/app_data/{{ app.name }}/{{ data_dir.path }}:{{ data_dir.path }}
+      {% endif %}
       {% endfor %}
     {% endif %}
 
