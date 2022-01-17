@@ -21,6 +21,10 @@ apps:
         - /data
       authentication:
         default_access: private
+        public_paths:
+          - /share/
+          - /static/
+          - /api/public/
 
 log:
   portal_core: debug
