@@ -21,6 +21,10 @@ class Status(str, Enum):
 	RUNNING = 'running'
 
 
+class Service(str, Enum):
+	POSTGRES = 'postgres'
+
+
 class DataDir(BaseModel):
 	path: str
 	uid: int
@@ -41,6 +45,7 @@ class App(BaseModel):
 	port: int
 	data_dirs: Optional[List[Union[str, DataDir]]]
 	env_vars: Optional[Dict[str, str]]
+	services: Optional[List[Service]]
 	authentication: Optional[Authentication]
 
 
