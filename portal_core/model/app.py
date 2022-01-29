@@ -25,6 +25,16 @@ class Service(str, Enum):
 	POSTGRES = 'postgres'
 
 
+class Postgres(BaseModel):
+	connection_string: str
+	userspec: str
+	user: str
+	password: str
+	hostspec: str
+	host: str
+	port: int
+
+
 class DataDir(BaseModel):
 	path: str
 	uid: int
@@ -55,6 +65,7 @@ class AppToInstall(App):
 
 class InstalledApp(AppToInstall):
 	status: str = Status.UNKNOWN
+	postgres: Postgres | None
 
 
 class StoreApp(App):

@@ -71,6 +71,10 @@ def test_postgres_is_setup(postgres):
             'version': '1.2.3',
             'port': 2,
             'services': ['postgres'],
+            'env_vars': {
+                'pg_user': '{{apps["postgres-app"].postgres.user}}',
+                'pg_password': '{{apps["postgres-app"].postgres.password}}'
+            },
             'reason': InstallationReason.CUSTOM,
         })
 
@@ -90,3 +94,9 @@ def test_postgres_is_setup(postgres):
             assert ('postgres-app',) in dbs
             current_db = cur.execute('SELECT current_database()').fetchall()
             assert ('postgres-app',) in current_db
+
+    with open(gconf.get('docker_compose.compose_filename'), 'r') as f:
+        output = yaml.safe_load(f)
+        postgres_app = output['services']['postgres-app']
+        assert 'pg_user=postgres-app' in postgres_app['environment']
+        assert 'pg_password=foo' in postgres_app['environment']

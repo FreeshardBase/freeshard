@@ -9,7 +9,7 @@ from psycopg.conninfo import make_conninfo
 from tinydb import Query
 
 from portal_core.database import apps_table, identities_table
-from portal_core.model.app import InstalledApp, Service
+from portal_core.model.app import InstalledApp, Service, Postgres
 from portal_core.model.identity import Identity
 
 
@@ -39,7 +39,9 @@ def create_data_dirs(app):
 
 def setup_services(app: InstalledApp):
 	if app.services and Service.POSTGRES in app.services:
-		connection_string = make_conninfo('', **gconf.get('services.postgres'))
+		pg_conf = gconf.get('services.postgres')
+		password = 'foo'
+		connection_string = make_conninfo('', **pg_conf)
 		with psycopg.connect(connection_string) as conn:
 			with conn.cursor() as cur:
 				cur.execute(sql.SQL('''
@@ -47,7 +49,7 @@ def setup_services(app: InstalledApp):
 					WITH PASSWORD {}
 				''').format(
 					sql.Identifier(app.name),
-					sql.Literal('foo')
+					sql.Literal(password)
 				))
 		with psycopg.connect(connection_string, autocommit=True) as conn:
 			with conn.cursor() as cur:
@@ -58,6 +60,15 @@ def setup_services(app: InstalledApp):
 					sql.Identifier(app.name),
 					sql.Identifier(app.name)
 				))
+		app.postgres = Postgres(
+			connection_string=f'postgres://{app.name}:{password}@{pg_conf["host"]}:{pg_conf["port"]}',
+			userspec=f'{app.name}:{password}',
+			user=app.name,
+			password=password,
+			hostspec=f'{pg_conf["host"]}:{pg_conf["port"]}',
+			host=pg_conf['host'],
+			port=pg_conf['port'],
+		)
 
 
 def root_path():
@@ -76,7 +87,7 @@ def write_docker_compose(apps, output_path: Path):
 	template_path = root_path() / 'data' / 'docker-compose.template.yml'
 	template = Template(template_path.read_text())
 	render_pass_one = template.render(apps=apps, portal=portal)
-	render_pass_two = Template(render_pass_one).render(portal=portal)
+	render_pass_two = Template(render_pass_one).render(apps={app.name: app for app in apps}, portal=portal)
 	with open(output_path, 'w') as f:
 		f.write('# == DO NOT MODIFY ==\n# this file is auto-generated\n\n')
 		f.write(remove_empty_lines(render_pass_two))
