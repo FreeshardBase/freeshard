@@ -5,6 +5,7 @@ import gconf
 import psycopg
 from jinja2 import Template
 from psycopg import sql
+from psycopg.conninfo import make_conninfo
 from tinydb import Query
 
 from portal_core.database import apps_table, identities_table
@@ -38,7 +39,8 @@ def create_data_dirs(app):
 
 def setup_services(app: InstalledApp):
 	if app.services and Service.POSTGRES in app.services:
-		with psycopg.connect(gconf.get('services.postgres.connection_string')) as conn:
+		connection_string = make_conninfo('', **gconf.get('services.postgres'))
+		with psycopg.connect(connection_string) as conn:
 			with conn.cursor() as cur:
 				cur.execute(sql.SQL('''
 					CREATE USER {}
@@ -47,7 +49,7 @@ def setup_services(app: InstalledApp):
 					sql.Identifier(app.name),
 					sql.Literal('foo')
 				))
-		with psycopg.connect(gconf.get('services.postgres.connection_string'), autocommit=True) as conn:
+		with psycopg.connect(connection_string, autocommit=True) as conn:
 			with conn.cursor() as cur:
 				cur.execute(sql.SQL('''
 					CREATE DATABASE {}

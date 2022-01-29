@@ -3,6 +3,7 @@ import psycopg
 import pytest
 import pytest_docker.plugin
 from fastapi.testclient import TestClient
+from psycopg.conninfo import make_conninfo
 
 import portal_core
 
@@ -45,7 +46,7 @@ def api_client(init_db) -> TestClient:
 
 @pytest.fixture(scope='session')
 def postgres(docker_services: pytest_docker.plugin.Services):
-	postgres_conn_string = gconf.get('services.postgres.connection_string')
+	postgres_conn_string = make_conninfo('', **gconf.get('services.postgres'))
 
 	def check():
 		try:

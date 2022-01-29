@@ -5,6 +5,7 @@ import gconf
 import psycopg
 import pytest
 import yaml
+from psycopg.conninfo import make_conninfo
 
 from portal_core.database import apps_table
 from portal_core.model.app import InstallationReason
@@ -75,7 +76,17 @@ def test_postgres_is_setup(postgres):
 
     compose.refresh_docker_compose()
 
-    with psycopg.connect(gconf.get('services.postgres.connection_string')) as conn:
+    admin_connection_string = make_conninfo('', **gconf.get('services.postgres'))
+    with psycopg.connect(admin_connection_string) as conn:
         with conn.cursor() as cur:
             dbs = cur.execute('SELECT datname FROM pg_database')
             assert ('postgres-app',) in dbs
+
+    app_connection_string = make_conninfo(admin_connection_string, user='postgres-app', password='foo')
+    with psycopg.connect(app_connection_string) as conn:
+        with conn.cursor() as cur:
+            dbs = list(cur.execute('SELECT datname FROM pg_database'))
+            print(dbs)
+            assert ('postgres-app',) in dbs
+            current_db = cur.execute('SELECT current_database()').fetchall()
+            assert ('postgres-app',) in current_db
