@@ -1,5 +1,7 @@
 import gconf
+import psycopg
 import pytest
+import pytest_docker.plugin
 from fastapi.testclient import TestClient
 
 import portal_core
@@ -7,7 +9,7 @@ import portal_core
 
 @pytest.fixture(scope='session', autouse=True)
 def load_gconf():
-	gconf.load('config.yml')
+	gconf.load('../config.yml', 'config.yml')
 
 
 @pytest.fixture
@@ -39,3 +41,24 @@ def api_client(init_db) -> TestClient:
 	whoareyou = TestClient(app).get('public/meta/whoareyou').json()
 	domain = whoareyou['domain'][:6].lower()
 	yield TestClient(app, base_url=f'https://{domain}.p.getportal.org')
+
+
+@pytest.fixture(scope='session')
+def postgres(docker_services: pytest_docker.plugin.Services):
+	postgres_conn_string = gconf.get('services.postgres.connection_string')
+
+	def check():
+		try:
+			conn = psycopg.connect(postgres_conn_string)
+		except psycopg.OperationalError as e:
+			print(e)
+			return False
+		else:
+			conn.close()
+			return True
+
+	docker_services.wait_until_responsive(
+		timeout=60.0, pause=1, check=check
+	)
+	return postgres_conn_string
+

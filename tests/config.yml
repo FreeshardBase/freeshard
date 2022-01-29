@@ -1,14 +1,10 @@
-dns:
-  zone: p.getportal.org
-  prefix length: 6
-
-log:
-  portal_core: debug
+services:
+  postgres:
+    connection_string: 'postgresql://postgres:postgres@localhost:5432'
 
 apps:
-  app_store:
-    project_id: 25524454
   initial_apps:
+    filebrowser: null
     app-foo:
       image: bar
       port: 80

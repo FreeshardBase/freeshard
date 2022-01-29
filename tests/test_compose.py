@@ -2,6 +2,7 @@ import re
 from pathlib import Path
 
 import gconf
+import psycopg
 import pytest
 import yaml
 
@@ -58,3 +59,23 @@ def test_template_is_written():
         baz_app = output['services']['baz-app']
         assert 'baz-env=foo' in baz_app['environment']
         assert any(re.search('url=https://.*\.p\.getportal\.org/baz', e) for e in baz_app['environment'])
+
+
+def test_postgres_is_setup(postgres):
+    identity.init_default_identity()
+    with apps_table() as apps:
+        apps.insert({
+            'name': 'postgres-app',
+            'image': 'postgres-app:latest',
+            'version': '1.2.3',
+            'port': 2,
+            'services': ['postgres'],
+            'reason': InstallationReason.CUSTOM,
+        })
+
+    compose.refresh_docker_compose()
+
+    with psycopg.connect(gconf.get('services.postgres.connection_string')) as conn:
+        with conn.cursor() as cur:
+            dbs = cur.execute('SELECT datname FROM pg_database')
+            assert ('postgres-app',) in dbs

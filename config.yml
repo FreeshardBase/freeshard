@@ -8,6 +8,10 @@ dns:
 docker_compose:
   compose_filename: /core/docker-compose-apps.yml
 
+services:
+  postgres:
+    connection_string: 'postgresql://postgres:postgres@postgres:5432'
+
 apps:
   app_data_dir: /app_data
   app_store:
