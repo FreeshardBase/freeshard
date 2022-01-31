@@ -39,9 +39,12 @@ def create_data_dirs(app):
 
 def setup_services(app: InstalledApp):
 	if app.services and Service.POSTGRES in app.services:
-		pg_conf = gconf.get('services.postgres')
+		pg_host = gconf.get('services.postgres.host')
+		pg_port = gconf.get('services.postgres.port')
+		pg_user = gconf.get('services.postgres.user')
+		pg_password = gconf.get('services.postgres.password')
 		password = 'foo'
-		connection_string = make_conninfo('', **pg_conf)
+		connection_string = make_conninfo('', host=pg_host, port=pg_port, user=pg_user, password=pg_password)
 		with psycopg.connect(connection_string) as conn:
 			with conn.cursor() as cur:
 				cur.execute(sql.SQL('''
@@ -61,13 +64,13 @@ def setup_services(app: InstalledApp):
 					sql.Identifier(app.name)
 				))
 		app.postgres = Postgres(
-			connection_string=f'postgres://{app.name}:{password}@{pg_conf["host"]}:{pg_conf["port"]}',
+			connection_string=f'postgres://{app.name}:{password}@{pg_host}:{pg_port}',
 			userspec=f'{app.name}:{password}',
 			user=app.name,
 			password=password,
-			hostspec=f'{pg_conf["host"]}:{pg_conf["port"]}',
-			host=pg_conf['host'],
-			port=pg_conf['port'],
+			hostspec=f'{pg_host}:{pg_port}',
+			host=pg_host,
+			port=pg_port,
 		)
 
 

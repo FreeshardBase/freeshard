@@ -50,7 +50,12 @@ def api_client(init_db) -> TestClient:
 
 @pytest.fixture(scope='session')
 def postgres(request):
-	postgres_conn_string = make_conninfo('', **gconf.get('services.postgres'))
+	pg_host = gconf.get('services.postgres.host')
+	pg_port = gconf.get('services.postgres.port')
+	pg_user = gconf.get('services.postgres.user')
+	pg_password = gconf.get('services.postgres.password')
+	postgres_conn_string = make_conninfo('', host=pg_host, port=pg_port, user=pg_user, password=pg_password)
+
 	print(f'Postgres connection: {postgres_conn_string}')
 
 	if gconf.get('services.postgres.host') == 'localhost':
