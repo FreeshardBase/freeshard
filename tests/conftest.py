@@ -1,11 +1,15 @@
+import logging
+from time import sleep
+
 import gconf
 import psycopg
 import pytest
-import pytest_docker.plugin
 from fastapi.testclient import TestClient
 from psycopg.conninfo import make_conninfo
 
 import portal_core
+
+log = logging.getLogger(__name__)
 
 
 @pytest.fixture(scope='session', autouse=True)
@@ -45,21 +49,23 @@ def api_client(init_db) -> TestClient:
 
 
 @pytest.fixture(scope='session')
-def postgres(docker_services: pytest_docker.plugin.Services):
+def postgres(request):
 	postgres_conn_string = make_conninfo('', **gconf.get('services.postgres'))
+	print(f'Postgres connection: {postgres_conn_string}')
 
-	def check():
+	if gconf.get('services.postgres.host') == 'localhost':
+		request.getfixturevalue('docker_services')
+
+	for i in range(60):
 		try:
+			sleep(1)
 			conn = psycopg.connect(postgres_conn_string)
 		except psycopg.OperationalError as e:
-			print(e)
-			return False
+			pass
 		else:
 			conn.close()
-			return True
+			break
+	else:
+		raise TimeoutError('Postgres did not start in time')
 
-	docker_services.wait_until_responsive(
-		timeout=60.0, pause=1, check=check
-	)
 	return postgres_conn_string
-

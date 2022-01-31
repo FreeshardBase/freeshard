@@ -9,6 +9,7 @@ stages:
 variables:
   IMAGE_TAG_REF: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
   IMAGE_TAG_VERSION: $CI_REGISTRY_IMAGE:$CI_COMMIT_TAG
+  POSTGRES_HOST_AUTH_METHOD: trust
 
 unittest:
   stage: unittest
@@ -24,7 +25,7 @@ unittest:
     - name: postgres:14-alpine
       alias: postgres
   variables:
-    GCONF_SERVICES_POSTGRES_PASSWORD: postgres
+    GCONF_SERVICES_POSTGRES_HOST: postgres
   tags:
     - portal
 
