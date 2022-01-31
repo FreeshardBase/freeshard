@@ -80,7 +80,12 @@ def test_postgres_is_setup(postgres):
 
     compose.refresh_docker_compose()
 
-    admin_connection_string = make_conninfo('', **gconf.get('services.postgres'))
+    pg_host = gconf.get('services.postgres.host')
+    pg_port = gconf.get('services.postgres.port')
+    pg_user = gconf.get('services.postgres.user')
+    pg_password = gconf.get('services.postgres.password')
+
+    admin_connection_string = make_conninfo('', host=pg_host, port=pg_port, user=pg_user, password=pg_password)
     with psycopg.connect(admin_connection_string) as conn:
         with conn.cursor() as cur:
             dbs = cur.execute('SELECT datname FROM pg_database')

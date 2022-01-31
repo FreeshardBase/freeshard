@@ -66,7 +66,7 @@ def postgres(request):
 			sleep(1)
 			conn = psycopg.connect(postgres_conn_string)
 		except psycopg.OperationalError as e:
-			pass
+			print(e)
 		else:
 			conn.close()
 			break
