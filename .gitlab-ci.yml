@@ -20,6 +20,11 @@ unittest:
     - pip install ".[dev]"
     - cd tests
     - pytest
+  services:
+    - name: postgres:14-alpine
+      alias: postgres
+  variables:
+    GCONF_SERVICES_POSTGRES_PASSWORD: postgres
   tags:
     - portal
 

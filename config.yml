@@ -13,7 +13,7 @@ services:
     host: postgres
     port: 5432
     user: postgres
-    password: postgres
+    password: ES9BOPusdVKoydq6
 
 apps:
   app_data_dir: /app_data
