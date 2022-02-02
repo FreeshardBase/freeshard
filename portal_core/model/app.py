@@ -65,7 +65,7 @@ class AppToInstall(App):
 
 class InstalledApp(AppToInstall):
 	status: str = Status.UNKNOWN
-	postgres: Postgres | None
+	postgres: Union[Postgres, None]
 
 
 class StoreApp(App):

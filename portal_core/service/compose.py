@@ -64,7 +64,7 @@ def setup_services(app: InstalledApp):
 					sql.Identifier(app.name)
 				))
 		app.postgres = Postgres(
-			connection_string=f'postgres://{app.name}:{password}@{pg_host}:{pg_port}',
+			connection_string=f'postgres://{app.name}:{password}@{pg_host}:{pg_port}/{app.name}',
 			userspec=f'{app.name}:{password}',
 			user=app.name,
 			password=password,
