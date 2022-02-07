@@ -1,4 +1,5 @@
 import shutil
+from contextlib import suppress
 from pathlib import Path
 
 import gconf
@@ -6,6 +7,7 @@ import psycopg
 from jinja2 import Template
 from psycopg import sql
 from psycopg.conninfo import make_conninfo
+from psycopg.errors import DuplicateObject, DuplicateDatabase
 from tinydb import Query
 
 from portal_core.database import apps_table, identities_table
@@ -47,22 +49,24 @@ def setup_services(app: InstalledApp):
 		connection_string = make_conninfo('', host=pg_host, port=pg_port, user=pg_user, password=pg_password)
 		with psycopg.connect(connection_string) as conn:
 			with conn.cursor() as cur:
-				cur.execute(sql.SQL('''
-					CREATE USER {}
-					WITH PASSWORD {}
-				''').format(
-					sql.Identifier(app.name),
-					sql.Literal(password)
-				))
+				with suppress(DuplicateObject):
+					cur.execute(sql.SQL('''
+						CREATE USER {}
+						WITH PASSWORD {}
+					''').format(
+						sql.Identifier(app.name),
+						sql.Literal(password)
+					))
 		with psycopg.connect(connection_string, autocommit=True) as conn:
 			with conn.cursor() as cur:
-				cur.execute(sql.SQL('''
-					CREATE DATABASE {}
-					WITH OWNER {}
-				''').format(
-					sql.Identifier(app.name),
-					sql.Identifier(app.name)
-				))
+				with suppress(DuplicateDatabase):
+					cur.execute(sql.SQL('''
+						CREATE DATABASE {}
+						WITH OWNER {}
+					''').format(
+						sql.Identifier(app.name),
+						sql.Identifier(app.name)
+					))
 		app.postgres = Postgres(
 			connection_string=f'postgres://{app.name}:{password}@{pg_host}:{pg_port}/{app.name}',
 			userspec=f'{app.name}:{password}',
