@@ -43,7 +43,6 @@ def install_store_app(name: str):
 			**app.dict(),
 			installation_reason=InstallationReason.STORE,
 		).dict())
-		compose.refresh_docker_compose()
 	compose.refresh_docker_compose()
 
 
