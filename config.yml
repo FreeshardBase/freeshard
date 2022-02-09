@@ -8,6 +8,13 @@ dns:
 docker_compose:
   compose_filename: /core/docker-compose-apps.yml
 
+services:
+  postgres:
+    host: postgres
+    port: 5432
+    user: postgres
+    password: ES9BOPusdVKoydq6
+
 apps:
   app_data_dir: /app_data
   app_store:

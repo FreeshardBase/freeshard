@@ -21,6 +21,20 @@ class Status(str, Enum):
 	RUNNING = 'running'
 
 
+class Service(str, Enum):
+	POSTGRES = 'postgres'
+
+
+class Postgres(BaseModel):
+	connection_string: str
+	userspec: str
+	user: str
+	password: str
+	hostspec: str
+	host: str
+	port: int
+
+
 class DataDir(BaseModel):
 	path: str
 	uid: int
@@ -41,6 +55,7 @@ class App(BaseModel):
 	port: int
 	data_dirs: Optional[List[Union[str, DataDir]]]
 	env_vars: Optional[Dict[str, str]]
+	services: Optional[List[Service]]
 	authentication: Optional[Authentication]
 
 
@@ -50,6 +65,7 @@ class AppToInstall(App):
 
 class InstalledApp(AppToInstall):
 	status: str = Status.UNKNOWN
+	postgres: Union[Postgres, None]
 
 
 class StoreApp(App):
