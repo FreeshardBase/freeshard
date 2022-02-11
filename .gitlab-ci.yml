@@ -66,10 +66,10 @@ pages:
   image: node:latest
   services:
     - name: $IMAGE_TAG_REF
-      alias: ptlcore
+      alias: portal_core
   script:
     - npm install -g redoc-cli
-    - redoc-cli bundle -o public/index.html http://ptlcore/openapi.json
+    - redoc-cli bundle -o public/index.html http://portal_core/openapi.json
   artifacts:
     paths:
       - public
