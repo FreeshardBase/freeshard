@@ -75,6 +75,7 @@ def setup_services(app: InstalledApp):
 			hostspec=f'{pg_host}:{pg_port}',
 			host=pg_host,
 			port=pg_port,
+			database=app.name,
 		)
 
 
