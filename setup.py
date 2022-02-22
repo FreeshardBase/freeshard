@@ -25,6 +25,7 @@ setup(
 		'docker',
 		'python-gitlab',
 		'psycopg[binary]',
+		'cachetools',
 		'common_py @ git+https://app_controller:MzJwN_VwwEyVmtj22LXx@gitlab.com/ptl/common_py.git',
 	],
 	extras_require={
