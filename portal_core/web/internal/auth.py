@@ -38,26 +38,29 @@ def authenticate_and_authorize(
 		x_forwarded_host: str = Header(None),
 		x_forwarded_uri: str = Header(None),
 ):
-	log.debug(f'auth attempt for host {x_forwarded_host}, uri {x_forwarded_uri}')
 	app_name = x_forwarded_host.split('.')[0]
 	app = get_app(app_name)
 	if not app:
+		log.debug(f'denied auth for {x_forwarded_host}{x_forwarded_uri} -> unknown app')
 		raise HTTPException(status.HTTP_404_NOT_FOUND)
 	access = _determine_access(x_forwarded_uri, app)
 	header_template_values = {}
 
 	if access.access == Access.PRIVATE:
 		if not authorization:
+			log.debug(f'denied auth for {x_forwarded_host}{x_forwarded_uri} -> no auth token')
 			raise HTTPException(status.HTTP_401_UNAUTHORIZED)
 		try:
 			terminal = pairing.verify_terminal_jwt(authorization)
 			header_template_values['client_id'] = terminal.id
 			header_template_values['client_name'] = terminal.name
 		except pairing.InvalidJwt:
+			log.debug(f'denied auth for {x_forwarded_host}{x_forwarded_uri} -> invalid auth token')
 			raise HTTPException(status.HTTP_401_UNAUTHORIZED)
 
 	for header_key, header_template in access.headers.items():
 		response.headers[header_key] = Template(header_template).render(header_template_values)
+	log.debug(f'granted auth for {x_forwarded_host}{x_forwarded_uri} with headers {response.headers.items()}')
 
 
 @cached(cache=TTLCache(maxsize=32, ttl=3))
