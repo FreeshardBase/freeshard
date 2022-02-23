@@ -1,5 +1,6 @@
 import gconf
 from tinydb import where
+from tinydb.table import Table
 
 from portal_core.database import apps_table
 from portal_core.model.app import InstallationReason, InstalledApp, AppToInstall
@@ -7,7 +8,7 @@ from portal_core.model.app import InstallationReason, InstalledApp, AppToInstall
 
 def refresh_init_apps():
 	configured_init_apps = {k: v for k, v in gconf.get('apps.initial_apps').items() if v}
-	with apps_table() as apps:
+	with apps_table() as apps:  # type: Table
 		installed_init_apps = [InstalledApp(**a) for a
 			in apps.search(where('installation_reason') == InstallationReason.CONFIG)]
 

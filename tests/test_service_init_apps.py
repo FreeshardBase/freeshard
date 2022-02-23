@@ -23,6 +23,12 @@ def test_add_init_app(init_db):
 				'image': f'image-{name}',
 				'port': 1,
 				'installation_reason': InstallationReason.CONFIG,
+				'authentication': {
+					'default_access': 'private',
+					'peer_paths': None,
+					'private_paths': None,
+					'public_paths': ['/pub']
+				}
 			})
 
 		apps.insert({

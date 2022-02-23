@@ -24,7 +24,7 @@ def migrate_0_0_to_1_0(app_json: dict) -> dict:
 			}}
 
 		with suppress(KeyError):
-			for public_path in authentication['public_paths']:
+			for public_path in authentication['public_paths'] or []:
 				app_json['paths'][public_path] = {
 					'access': 'public',
 					'headers': {
@@ -32,7 +32,7 @@ def migrate_0_0_to_1_0(app_json: dict) -> dict:
 					}
 				}
 		with suppress(KeyError):
-			for private_path in authentication['private_paths']:
+			for private_path in authentication['private_paths'] or []:
 				app_json['paths'][private_path] = {
 					'access': 'private',
 					'headers': {
