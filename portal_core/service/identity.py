@@ -3,8 +3,8 @@ import logging
 from tinydb import Query
 from tinydb.table import Table
 
-from portal_core import get_db, Identity
-from portal_core.database import identities_table
+from portal_core import Identity
+from portal_core.database.database import identities_table, get_db
 
 log = logging.getLogger(__name__)
 

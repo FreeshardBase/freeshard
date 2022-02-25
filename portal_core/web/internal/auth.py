@@ -6,7 +6,7 @@ from jinja2 import Template
 from tinydb import Query
 from tinydb.table import Table
 
-from portal_core.database import apps_table
+from portal_core.database.database import apps_table
 from portal_core.model.app import InstalledApp, Access
 from portal_core.model.app import Path
 from portal_core.service import pairing

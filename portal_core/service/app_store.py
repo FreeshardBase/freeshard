@@ -10,7 +10,7 @@ import gconf
 from gitlab import Gitlab
 from tinydb import where
 
-from portal_core.database import apps_table
+from portal_core.database.database import apps_table
 from portal_core.model.app import StoreApp, InstallationReason, AppToInstall
 from . import compose
 

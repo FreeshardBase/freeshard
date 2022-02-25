@@ -7,8 +7,7 @@ import gconf
 import jinja2
 from fastapi import FastAPI
 
-from . import database
-from .database import get_db
+from portal_core.database import database
 from .model.identity import Identity
 from .service import app_store, init_apps, compose, identity
 from .web import internal, public, protected

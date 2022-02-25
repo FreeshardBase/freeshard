@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from tinydb import Query
 from tinydb.table import Table
 
-from portal_core.database import peers_table
+from portal_core.database.database import peers_table
 
 log = logging.getLogger(__name__)
 
