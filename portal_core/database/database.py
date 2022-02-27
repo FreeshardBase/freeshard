@@ -1,3 +1,4 @@
+import logging
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -7,6 +8,8 @@ from tinydb.table import Table
 from tinydb_serialization import SerializationMiddleware
 from tinydb_serialization.serializers import DateTimeSerializer
 
+log = logging.getLogger(__name__)
+
 
 def init_database():
 	file = Path(gconf.get('database.filename'))
@@ -15,6 +18,9 @@ def init_database():
 	if not file.exists():
 		file.parent.mkdir(parents=True, exist_ok=True)
 		file.touch()
+		log.info(f'initialized database at {file}')
+	else:
+		log.debug(f'database already exists at {file}')
 
 
 @contextmanager
