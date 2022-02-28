@@ -48,6 +48,7 @@ def test_migration(init_db):
 				'access': 'private',
 				'headers': {
 					'X-Ptl-Client-Id': '{{ client_id }}',
+					'X-Ptl-Client-Name': '{{ client_name }}',
 					'X-Ptl-Client-Type': 'terminal'
 				}
 			},

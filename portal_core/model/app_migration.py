@@ -12,7 +12,8 @@ def migrate_0_0_to_1_0(app_json: dict) -> dict:
 				'access': 'private',
 				'headers': {
 					'X-Ptl-Client-Type': 'terminal',
-					'X-Ptl-Client-Id': '{{ client_id }}'
+					'X-Ptl-Client-Id': '{{ client_id }}',
+					'X-Ptl-Client-Name': '{{ client_name }}'
 				}
 			}}
 		elif authentication['default_access'] == 'public':
@@ -24,14 +25,6 @@ def migrate_0_0_to_1_0(app_json: dict) -> dict:
 			}}
 
 		with suppress(KeyError):
-			for public_path in authentication['public_paths'] or []:
-				app_json['paths'][public_path] = {
-					'access': 'public',
-					'headers': {
-						'X-Ptl-Client-Type': 'public'
-					}
-				}
-		with suppress(KeyError):
 			for private_path in authentication['private_paths'] or []:
 				app_json['paths'][private_path] = {
 					'access': 'private',
@@ -39,6 +32,15 @@ def migrate_0_0_to_1_0(app_json: dict) -> dict:
 						'X-Ptl-Client-Type': 'terminal',
 						'X-Ptl-Client-Id': '{{ client_id }}',
 						'X-Ptl-Client-Name': '{{ client_name }}'
+					}
+				}
+
+		with suppress(KeyError):
+			for public_path in authentication['public_paths'] or []:
+				app_json['paths'][public_path] = {
+					'access': 'public',
+					'headers': {
+						'X-Ptl-Client-Type': 'public'
 					}
 				}
 		del app_json['authentication']

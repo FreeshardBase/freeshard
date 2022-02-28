@@ -23,7 +23,7 @@ def migrate_all():
 				apps.remove(doc_ids=[app.doc_id])
 				installed_app = InstalledApp(**app)
 				apps.insert(installed_app.dict())
-				log.info(f'migrated app {installed_app.name} to version {TARGET_VERSION}')
+				log.info(f'migrated app {installed_app.name} to app.json format version {TARGET_VERSION}')
 			else:
 				log.debug(f'app {installed_app.name} is already at version {TARGET_VERSION}')
 
