@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from tinydb import Query
 from tinydb.table import Table
 
-from portal_core.database import identities_table
+from portal_core.database.database import identities_table
 from portal_core.model.identity import Identity
 from portal_core.service import identity as identity_service
 

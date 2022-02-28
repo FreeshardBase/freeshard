@@ -2,7 +2,7 @@ import pytest
 
 from portal_core.service import app_store
 
-pytestmark = pytest.mark.usefixtures('tempfile_path_config', 'api_client')
+pytestmark = pytest.mark.usefixtures('api_client')
 
 
 def test_install():

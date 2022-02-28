@@ -4,17 +4,6 @@ networks:
   portal:
     name: portal
 
-{% macro router(suffix, paths, middleware, app) -%}
-      - traefik.http.routers.{{ app.name }}_{{ suffix }}.entrypoints=https
-      - traefik.http.routers.{{ app.name }}_{{ suffix }}.rule=Host(`{{ app.name }}.{{ portal.domain }}`){% if paths %} && (Host(`invalid`){% for path in paths %} || PathPrefix(`{{ path }}`){% endfor %}){% endif %}
-      - traefik.http.routers.{{ app.name }}_{{ suffix }}.tls=true
-      - traefik.http.routers.{{ app.name }}_{{ suffix }}.tls.certresolver=letsencrypt
-      - traefik.http.routers.{{ app.name }}_{{ suffix }}.tls.domains[0].main={{ portal.domain }}
-      - traefik.http.routers.{{ app.name }}_{{ suffix }}.tls.domains[0].sans=*.{{ portal.domain }}
-      - traefik.http.routers.{{ app.name }}_{{ suffix }}.middlewares={{ middleware }}@file
-      - traefik.http.routers.{{ app.name }}_{{ suffix }}.service={{ app.name }}
-{%- endmacro %}
-
 services:
   {% for app in apps %}
   {{ app.name }}:
@@ -45,26 +34,12 @@ services:
     labels:
       - traefik.enable=true
       - traefik.http.services.{{ app.name }}.loadbalancer.server.port={{ app.port }}
-
-      {% if not app.authentication or not app.authentication.default_access or app.authentication.default_access == 'private' %}
-
-      {{ router('private', [], 'auth-private', app) }}
-      {% if app.authentication and app.authentication.public_paths %}
-      {{ router('public', app.authentication.public_paths, 'auth-public', app) }}
-      {% endif %}
-      {% if app.authentication and app.authentication.peer_paths %}
-      {{ router('peer', app.authentication.peer_paths, 'auth-peer', app) }}
-      {% endif %}
-
-      {% elif app.authentication.default_access == 'public' %}
-
-      {{ router('public', [], 'auth-public', app) }}
-      {% if app.authentication.private_paths %}
-      {{ router('private', app.authentication.private_paths, 'auth-private', app) }}
-      {% endif %}
-      {% if app.authentication.peer_paths %}
-      {{ router('peer', app.authentication.peer_paths, 'auth-peer', app) }}
-      {% endif %}
-
-      {% endif %}
+      - traefik.http.routers.{{ app.name }}_router.entrypoints=https
+      - traefik.http.routers.{{ app.name }}_router.rule=Host(`{{ app.name }}.{{ portal.domain }}`)
+      - traefik.http.routers.{{ app.name }}_router.tls=true
+      - traefik.http.routers.{{ app.name }}_router.tls.certresolver=letsencrypt
+      - traefik.http.routers.{{ app.name }}_router.tls.domains[0].main={{ portal.domain }}
+      - traefik.http.routers.{{ app.name }}_router.tls.domains[0].sans=*.{{ portal.domain }}
+      - traefik.http.routers.{{ app.name }}_router.middlewares=auth@file
+      - traefik.http.routers.{{ app.name }}_router.service={{ app.name }}
   {% endfor %}

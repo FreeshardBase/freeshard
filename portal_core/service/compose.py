@@ -10,7 +10,7 @@ from psycopg.conninfo import make_conninfo
 from psycopg.errors import DuplicateObject, DuplicateDatabase
 from tinydb import Query
 
-from portal_core.database import apps_table, identities_table
+from portal_core.database.database import apps_table, identities_table
 from portal_core.model.app import InstalledApp, Service, Postgres
 from portal_core.model.identity import Identity
 
@@ -75,6 +75,7 @@ def setup_services(app: InstalledApp):
 			hostspec=f'{pg_host}:{pg_port}',
 			host=pg_host,
 			port=pg_port,
+			database=app.name,
 		)
 
 

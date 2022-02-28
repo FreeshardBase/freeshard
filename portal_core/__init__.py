@@ -7,8 +7,7 @@ import gconf
 import jinja2
 from fastapi import FastAPI
 
-from . import database
-from .database import get_db
+from portal_core.database import database, migration
 from .model.identity import Identity
 from .service import app_store, init_apps, compose, identity
 from .web import internal, public, protected
@@ -22,7 +21,7 @@ def create_app():
 	log.debug(f'loaded config {loaded_config}')
 
 	database.init_database()
-	log.debug('Initialized DB')
+	migration.migrate_all()
 
 	default_identity = identity.init_default_identity()
 	_ensure_traefik_config(default_identity)

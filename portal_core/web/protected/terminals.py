@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from tinydb import Query
 from tinydb.table import Table
 
-from portal_core.database import terminals_table
+from portal_core.database.database import terminals_table
 from portal_core.service import pairing
 from portal_core.model.terminal import Terminal
 

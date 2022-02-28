@@ -1,7 +1,9 @@
 from enum import Enum
 from typing import Optional, List, Dict, Union
 
-from pydantic import BaseModel
+from pydantic import BaseModel, root_validator
+
+from portal_core.model import app_migration
 
 
 class InstallationReason(str, Enum):
@@ -11,7 +13,7 @@ class InstallationReason(str, Enum):
 	STORE = 'store'
 
 
-class DefaultAccess(str, Enum):
+class Access(str, Enum):
 	PUBLIC = 'public'
 	PRIVATE = 'private'
 
@@ -41,14 +43,13 @@ class DataDir(BaseModel):
 	gid: int
 
 
-class Authentication(BaseModel):
-	default_access: DefaultAccess = DefaultAccess.PRIVATE
-	public_paths: Optional[List[str]]
-	private_paths: Optional[List[str]]
-	peer_paths: Optional[List[str]]
+class Path(BaseModel):
+	access: Access
+	headers: Optional[Dict[str, str]]
 
 
 class App(BaseModel):
+	v: str
 	name: str
 	description: str = 'n/a'
 	image: str
@@ -56,7 +57,16 @@ class App(BaseModel):
 	data_dirs: Optional[List[Union[str, DataDir]]]
 	env_vars: Optional[Dict[str, str]]
 	services: Optional[List[Service]]
-	authentication: Optional[Authentication]
+	paths: Dict[str, Path]
+
+	@root_validator(pre=True)
+	def migrate(cls, values):
+		if 'v' not in values:
+			values['v'] = '0.0'
+		while values['v'] != '1.0':
+			migrate = app_migration.migrations[values['v']]
+			values = migrate(values)
+		return values
 
 
 class AppToInstall(App):

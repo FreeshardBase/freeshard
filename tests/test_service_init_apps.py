@@ -1,8 +1,8 @@
 import gconf
 import pytest
 
-from portal_core import database, model
-from portal_core.database import apps_table
+from portal_core import database
+from portal_core.database.database import apps_table
 from portal_core.service import init_apps
 from portal_core.model.app import InstallationReason
 
@@ -23,6 +23,12 @@ def test_add_init_app(init_db):
 				'image': f'image-{name}',
 				'port': 1,
 				'installation_reason': InstallationReason.CONFIG,
+				'authentication': {
+					'default_access': 'private',
+					'peer_paths': None,
+					'private_paths': None,
+					'public_paths': ['/pub']
+				}
 			})
 
 		apps.insert({
