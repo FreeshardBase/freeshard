@@ -58,8 +58,9 @@ def authenticate_and_authorize(
 			log.debug(f'denied auth for {x_forwarded_host}{x_forwarded_uri} -> invalid auth token')
 			raise HTTPException(status.HTTP_401_UNAUTHORIZED)
 
-	for header_key, header_template in access.headers.items():
-		response.headers[header_key] = Template(header_template).render(header_template_values)
+	if 'headers' in access and access.headers:
+		for header_key, header_template in access.headers.items():
+			response.headers[header_key] = Template(header_template).render(header_template_values)
 	log.debug(f'granted auth for {x_forwarded_host}{x_forwarded_uri} with headers {response.headers.items()}')
 
 
