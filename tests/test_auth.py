@@ -42,3 +42,62 @@ def test_default_public(api_client):
 	}).status_code == status.HTTP_200_OK
 
 
+def test_empty_path_headers(api_client):
+	app_name = 'app-with-empty-path-headers'
+	with apps_table() as apps:
+		apps.insert(AppToInstall(**{
+			'description': 'n/a',
+			'env_vars': None,
+			'image': 'foo-app:latest',
+			'installation_reason': 'config',
+			'name': app_name,
+			'paths': {
+				'': {
+					'access': 'private',
+					'headers': None
+				},
+			},
+			'port': 80,
+			'services': None,
+			'v': '1.0'
+		}).dict())
+
+	t_name = 'T1'
+	pairing_code = get_pairing_code(api_client)
+	response = add_terminal(api_client, pairing_code['code'], t_name)
+	assert response.status_code == 201
+
+	assert api_client.get('internal/auth', headers={
+		'X-Forwarded-Host': f'{app_name}.myportal.org',
+		'X-Forwarded-Uri': '/private1'
+	}).status_code == status.HTTP_200_OK
+
+
+def test_no_path_headers(api_client):
+	app_name = 'app-with-no-path-headers'
+	with apps_table() as apps:
+		apps.insert(AppToInstall(**{
+			'description': 'n/a',
+			'env_vars': None,
+			'image': 'foo-app:latest',
+			'installation_reason': 'config',
+			'name': app_name,
+			'paths': {
+				'': {
+					'access': 'private',
+				},
+			},
+			'port': 80,
+			'services': None,
+			'v': '1.0'
+		}).dict())
+
+	t_name = 'T1'
+	pairing_code = get_pairing_code(api_client)
+	response = add_terminal(api_client, pairing_code['code'], t_name)
+	assert response.status_code == 201
+
+	assert api_client.get('internal/auth', headers={
+		'X-Forwarded-Host': f'{app_name}.myportal.org',
+		'X-Forwarded-Uri': '/private1'
+	}).status_code == status.HTTP_200_OK
