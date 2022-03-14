@@ -38,40 +38,50 @@ def authenticate_and_authorize(
 		x_forwarded_host: str = Header(None),
 		x_forwarded_uri: str = Header(None),
 ):
-	app_name = x_forwarded_host.split('.')[0]
-	app = get_app(app_name)
-	if not app:
-		log.debug(f'denied auth for {x_forwarded_host}{x_forwarded_uri} -> unknown app')
-		raise HTTPException(status.HTTP_404_NOT_FOUND)
-	access = _determine_access(x_forwarded_uri, app)
-	header_template_values = {}
+	app = _get_app(x_forwarded_host)
+	access_path = _determine_access_path(x_forwarded_uri, app)
+	header_values = _make_headers(authorization)
 
-	if access.access == Access.PRIVATE:
-		if not authorization:
-			log.debug(f'denied auth for {x_forwarded_host}{x_forwarded_uri} -> no auth token')
-			raise HTTPException(status.HTTP_401_UNAUTHORIZED)
-		try:
-			terminal = pairing.verify_terminal_jwt(authorization)
-			header_template_values['client_id'] = terminal.id
-			header_template_values['client_name'] = terminal.name
-		except pairing.InvalidJwt:
-			log.debug(f'denied auth for {x_forwarded_host}{x_forwarded_uri} -> invalid auth token')
-			raise HTTPException(status.HTTP_401_UNAUTHORIZED)
+	if access_path.access == Access.PRIVATE and header_values['client_type'] != 'terminal':
+		log.debug(f'denied auth for {x_forwarded_host}{x_forwarded_uri} -> no valid auth token')
+		raise HTTPException(status.HTTP_401_UNAUTHORIZED)
 
-	if access.headers:
-		for header_key, header_template in access.headers.items():
-			response.headers[header_key] = Template(header_template).render(header_template_values)
+	if access_path.headers:
+		for header_key, header_template in access_path.headers.items():
+			response.headers[header_key] = Template(header_template).render(header_values)
 	log.debug(f'granted auth for {x_forwarded_host}{x_forwarded_uri} with headers {response.headers.items()}')
 
 
+def _get_app(x_forwarded_host):
+	app_name = x_forwarded_host.split('.')[0]
+	app = _find_app(app_name)
+	if not app:
+		log.debug(f'denied auth for {x_forwarded_host} -> unknown app')
+		raise HTTPException(status.HTTP_404_NOT_FOUND)
+	return app
+
+
 @cached(cache=TTLCache(maxsize=32, ttl=3))
-def get_app(app_name):
+def _find_app(app_name):
 	with apps_table() as apps:  # type: Table
 		app = InstalledApp(**apps.get(Query().name == app_name))
 	return app
 
 
-def _determine_access(uri, app: InstalledApp) -> Path:
+def _determine_access_path(uri, app: InstalledApp) -> Path:
 	for path, props in sorted(app.paths.items(), key=lambda x: len(x[0]), reverse=True):  # type: (str, Path)
 		if uri.startswith(path):
 			return props
+
+
+def _make_headers(authorization):
+	header_values = {}
+	try:
+		terminal = pairing.verify_terminal_jwt(authorization)
+	except pairing.InvalidJwt:
+		header_values['client_type'] = 'public'
+	else:
+		header_values['client_type'] = 'terminal'
+		header_values['client_id'] = terminal.id
+		header_values['client_name'] = terminal.name
+	return header_values

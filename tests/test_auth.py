@@ -118,24 +118,55 @@ def test_normal_headers(api_client):
 					'headers': {
 						'X-Ptl-Client-Id': '{{ client_id }}',
 						'X-Ptl-Client-Name': '{{ client_name }}',
-						'X-Ptl-Client-Type': 'terminal',
+						'X-Ptl-Client-Type': '{{ client_type }}',
 						'X-Ptl-Foo': 'bar'
 					}
 				},
+				'/public': {
+					'access': 'public',
+					'headers': {
+						'X-Ptl-Client-Id': '{{ client_id }}',
+						'X-Ptl-Client-Name': '{{ client_name }}',
+						'X-Ptl-Client-Type': '{{ client_type }}',
+						'X-Ptl-Foo': 'baz'
+					}
+				}
 			},
 			'port': 80,
 			'services': None,
 			'v': '1.0'
 		}).dict())
 
+	response_public = api_client.get(
+		'internal/auth',
+		headers={'X-Forwarded-Host': f'{app_name}.myportal.org', 'X-Forwarded-Uri': '/public'})
+	assert response_public.status_code == status.HTTP_200_OK
+	assert response_public.headers['X-Ptl-Client-Type'] == 'public'
+	assert response_public.headers['X-Ptl-Client-Id'] == ''
+	assert response_public.headers['X-Ptl-Client-Name'] == ''
+	assert response_public.headers['X-Ptl-Foo'] == 'baz'
+
+	response_private = api_client.get(
+		'internal/auth',
+		headers={'X-Forwarded-Host': f'{app_name}.myportal.org', 'X-Forwarded-Uri': '/private'})
+	assert response_private.status_code == status.HTTP_401_UNAUTHORIZED
+
 	t_name = 'T1'
 	pairing_code = get_pairing_code(api_client)
 	response_terminal = add_terminal(api_client, pairing_code['code'], t_name)
 	assert response_terminal.status_code == 201
 
+	response_public_auth = api_client.get(
+		'internal/auth',
+		headers={'X-Forwarded-Host': f'{app_name}.myportal.org', 'X-Forwarded-Uri': '/public'})
+	assert response_public_auth.status_code == status.HTTP_200_OK
+	assert response_public_auth.headers['X-Ptl-Client-Type'] == 'terminal'
+	assert response_public_auth.headers['X-Ptl-Client-Name'] == t_name
+	assert response_public_auth.headers['X-Ptl-Foo'] == 'baz'
+
 	response_auth = api_client.get(
 		'internal/auth',
-		headers={'X-Forwarded-Host': f'{app_name}.myportal.org', 'X-Forwarded-Uri': '/private1'})
+		headers={'X-Forwarded-Host': f'{app_name}.myportal.org', 'X-Forwarded-Uri': '/private'})
 	assert response_auth.status_code == status.HTTP_200_OK
 	assert response_auth.headers['X-Ptl-Client-Type'] == 'terminal'
 	assert response_auth.headers['X-Ptl-Client-Name'] == t_name
