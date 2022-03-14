@@ -101,3 +101,42 @@ def test_no_path_headers(api_client):
 		'X-Forwarded-Host': f'{app_name}.myportal.org',
 		'X-Forwarded-Uri': '/private1'
 	}).status_code == status.HTTP_200_OK
+
+
+def test_normal_headers(api_client):
+	app_name = 'app-with-normal-headers'
+	with apps_table() as apps:
+		apps.insert(AppToInstall(**{
+			'description': 'n/a',
+			'env_vars': None,
+			'image': 'foo-app:latest',
+			'installation_reason': 'config',
+			'name': app_name,
+			'paths': {
+				'': {
+					'access': 'private',
+					'headers': {
+						'X-Ptl-Client-Id': '{{ client_id }}',
+						'X-Ptl-Client-Name': '{{ client_name }}',
+						'X-Ptl-Client-Type': 'terminal',
+						'X-Ptl-Foo': 'bar'
+					}
+				},
+			},
+			'port': 80,
+			'services': None,
+			'v': '1.0'
+		}).dict())
+
+	t_name = 'T1'
+	pairing_code = get_pairing_code(api_client)
+	response_terminal = add_terminal(api_client, pairing_code['code'], t_name)
+	assert response_terminal.status_code == 201
+
+	response_auth = api_client.get(
+		'internal/auth',
+		headers={'X-Forwarded-Host': f'{app_name}.myportal.org', 'X-Forwarded-Uri': '/private1'})
+	assert response_auth.status_code == status.HTTP_200_OK
+	assert response_auth.headers['X-Ptl-Client-Type'] == 'terminal'
+	assert response_auth.headers['X-Ptl-Client-Name'] == t_name
+	assert response_auth.headers['X-Ptl-Foo'] == 'bar'
