@@ -61,7 +61,10 @@ def create_terminal_jwt(terminal_id, **kwargs) -> str:
 	return jwt.encode(payload, jwt_secret, algorithm='HS256')
 
 
-def verify_terminal_jwt(token: str):
+def verify_terminal_jwt(token: str = None):
+	if not token:
+		raise InvalidJwt('Missing JWT')
+
 	try:
 		jwt_secret = database.get_value(STORE_KEY_JWT_SECRET)
 	except KeyError as e:
