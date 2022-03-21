@@ -6,9 +6,9 @@ from jinja2 import Template
 from tinydb import Query
 from tinydb.table import Table
 
-from portal_core.database.database import apps_table
-from portal_core.model.app import InstalledApp, Access
-from portal_core.model.app import Path
+from portal_core.database.database import apps_table, identities_table
+from portal_core.model.app import InstalledApp, Access, Path
+from portal_core.model.identity import Identity, SafeIdentity
 from portal_core.service import pairing
 
 log = logging.getLogger(__name__)
@@ -40,15 +40,17 @@ def authenticate_and_authorize(
 ):
 	app = _get_app(x_forwarded_host)
 	access_path = _determine_access_path(x_forwarded_uri, app)
-	header_values = _make_headers(authorization)
+	auth_header_values = _make_auth_header_values(authorization)
+	portal_header_values = _get_portal_identity()
 
-	if access_path.access == Access.PRIVATE and header_values['client_type'] != 'terminal':
+	if access_path.access == Access.PRIVATE and auth_header_values['client_type'] != 'terminal':
 		log.debug(f'denied auth for {x_forwarded_host}{x_forwarded_uri} -> no valid auth token')
 		raise HTTPException(status.HTTP_401_UNAUTHORIZED)
 
 	if access_path.headers:
 		for header_key, header_template in access_path.headers.items():
-			response.headers[header_key] = Template(header_template).render(header_values)
+			response.headers[header_key] = Template(header_template) \
+				.render(auth=auth_header_values, portal=portal_header_values)
 	log.debug(f'granted auth for {x_forwarded_host}{x_forwarded_uri} with headers {response.headers.items()}')
 
 
@@ -59,6 +61,13 @@ def _get_app(x_forwarded_host):
 		log.debug(f'denied auth for {x_forwarded_host} -> unknown app')
 		raise HTTPException(status.HTTP_404_NOT_FOUND)
 	return app
+
+
+@cached(cache=TTLCache(maxsize=8, ttl=3))
+def _get_portal_identity():
+	with identities_table() as identities:
+		default_identity = Identity(**identities.get(Query().is_default == True))
+	return SafeIdentity.from_identity(default_identity)
 
 
 @cached(cache=TTLCache(maxsize=32, ttl=3))
@@ -74,7 +83,7 @@ def _determine_access_path(uri, app: InstalledApp) -> Path:
 			return props
 
 
-def _make_headers(authorization):
+def _make_auth_header_values(authorization):
 	header_values = {}
 	try:
 		terminal = pairing.verify_terminal_jwt(authorization)
