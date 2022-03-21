@@ -49,3 +49,16 @@ class Identity(PropertyBaseModel):
 		domain = f'{subdomain}.{zone}'
 		return domain
 
+
+class SafeIdentity(PropertyBaseModel):
+	domain: str
+	id: str
+	public_key_pem: str
+
+	@classmethod
+	def from_identity(cls, identity: Identity):
+		return cls(
+			domain=identity.domain,
+			id=identity.id,
+			public_key_pem=identity.public_key_pem
+		)
