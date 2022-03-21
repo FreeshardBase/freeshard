@@ -12,7 +12,7 @@ from tinydb import Query
 
 from portal_core.database.database import apps_table, identities_table
 from portal_core.model.app import InstalledApp, Service, Postgres
-from portal_core.model.identity import Identity
+from portal_core.model.identity import Identity, SafeIdentity
 
 
 def refresh_docker_compose():
@@ -86,12 +86,7 @@ def root_path():
 def write_docker_compose(apps, output_path: Path):
 	with identities_table() as identities:
 		default_identity = Identity(**identities.get(Query().is_default == True))
-	portal = {
-		'domain': default_identity.domain,
-		'id': default_identity.id,
-		'public_key_pem': default_identity.public_key_pem,
-	}
-
+	portal = SafeIdentity.from_identity(default_identity)
 	template_path = root_path() / 'data' / 'docker-compose.template.yml'
 	template = Template(template_path.read_text())
 	render_pass_one = template.render(apps=apps, portal=portal)
