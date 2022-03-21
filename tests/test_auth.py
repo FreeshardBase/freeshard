@@ -119,6 +119,7 @@ def test_normal_headers(api_client):
 						'X-Ptl-Client-Id': '{{ auth.client_id }}',
 						'X-Ptl-Client-Name': '{{ auth.client_name }}',
 						'X-Ptl-Client-Type': '{{ auth.client_type }}',
+						'X-Ptl-ID': '{{ portal.id }}',
 						'X-Ptl-Foo': 'bar'
 					}
 				},
@@ -128,6 +129,7 @@ def test_normal_headers(api_client):
 						'X-Ptl-Client-Id': '{{ auth.client_id }}',
 						'X-Ptl-Client-Name': '{{ auth.client_name }}',
 						'X-Ptl-Client-Type': '{{ auth.client_type }}',
+						'X-Ptl-ID': '{{ portal.id }}',
 						'X-Ptl-Foo': 'baz'
 					}
 				}
@@ -137,6 +139,9 @@ def test_normal_headers(api_client):
 			'v': '1.0'
 		}).dict())
 
+	default_identity = api_client.get('protected/identities/default').json()
+	print(default_identity)
+
 	response_public = api_client.get(
 		'internal/auth',
 		headers={'X-Forwarded-Host': f'{app_name}.myportal.org', 'X-Forwarded-Uri': '/public'})
@@ -144,6 +149,7 @@ def test_normal_headers(api_client):
 	assert response_public.headers['X-Ptl-Client-Type'] == 'public'
 	assert response_public.headers['X-Ptl-Client-Id'] == ''
 	assert response_public.headers['X-Ptl-Client-Name'] == ''
+	assert response_public.headers['X-Ptl-ID'] == default_identity['id']
 	assert response_public.headers['X-Ptl-Foo'] == 'baz'
 
 	response_private = api_client.get(
@@ -162,6 +168,7 @@ def test_normal_headers(api_client):
 	assert response_public_auth.status_code == status.HTTP_200_OK
 	assert response_public_auth.headers['X-Ptl-Client-Type'] == 'terminal'
 	assert response_public_auth.headers['X-Ptl-Client-Name'] == t_name
+	assert response_public_auth.headers['X-Ptl-ID'] == default_identity['id']
 	assert response_public_auth.headers['X-Ptl-Foo'] == 'baz'
 
 	response_auth = api_client.get(
@@ -170,4 +177,5 @@ def test_normal_headers(api_client):
 	assert response_auth.status_code == status.HTTP_200_OK
 	assert response_auth.headers['X-Ptl-Client-Type'] == 'terminal'
 	assert response_auth.headers['X-Ptl-Client-Name'] == t_name
+	assert response_auth.headers['X-Ptl-ID'] == default_identity['id']
 	assert response_auth.headers['X-Ptl-Foo'] == 'bar'
