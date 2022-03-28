@@ -52,6 +52,7 @@ class App(BaseModel):
 	v: str
 	name: str
 	description: str = 'n/a'
+	long_description: Optional[List[str]]
 	image: str
 	port: int
 	data_dirs: Optional[List[Union[str, DataDir]]]
@@ -85,4 +86,5 @@ class StoreApp(App):
 class StoreAppOverview(BaseModel):
 	name: str
 	description: str
+	long_description: List[str]
 	is_installed: bool
