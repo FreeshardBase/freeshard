@@ -87,10 +87,3 @@ class InstalledApp(AppToInstall):
 
 class StoreApp(App):
 	is_installed: bool
-
-
-class StoreAppOverview(BaseModel):
-	name: str
-	description: str
-	long_description: List[str]
-	is_installed: bool
