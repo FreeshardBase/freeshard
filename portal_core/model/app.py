@@ -27,6 +27,13 @@ class Service(str, Enum):
 	POSTGRES = 'postgres'
 
 
+class StoreInfo(BaseModel):
+	description_short: Optional[str]
+	description_long: Optional[Union[str, List[str]]]
+	hint: Optional[Union[str, List[str]]]
+	is_featured: Optional[bool]
+
+
 class Postgres(BaseModel):
 	connection_string: str
 	userspec: str
@@ -51,19 +58,19 @@ class Path(BaseModel):
 class App(BaseModel):
 	v: str
 	name: str
-	description: str = 'n/a'
 	image: str
 	port: int
 	data_dirs: Optional[List[Union[str, DataDir]]]
 	env_vars: Optional[Dict[str, str]]
 	services: Optional[List[Service]]
 	paths: Dict[str, Path]
+	store_info: Optional[StoreInfo]
 
 	@root_validator(pre=True)
 	def migrate(cls, values):
 		if 'v' not in values:
 			values['v'] = '0.0'
-		while values['v'] != '1.0':
+		while values['v'] != '2.0':
 			migrate = app_migration.migrations[values['v']]
 			values = migrate(values)
 		return values
@@ -79,10 +86,4 @@ class InstalledApp(AppToInstall):
 
 
 class StoreApp(App):
-	is_installed: bool
-
-
-class StoreAppOverview(BaseModel):
-	name: str
-	description: str
 	is_installed: bool

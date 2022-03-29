@@ -4,7 +4,7 @@ from typing import List, Optional
 from fastapi import APIRouter, status
 from pydantic import BaseModel
 
-from portal_core.model.app import StoreApp, StoreAppOverview
+from portal_core.model.app import StoreApp
 from portal_core.service import app_store
 
 log = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ class AppOverview(BaseModel):
 	is_installed: bool
 
 
-@router.get('/apps', response_model=List[StoreAppOverview])
+@router.get('/apps', response_model=List[StoreApp])
 def get_apps():
 	return app_store.get_store_apps()
 
