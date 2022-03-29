@@ -7,7 +7,7 @@ from ..model.app import InstalledApp
 
 log = logging.getLogger(__name__)
 
-TARGET_VERSION = '1.0'
+TARGET_VERSION = '2.0'
 
 
 def migrate_all():

@@ -50,6 +50,22 @@ def migrate_0_0_to_1_0(app_json: dict) -> dict:
 	return app_json
 
 
+def migrate_1_0_to_2_0(app_json: dict) -> dict:
+	try:
+		description = app_json['description']
+	except KeyError:
+		pass
+	else:
+		app_json['store_info'] = {
+			'description_short': description
+		}
+		del app_json['description']
+
+	app_json['v'] = '2.0'
+	return app_json
+
+
 migrations = {
-	'0.0': migrate_0_0_to_1_0
+	'0.0': migrate_0_0_to_1_0,
+	'1.0': migrate_1_0_to_2_0
 }
