@@ -5,6 +5,7 @@ from typing import List
 
 import gconf
 import psycopg
+import yaml
 from jinja2 import Template
 from psycopg import sql
 from psycopg.conninfo import make_conninfo
@@ -26,8 +27,13 @@ def refresh_docker_compose():
 		create_data_dirs(app)
 		setup_services(app)
 
+	with identities_table() as identities:
+		default_identity = Identity(**identities.get(Query().is_default == True))
+	portal = SafeIdentity.from_identity(default_identity)
+
+	spec = compose_spec(apps, portal)
 	docker_compose_filename = gconf.get('docker_compose.compose_filename')
-	write_docker_compose(apps, docker_compose_filename)
+	write_docker_compose(spec, docker_compose_filename)
 
 
 def create_data_dirs(app):
@@ -82,27 +88,10 @@ def setup_services(app: InstalledApp):
 		)
 
 
-def root_path():
-	return Path(__file__).parent.parent
-
-
-def write_docker_compose(apps, output_path: Path):
-	with identities_table() as identities:
-		default_identity = Identity(**identities.get(Query().is_default == True))
-	portal = SafeIdentity.from_identity(default_identity)
-	template_path = root_path() / 'data' / 'docker-compose.template.yml'
-	template = Template(template_path.read_text())
-	render_pass_one = template.render(apps=apps, portal=portal)
-	render_pass_two = Template(render_pass_one).render(apps={app.name: app for app in apps}, portal=portal)
+def write_docker_compose(spec: dc.ComposeSpecification, output_path: Path):
 	with open(output_path, 'w') as f:
 		f.write('# == DO NOT MODIFY ==\n# this file is auto-generated\n\n')
-		f.write(remove_empty_lines(render_pass_two))
-
-
-def remove_empty_lines(in_: str):
-	lines = in_.split('\n')
-	filled_lines = [line for line in lines if line.strip() != '']
-	return '\n'.join(filled_lines)
+		f.write(yaml.dump(spec.dict(exclude_none=True)))
 
 
 def compose_spec(apps: List[InstalledApp], portal: SafeIdentity) -> dc.ComposeSpecification:
@@ -138,10 +127,13 @@ def volumes(app: InstalledApp) -> List[str]:
 
 
 def environment(app: InstalledApp, portal: SafeIdentity) -> List[str]:
-	def render(v):
-		return Template(v).render(portal=portal, postgres=app.postgres or None)
+	if app.env_vars:
+		def render(v):
+			return Template(v).render(portal=portal, postgres=app.postgres or None)
 
-	return [f'{k}={render(v)}' for k, v in app.env_vars.items()]
+		return [f'{k}={render(v)}' for k, v in app.env_vars.items()]
+	else:
+		return []
 
 
 def traefik_labels(app: InstalledApp, portal: SafeIdentity) -> List[str]:

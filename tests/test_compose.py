@@ -72,8 +72,8 @@ def test_postgres_is_setup(postgres):
             'port': 2,
             'services': ['postgres'],
             'env_vars': {
-                'pg_user': '{{apps["postgres-app"].postgres.user}}',
-                'pg_password': '{{apps["postgres-app"].postgres.password}}'
+                'pg_user': '{{postgres.user}}',
+                'pg_password': '{{postgres.password}}'
             },
             'reason': InstallationReason.CUSTOM,
         })

@@ -22,6 +22,7 @@ setup(
 		'pyjwt',
 		'pydantic',
 		'Jinja2',
+		'pyyaml',
 		'docker',
 		'python-gitlab',
 		'psycopg[binary]',
