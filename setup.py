@@ -1,5 +1,4 @@
 import logging
-from pathlib import Path
 
 from setuptools import setup, find_packages
 
@@ -39,10 +38,4 @@ setup(
 	data_files=[
 		('', ['config.yml']),
 	],
-	package_data={
-		'portal_core': [
-			*[str(f.relative_to('portal_core'))
-				for f in Path('portal_core').glob('data/**/*') if f.is_file()],
-		],
-	}
 )
