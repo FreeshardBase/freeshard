@@ -1,6 +1,7 @@
 import shutil
 from contextlib import suppress
 from pathlib import Path
+from typing import List
 
 import gconf
 import psycopg
@@ -13,6 +14,8 @@ from tinydb import Query
 from portal_core.database.database import apps_table, identities_table
 from portal_core.model.app import InstalledApp, Service, Postgres
 from portal_core.model.identity import Identity, SafeIdentity
+
+import portal_core.model.docker_compose as dc
 
 
 def refresh_docker_compose():
@@ -100,3 +103,57 @@ def remove_empty_lines(in_: str):
 	lines = in_.split('\n')
 	filled_lines = [line for line in lines if line.strip() != '']
 	return '\n'.join(filled_lines)
+
+
+def compose_spec(apps: List[InstalledApp], portal: SafeIdentity) -> dc.ComposeSpecification:
+	return dc.ComposeSpecification(
+		version='3.5',
+		networks={
+			'portal': dc.Network(name='portal')
+		},
+		services={app.name: service_spec(app, portal) for app in apps}
+	)
+
+
+def service_spec(app: InstalledApp, portal: SafeIdentity):
+	return dc.Service(
+		image=app.image,
+		container_name=app.name,
+		restart='always',
+		networks=dc.ListOfStrings.parse_obj(['portal']),
+		volumes=volumes(app),
+		environment=dc.ListOrDict.parse_obj(environment(app, portal)),
+		labels=dc.ListOrDict.parse_obj(traefik_labels(app, portal))
+	)
+
+
+def volumes(app: InstalledApp) -> List[str]:
+	result = []
+	for data_dir in app.data_dirs or []:
+		if isinstance(data_dir, str):
+			result.append(f'/home/portal/user_data/app_data/{app.name}/{data_dir}:{data_dir}')
+		else:
+			result.append(f'/home/portal/user_data/app_data/{app.name}/{data_dir.path}:{data_dir.path}')
+	return result
+
+
+def environment(app: InstalledApp, portal: SafeIdentity) -> List[str]:
+	def render(v):
+		return Template(v).render(portal=portal, postgres=app.postgres or None)
+
+	return [f'{k}={render(v)}' for k, v in app.env_vars.items()]
+
+
+def traefik_labels(app: InstalledApp, portal: SafeIdentity) -> List[str]:
+	return [
+		'traefik.enable=true',
+		f'traefik.http.services.{app.name}.loadbalancer.server.port={app.port}',
+		f'traefik.http.routers.{app.name}_router.entrypoints=https',
+		f'traefik.http.routers.{app.name}_router.rule=Host(`{app.name}.{portal.domain}`)',
+		f'traefik.http.routers.{app.name}_router.tls=true',
+		f'traefik.http.routers.{app.name}_router.tls.certresolver=letsencrypt',
+		f'traefik.http.routers.{app.name}_router.tls.domains[0].main={portal.domain}',
+		f'traefik.http.routers.{app.name}_router.tls.domains[0].sans=*.{portal.domain}',
+		f'traefik.http.routers.{app.name}_router.middlewares=auth@file',
+		f'traefik.http.routers.{app.name}_router.service={app.name}'
+	]

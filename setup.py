@@ -32,6 +32,7 @@ setup(
 		'dev': [
 			'pytest',
 			'pytest-docker',
+			'datamodel-code-generator[http]'
 		]
 	},
 	data_files=[
