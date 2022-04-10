@@ -5,6 +5,8 @@ from pydantic import BaseModel, root_validator
 
 from portal_core.model import app_migration
 
+CURRENT_VERSION = '3.0'
+
 
 class InstallationReason(str, Enum):
 	UNKNOWN = 'unknown'
@@ -70,7 +72,7 @@ class App(BaseModel):
 	def migrate(cls, values):
 		if 'v' not in values:
 			values['v'] = '0.0'
-		while values['v'] != '2.0':
+		while values['v'] != CURRENT_VERSION:
 			migrate = app_migration.migrations[values['v']]
 			values = migrate(values)
 		return values
