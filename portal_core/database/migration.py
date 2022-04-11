@@ -3,11 +3,9 @@ import logging
 from tinydb.table import Table
 
 from . import database
-from ..model.app import InstalledApp
+from ..model.app import InstalledApp, CURRENT_VERSION
 
 log = logging.getLogger(__name__)
-
-TARGET_VERSION = '2.0'
 
 
 def migrate_all():
@@ -23,10 +21,10 @@ def migrate_all():
 				apps.remove(doc_ids=[app.doc_id])
 				installed_app = InstalledApp(**app)
 				apps.insert(installed_app.dict())
-				log.info(f'migrated app {installed_app.name} to app.json format version {TARGET_VERSION}')
+				log.info(f'migrated app {installed_app.name} to app.json format version {CURRENT_VERSION}')
 			else:
-				log.debug(f'app {installed_app.name} is already at version {TARGET_VERSION}')
+				log.debug(f'app {installed_app.name} is already at version {CURRENT_VERSION}')
 
 
 def _needs_migration(app):
-	return 'v' not in app or app['v'] != TARGET_VERSION
+	return 'v' not in app or app['v'] != CURRENT_VERSION
