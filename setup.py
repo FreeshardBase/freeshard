@@ -1,5 +1,4 @@
 import logging
-from pathlib import Path
 
 from setuptools import setup, find_packages
 
@@ -7,7 +6,7 @@ log = logging.getLogger(__name__)
 
 setup(
 	name='portal_core',
-	version='0.7.0',
+	version='0.8.0',
 	packages=find_packages(),
 	url='https://gitlab.com/ptl/portal_core',
 	author='Max von Tettenborn',
@@ -22,6 +21,7 @@ setup(
 		'pyjwt',
 		'pydantic',
 		'Jinja2',
+		'pyyaml',
 		'docker',
 		'python-gitlab',
 		'psycopg[binary]',
@@ -32,15 +32,10 @@ setup(
 		'dev': [
 			'pytest',
 			'pytest-docker',
+			'datamodel-code-generator[http]'
 		]
 	},
 	data_files=[
 		('', ['config.yml']),
 	],
-	package_data={
-		'portal_core': [
-			*[str(f.relative_to('portal_core'))
-				for f in Path('portal_core').glob('data/**/*') if f.is_file()],
-		],
-	}
 )

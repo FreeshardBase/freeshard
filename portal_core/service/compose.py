@@ -1,9 +1,11 @@
 import shutil
 from contextlib import suppress
 from pathlib import Path
+from typing import List
 
 import gconf
 import psycopg
+import yaml
 from jinja2 import Template
 from psycopg import sql
 from psycopg.conninfo import make_conninfo
@@ -14,6 +16,8 @@ from portal_core.database.database import apps_table, identities_table
 from portal_core.model.app import InstalledApp, Service, Postgres
 from portal_core.model.identity import Identity, SafeIdentity
 
+import portal_core.model.docker_compose as dc
+
 
 def refresh_docker_compose():
 	with apps_table() as apps:
@@ -23,8 +27,13 @@ def refresh_docker_compose():
 		create_data_dirs(app)
 		setup_services(app)
 
+	with identities_table() as identities:
+		default_identity = Identity(**identities.get(Query().is_default == True))
+	portal = SafeIdentity.from_identity(default_identity)
+
+	spec = compose_spec(apps, portal)
 	docker_compose_filename = gconf.get('docker_compose.compose_filename')
-	write_docker_compose(apps, docker_compose_filename)
+	write_docker_compose(spec, docker_compose_filename)
 
 
 def create_data_dirs(app):
@@ -79,24 +88,66 @@ def setup_services(app: InstalledApp):
 		)
 
 
-def root_path():
-	return Path(__file__).parent.parent
-
-
-def write_docker_compose(apps, output_path: Path):
-	with identities_table() as identities:
-		default_identity = Identity(**identities.get(Query().is_default == True))
-	portal = SafeIdentity.from_identity(default_identity)
-	template_path = root_path() / 'data' / 'docker-compose.template.yml'
-	template = Template(template_path.read_text())
-	render_pass_one = template.render(apps=apps, portal=portal)
-	render_pass_two = Template(render_pass_one).render(apps={app.name: app for app in apps}, portal=portal)
+def write_docker_compose(spec: dc.ComposeSpecification, output_path: Path):
 	with open(output_path, 'w') as f:
 		f.write('# == DO NOT MODIFY ==\n# this file is auto-generated\n\n')
-		f.write(remove_empty_lines(render_pass_two))
+		f.write(yaml.dump(spec.dict(exclude_none=True)))
 
 
-def remove_empty_lines(in_: str):
-	lines = in_.split('\n')
-	filled_lines = [line for line in lines if line.strip() != '']
-	return '\n'.join(filled_lines)
+def compose_spec(apps: List[InstalledApp], portal: SafeIdentity) -> dc.ComposeSpecification:
+	return dc.ComposeSpecification(
+		version='3.5',
+		networks={
+			'portal': dc.Network(name='portal')
+		},
+		services={app.name: service_spec(app, portal) for app in apps}
+	)
+
+
+def service_spec(app: InstalledApp, portal: SafeIdentity):
+	return dc.Service(
+		image=app.image,
+		container_name=app.name,
+		restart='always',
+		networks=dc.ListOfStrings.parse_obj(['portal']),
+		volumes=volumes(app),
+		environment=dc.ListOrDict.parse_obj(environment(app, portal)),
+		labels=dc.ListOrDict.parse_obj(traefik_labels(app, portal))
+	)
+
+
+def volumes(app: InstalledApp) -> List[str]:
+	result = []
+	for data_dir in app.data_dirs or []:
+		if isinstance(data_dir, str):
+			result.append(f'/home/portal/user_data/app_data/{app.name}/{data_dir}:{data_dir}')
+		else:
+			result.append(f'/home/portal/user_data/app_data/{app.name}/{data_dir.path}:{data_dir.path}')
+	if app.services and Service.DOCKER_SOCK_RO in app.services:
+		result.append('/var/run/docker.sock:/var/run/docker.sock:ro')
+	return result
+
+
+def environment(app: InstalledApp, portal: SafeIdentity) -> List[str]:
+	if app.env_vars:
+		def render(v):
+			return Template(v).render(portal=portal, postgres=app.postgres or None)
+
+		return [f'{k}={render(v)}' for k, v in app.env_vars.items()]
+	else:
+		return []
+
+
+def traefik_labels(app: InstalledApp, portal: SafeIdentity) -> List[str]:
+	return [
+		'traefik.enable=true',
+		f'traefik.http.services.{app.name}.loadbalancer.server.port={app.port}',
+		f'traefik.http.routers.{app.name}_router.entrypoints=https',
+		f'traefik.http.routers.{app.name}_router.rule=Host(`{app.name}.{portal.domain}`)',
+		f'traefik.http.routers.{app.name}_router.tls=true',
+		f'traefik.http.routers.{app.name}_router.tls.certresolver=letsencrypt',
+		f'traefik.http.routers.{app.name}_router.tls.domains[0].main={portal.domain}',
+		f'traefik.http.routers.{app.name}_router.tls.domains[0].sans=*.{portal.domain}',
+		f'traefik.http.routers.{app.name}_router.middlewares=auth@file',
+		f'traefik.http.routers.{app.name}_router.service={app.name}'
+	]
