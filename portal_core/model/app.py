@@ -27,6 +27,7 @@ class Status(str, Enum):
 
 class Service(str, Enum):
 	POSTGRES = 'postgres'
+	DOCKER_SOCK_RO = 'docker_sock_ro'
 
 
 class StoreInfo(BaseModel):
