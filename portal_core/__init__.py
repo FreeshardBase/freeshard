@@ -9,7 +9,7 @@ from fastapi import FastAPI
 
 from portal_core.database import database, migration
 from .model.identity import Identity
-from .service import app_store, init_apps, compose, identity
+from .service import app_store, init_apps, app_infra, identity
 from .web import internal, public, protected
 
 log = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ def create_app():
 	init_apps.refresh_init_apps()
 	log.debug('refreshed initial apps')
 
-	compose.refresh_docker_compose()
+	app_infra.refresh_app_infra()
 	log.debug('launched docker-compose')
 
 	app_meta = metadata('portal_core')

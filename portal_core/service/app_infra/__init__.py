@@ -5,6 +5,7 @@ from typing import List
 
 import gconf
 import psycopg
+import pydantic
 import yaml
 from jinja2 import Template
 from psycopg import sql
@@ -19,7 +20,7 @@ from portal_core.model.identity import Identity, SafeIdentity
 import portal_core.model.docker_compose as dc
 
 
-def refresh_docker_compose():
+def refresh_app_infra():
 	with apps_table() as apps:
 		apps = [InstalledApp(**a) for a in apps.all()]
 
@@ -31,9 +32,8 @@ def refresh_docker_compose():
 		default_identity = Identity(**identities.get(Query().is_default == True))
 	portal = SafeIdentity.from_identity(default_identity)
 
-	spec = compose_spec(apps, portal)
-	docker_compose_filename = gconf.get('docker_compose.compose_filename')
-	write_docker_compose(spec, docker_compose_filename)
+	docker_compose_filename = gconf.get('app_infra.compose_filename')
+	write_to_yaml(compose_spec(apps, portal), docker_compose_filename)
 
 
 def create_data_dirs(app):
@@ -88,7 +88,7 @@ def setup_services(app: InstalledApp):
 		)
 
 
-def write_docker_compose(spec: dc.ComposeSpecification, output_path: Path):
+def write_to_yaml(spec: pydantic.BaseModel, output_path: Path):
 	with open(output_path, 'w') as f:
 		f.write('# == DO NOT MODIFY ==\n# this file is auto-generated\n\n')
 		f.write(yaml.dump(spec.dict(exclude_none=True)))

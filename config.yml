@@ -5,8 +5,9 @@ dns:
   zone: p.getportal.org
   prefix length: 6
 
-docker_compose:
+app_infra:
   compose_filename: /core/docker-compose-apps.yml
+  traefik_dyn_filename: /core/traefik_dyn.yml
 
 services:
   postgres:

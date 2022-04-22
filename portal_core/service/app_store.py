@@ -12,7 +12,7 @@ from tinydb import where
 
 from portal_core.database.database import apps_table
 from portal_core.model.app import StoreApp, InstallationReason, AppToInstall
-from . import compose
+from . import app_infra
 
 log = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ def install_store_app(name: str):
 			**app.dict(),
 			installation_reason=InstallationReason.STORE,
 		).dict())
-	compose.refresh_docker_compose()
+	app_infra.refresh_app_infra()
 
 
 def refresh_app_store(ref: str = None):

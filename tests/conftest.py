@@ -26,7 +26,7 @@ def tempfile_path_config(tmp_path):
 			'app_data_dir': tmp_path / 'app_data',
 			'app_store': {'sync_dir': tmp_path / 'app_store'},
 		},
-		'docker_compose': {'compose_filename': tmp_path / 'docker-compose-apps.yml'}
+		'app_infra': {'compose_filename': tmp_path / 'docker-compose-apps.yml'}
 	}
 	with gconf.override_conf(override):
 		yield
