@@ -416,6 +416,9 @@ class ForwardAuthMiddleware(BaseModel):
         None,
         description='The authResponseHeaders option is the list of the headers to copy from the authentication server to the request.',
     )
+    authResponseHeadersRegex: Optional[str] = Field(
+        None,
+    )
     tls: Optional[Tls2] = Field(
         None,
         description='The tls option is the TLS configuration from Traefik to the authentication server.',

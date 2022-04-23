@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from time import sleep
 
 import gconf
@@ -14,7 +15,7 @@ log = logging.getLogger(__name__)
 
 @pytest.fixture(scope='session', autouse=True)
 def load_gconf():
-	gconf.load('../config.yml', 'config.yml')
+	gconf.load(Path(__file__).parent.parent / 'config.yml', Path(__file__).parent /'config.yml')
 
 
 @pytest.fixture
