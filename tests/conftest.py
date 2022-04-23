@@ -26,7 +26,10 @@ def tempfile_path_config(tmp_path):
 			'app_data_dir': tmp_path / 'app_data',
 			'app_store': {'sync_dir': tmp_path / 'app_store'},
 		},
-		'app_infra': {'compose_filename': tmp_path / 'docker-compose-apps.yml'}
+		'app_infra': {
+			'compose_filename': tmp_path / 'docker-compose-apps.yml',
+			'traefik_dyn_filename': tmp_path / 'traefik_dyn.yml',
+		}
 	}
 	with gconf.override_conf(override):
 		yield
