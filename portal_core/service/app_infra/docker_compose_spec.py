@@ -25,7 +25,6 @@ def service_spec(app: InstalledApp, portal: SafeIdentity):
 		networks=dc.ListOfStrings.parse_obj(['portal']),
 		volumes=volumes(app),
 		environment=dc.ListOrDict.parse_obj(environment(app, portal)),
-		labels=dc.ListOrDict.parse_obj(traefik_labels(app, portal))
 	)
 
 
@@ -49,18 +48,3 @@ def environment(app: InstalledApp, portal: SafeIdentity) -> List[str]:
 		return [f'{k}={render(v)}' for k, v in app.env_vars.items()]
 	else:
 		return []
-
-
-def traefik_labels(app: InstalledApp, portal: SafeIdentity) -> List[str]:
-	return [
-		'traefik.enable=true',
-		f'traefik.http.services.{app.name}.loadbalancer.server.port={app.port}',
-		f'traefik.http.routers.{app.name}_router.entrypoints=https',
-		f'traefik.http.routers.{app.name}_router.rule=Host(`{app.name}.{portal.domain}`)',
-		f'traefik.http.routers.{app.name}_router.tls=true',
-		f'traefik.http.routers.{app.name}_router.tls.certresolver=letsencrypt',
-		f'traefik.http.routers.{app.name}_router.tls.domains[0].main={portal.domain}',
-		f'traefik.http.routers.{app.name}_router.tls.domains[0].sans=*.{portal.domain}',
-		f'traefik.http.routers.{app.name}_router.middlewares=auth@file',
-		f'traefik.http.routers.{app.name}_router.service={app.name}'
-	]

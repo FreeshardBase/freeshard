@@ -37,6 +37,7 @@ def traefik_dyn_spec(apps: List[InstalledApp], portal: SafeIdentity) -> t.Model:
 					middlewares=['auth-private'],
 					tls=t.Tls1(certResolver='letsencrypt'),
 				),
+				**{a.name: make_app_router(a, portal) for a in apps}
 			},
 			middlewares={
 				'strip': t.HttpMiddleware(
@@ -90,6 +91,7 @@ def traefik_dyn_spec(apps: List[InstalledApp], portal: SafeIdentity) -> t.Model:
 			services={
 				'portal_core': make_service(url='http://portal_core:80/'),
 				'web-terminal': make_service(url='http://web-terminal:80/'),
+				**{a.name: make_service(f'http://{a.name}:{a.port}') for a in apps}
 			}
 		)
 	)
@@ -104,4 +106,14 @@ def make_service(url: str):
 				]
 			)
 		)
+	)
+
+
+def make_app_router(app: InstalledApp, portal: SafeIdentity) -> t.HttpRouter:
+	return t.HttpRouter(
+		rule=f'Host(`{app.name}.{portal.domain}`)',
+		entryPoints=['https'],
+		service=app.name,
+		middlewares=['app-error', 'auth'],
+		tls=t.Tls1(certResolver='letsencrypt'),
 	)

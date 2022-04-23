@@ -1,5 +1,3 @@
-import re
-
 import gconf
 import pytest
 import yaml
@@ -30,7 +28,16 @@ def test_template_is_written():
 
 	with open(gconf.get('app_infra.traefik_dyn_filename'), 'r') as f:
 		output = yaml.safe_load(f)
-		out_middlewares = output['http']['middlewares']
-		assert all(m in out_middlewares for m in ['app-error', 'auth', 'strip'])
+		out_middlewares: dict = output['http']['middlewares']
+
+		assert set(out_middlewares.keys()) == {'app-error', 'auth', 'strip', 'auth-public', 'auth-private'}
 		assert 'authResponseHeadersRegex' in out_middlewares['auth']['forwardAuth']
 
+		out_services: dict = output['http']['services']
+		assert set(out_services.keys()) == {'portal_core', 'web-terminal', 'baz-app'}
+		assert out_services['baz-app']['loadBalancer']['servers'] == [{'url': 'http://baz-app:2'}]
+
+		out_routers: dict = output['http']['routers']
+		assert set(out_routers.keys()) == {
+			'portal_core_private', 'portal_core_public', 'web-terminal', 'traefik', 'baz-app'}
+		assert out_routers['baz-app']['service'] == 'baz-app'
