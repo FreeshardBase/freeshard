@@ -1,7 +1,4 @@
-import pytest
 from starlette import status
-
-pytestmark = pytest.mark.usefixtures('tempfile_path_config')
 
 
 def test_status_404(api_client):

@@ -1,8 +1,3 @@
-import pytest
-
-pytestmark = pytest.mark.usefixtures('tempfile_path_config')
-
-
 def test_add(api_client):
 	response = api_client.post('protected/peers', json={
 		'id': 'foo',

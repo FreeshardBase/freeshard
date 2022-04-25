@@ -1,11 +1,8 @@
-import pytest
 from starlette import status
 
 from portal_core.database.database import apps_table
 from portal_core.model.app import InstallationReason, AppToInstall
 from tests.util import get_pairing_code, add_terminal
-
-pytestmark = pytest.mark.usefixtures('tempfile_path_config')
 
 
 def test_default_public(api_client):

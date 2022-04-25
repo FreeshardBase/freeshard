@@ -1,11 +1,7 @@
-import pytest
-
 from portal_core.service import app_store
 
-pytestmark = pytest.mark.usefixtures('api_client')
 
-
-def test_install():
+def test_install(api_client):
 	app_store.refresh_app_store(ref='develop')
 
 	app_template_pathon_details = next(a for a in (app_store.get_store_apps()) if a.name == 'app-template-python')
