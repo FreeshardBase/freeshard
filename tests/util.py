@@ -4,6 +4,8 @@ from pathlib import Path
 
 import gconf
 
+WAITING_DOCKER_IMAGE = 'nginx:alpine'
+
 
 def get_pairing_code(api_client, deadline=None):
 	response = api_client.get('protected/terminals/pairing-code', params={'deadline': deadline})

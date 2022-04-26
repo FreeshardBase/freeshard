@@ -3,14 +3,14 @@ from starlette import status
 from portal_core.database.database import apps_table
 from portal_core.model.app import InstallationReason, AppToInstall
 from portal_core.service import app_infra
-from tests.util import get_pairing_code, add_terminal, create_apps_from_docker_compose
+from tests.util import get_pairing_code, add_terminal, create_apps_from_docker_compose, WAITING_DOCKER_IMAGE
 
 
 def test_default_public(api_client):
 	with apps_table() as apps:
 		apps.insert(AppToInstall(**{
 			'name': 'foo-app',
-			'image': 'jannash/noop',
+			'image': WAITING_DOCKER_IMAGE,
 			'version': '1.2.3',
 			'port': 1,
 			'authentication': {
@@ -48,7 +48,7 @@ def test_empty_path_headers(api_client):
 		apps.insert(AppToInstall(**{
 			'description': 'n/a',
 			'env_vars': None,
-			'image': 'jannash/noop',
+			'image': WAITING_DOCKER_IMAGE,
 			'installation_reason': 'config',
 			'name': app_name,
 			'paths': {
@@ -81,7 +81,7 @@ def test_no_path_headers(api_client):
 		apps.insert(AppToInstall(**{
 			'description': 'n/a',
 			'env_vars': None,
-			'image': 'jannash/noop',
+			'image': WAITING_DOCKER_IMAGE,
 			'installation_reason': 'config',
 			'name': app_name,
 			'paths': {
@@ -113,7 +113,7 @@ def test_normal_headers(api_client):
 		apps.insert(AppToInstall(**{
 			'description': 'n/a',
 			'env_vars': None,
-			'image': 'jannash/noop',
+			'image': WAITING_DOCKER_IMAGE,
 			'installation_reason': 'config',
 			'name': app_name,
 			'paths': {
