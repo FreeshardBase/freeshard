@@ -10,6 +10,7 @@ FROM python:3.8 as production
 
 COPY --from=build /venv /venv
 COPY config.yml .
+COPY data/ /data/
 RUN mkdir /core
 
 HEALTHCHECK --start-period=5s CMD curl -f localhost/public/health || exit 1

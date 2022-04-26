@@ -1,12 +1,9 @@
 import gconf
-import pytest
 
 from portal_core import database
 from portal_core.database.database import apps_table
-from portal_core.service import init_apps
 from portal_core.model.app import InstallationReason
-
-pytestmark = pytest.mark.usefixtures('init_db')
+from portal_core.service import init_apps
 
 init_app_conf = {'apps': {'initial_apps': {
 	'app-foo': {'image': 'image-foo', 'port': 80, 'data_dirs': ['/data', '/config']},

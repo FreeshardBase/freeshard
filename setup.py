@@ -35,7 +35,5 @@ setup(
 			'datamodel-code-generator[http]'
 		]
 	},
-	data_files=[
-		('', ['config.yml']),
-	],
+	package_data={'': ['config.yml', 'data/*']},
 )

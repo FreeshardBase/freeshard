@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>{{ app_name }}</title>
+</head>
+<body onload="timeRefresh(2000);">
+<div class="center">
+<img src="{{ icon_data }}">
+<h1>{{ app_name }}</h1>
+</div>
+<script>
+    function timeRefresh(time) {
+        setTimeout("location.reload();", time)
+    }
+</script>
+</body>
+<style>
+    body {
+        justify-content: center;
+        display: grid;
+    }
+
+    h1 {
+        font-family: Arial, Helvetica, sans-serif;
+        text-align: center;
+    }
+
+    img {
+        height: 7em;
+    }
+
+    .center {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        margin-right: -50%;
+        transform: translate(-50%, -50%);
+        text-align: center;
+    }
+</style>
+</html>

@@ -13,13 +13,14 @@ import portal_core
 log = logging.getLogger(__name__)
 
 
-@pytest.fixture(scope='session', autouse=True)
+@pytest.fixture
 def load_gconf():
+	gconf.reset()
 	gconf.load(Path(__file__).parent.parent / 'config.yml', Path(__file__).parent /'config.yml')
 
 
 @pytest.fixture
-def tempfile_path_config(tmp_path):
+def tempfile_path_config(load_gconf, tmp_path):
 	print(f'\nUsing temp path: {tmp_path}')
 	override = {
 		'database': {'filename': tmp_path / 'portal_core_db.json'},

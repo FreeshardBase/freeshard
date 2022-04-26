@@ -1,8 +1,3 @@
-import pytest
-
-pytestmark = pytest.mark.usefixtures('tempfile_path_config')
-
-
 def test_get_whoareyou(api_client):
 	default_identity = api_client.get('protected/identities/default').json()
 	response = api_client.get('public/meta/whoareyou')
