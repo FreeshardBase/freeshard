@@ -9,7 +9,7 @@ apps:
   initial_apps:
     filebrowser: null
     app-foo:
-      image: bar
+      image: jannash/noop
       port: 80
       data_dirs:
         - /data

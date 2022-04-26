@@ -9,7 +9,7 @@ from tinydb.table import Table
 from portal_core.database.database import apps_table, identities_table
 from portal_core.model.app import InstalledApp, Access, Path
 from portal_core.model.identity import Identity, SafeIdentity
-from portal_core.service import pairing
+from portal_core.service import pairing, app_lifecycle
 
 log = logging.getLogger(__name__)
 
@@ -52,6 +52,8 @@ def authenticate_and_authorize(
 			response.headers[header_key] = Template(header_template) \
 				.render(auth=auth_header_values, portal=portal_header_values)
 	log.debug(f'granted auth for {x_forwarded_host}{x_forwarded_uri} with headers {response.headers.items()}')
+
+	app_lifecycle.ensure_app_is_running(app)
 
 
 def _get_app(x_forwarded_host):
