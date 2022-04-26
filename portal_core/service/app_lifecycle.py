@@ -2,6 +2,7 @@ import logging
 import time
 
 import docker
+import gconf
 from docker import errors as docker_errors
 from tinydb.table import Table
 
@@ -33,10 +34,11 @@ async def stop_apps():
 				last_access = last_access_dict[app.name]
 			except KeyError:
 				continue
-			if last_access < time.time() - 10:
+			if last_access < time.time() - gconf.get('apps.lifecycle.default_idle_time_for_shutdown'):
 				log.debug(f'Stopping {app.name} due to inactivity')
 				docker_client.containers.get(app.name).stop()
 				del last_access_dict[app.name]
+
 
 class NoSuchApp(Exception):
 	pass

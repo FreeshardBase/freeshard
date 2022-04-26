@@ -7,7 +7,7 @@ from portal_core.service import app_infra
 from tests.util import create_apps_from_docker_compose, WAITING_DOCKER_IMAGE
 
 
-def test_default_public(api_client):
+def test_app_starts_and_stops(api_client):
 	docker_client = docker.from_env()
 	app = AppToInstall(**{
 		'name': 'foo-app',
@@ -34,4 +34,16 @@ def test_default_public(api_client):
 		def assert_app_running():
 			assert docker_client.containers.get('foo-app').status == 'running'
 
+		def assert_app_exited():
+			assert docker_client.containers.get('foo-app').status == 'exited'
+
 		retry(assert_app_running, timeout=10, retry_errors=[AssertionError])
+		retry(assert_app_exited, timeout=10, retry_errors=[AssertionError])
+
+		api_client.get('internal/auth', headers={
+			'X-Forwarded-Host': 'foo-app.myportal.org',
+			'X-Forwarded-Uri': '/pub'
+		})
+
+		retry(assert_app_running, timeout=10, retry_errors=[AssertionError])
+		retry(assert_app_exited, timeout=10, retry_errors=[AssertionError])

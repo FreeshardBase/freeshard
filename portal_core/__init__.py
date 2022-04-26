@@ -5,12 +5,12 @@ from pathlib import Path
 
 import gconf
 import jinja2
-from common_py.background_task import BackgroundTaskHandler
 from fastapi import FastAPI
 
 from portal_core.database import database, migration
 from .model.identity import Identity
 from .service import app_store, init_apps, app_infra, identity, app_lifecycle
+from .util.background_task import BackgroundTaskHandler
 from .web import internal, public, protected
 
 log = logging.getLogger(__name__)
@@ -35,7 +35,8 @@ def create_app():
 	app_infra.refresh_app_infra()
 	log.debug('written app infra files (docker-compose and traefik)')
 
-	bg_tasks = BackgroundTaskHandler([(app_lifecycle.stop_apps, 10)])
+	bg_tasks = BackgroundTaskHandler([(app_lifecycle.stop_apps, gconf.get('apps.lifecycle.refresh_interval'))])
+	bg_tasks.start()
 
 	app_meta = metadata('portal_core')
 	app = FastAPI(

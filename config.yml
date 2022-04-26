@@ -21,6 +21,9 @@ apps:
   app_store:
     project_id: 25524454
     sync_dir: /core/appstore
+  lifecycle:
+    refresh_interval: 10
+    default_idle_time_for_shutdown: 60
   initial_apps:
     filebrowser:
       image: portalapps.azurecr.io/ptl-apps/filebrowser:master
