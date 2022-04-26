@@ -1,5 +1,6 @@
 import logging
 
+import gconf
 from cachetools import cached, TTLCache
 from fastapi import HTTPException, APIRouter, Cookie, Response, status, Header
 from jinja2 import Template
@@ -65,14 +66,14 @@ def _get_app(x_forwarded_host):
 	return app
 
 
-@cached(cache=TTLCache(maxsize=8, ttl=3))
+@cached(cache=TTLCache(maxsize=8, ttl=gconf.get('tests.cache_ttl', default=3)))
 def _get_portal_identity():
 	with identities_table() as identities:
 		default_identity = Identity(**identities.get(Query().is_default == True))
 	return SafeIdentity.from_identity(default_identity)
 
 
-@cached(cache=TTLCache(maxsize=32, ttl=3))
+@cached(cache=TTLCache(maxsize=32, ttl=gconf.get('tests.cache_ttl', default=3)))
 def _find_app(app_name):
 	with apps_table() as apps:  # type: Table
 		app = InstalledApp(**apps.get(Query().name == app_name))

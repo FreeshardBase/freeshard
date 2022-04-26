@@ -1,3 +1,6 @@
+tests:
+  cache_ttl: 0
+
 services:
   postgres:
     host: localhost
