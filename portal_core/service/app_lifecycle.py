@@ -1,9 +1,11 @@
 import logging
 import time
+from typing import Dict
 
 import docker
 import gconf
 from docker import errors as docker_errors
+from docker.models.containers import Container
 from tinydb.table import Table
 
 from portal_core.database.database import apps_table
@@ -11,7 +13,7 @@ from portal_core.model.app import InstalledApp
 
 log = logging.getLogger(__name__)
 
-last_access_dict = dict()
+last_access_dict: Dict[str, float] = dict()
 
 
 def ensure_app_is_running(app: InstalledApp):
@@ -26,18 +28,23 @@ def ensure_app_is_running(app: InstalledApp):
 
 
 async def stop_apps():
-	docker_client = docker.from_env()
 	global last_access_dict
+	docker_client = docker.from_env()
+	containers = {c.name: c for c in docker_client.containers.list()}
+
 	with apps_table() as apps:  # type: Table
 		for app in [InstalledApp(**a) for a in apps.all()]:
 			try:
-				last_access = last_access_dict[app.name]
-			except KeyError:
+				container: Container = containers[app.name]
+			except KeyError as e:
+				log.error(f'no container found for app {app.name}')
 				continue
-			if last_access < time.time() - gconf.get('apps.lifecycle.default_idle_time_for_shutdown'):
-				log.debug(f'Stopping {app.name} due to inactivity')
-				docker_client.containers.get(app.name).stop()
-				del last_access_dict[app.name]
+
+			if container.status == 'running':
+				last_access = last_access_dict.get(app.name, default=0.0)
+				if last_access < time.time() - gconf.get('apps.lifecycle.default_idle_time_for_shutdown'):
+					log.debug(f'Stopping {app.name} due to inactivity')
+					container.stop()
 
 
 class NoSuchApp(Exception):
