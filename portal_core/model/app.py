@@ -5,7 +5,7 @@ from pydantic import BaseModel, root_validator, conint, validator
 
 from portal_core.model import app_migration
 
-CURRENT_VERSION = '3.0'
+CURRENT_VERSION = '3.1'
 
 
 class InstallationReason(str, Enum):
@@ -59,7 +59,7 @@ class Path(BaseModel):
 
 
 class Lifecycle(BaseModel):
-	always_on: Optional[bool]
+	always_on: bool = False
 	idle_time_for_shutdown: Optional[int]
 
 	@validator('idle_time_for_shutdown')
@@ -70,9 +70,9 @@ class Lifecycle(BaseModel):
 
 	@root_validator
 	def validate(cls, values):
-		if values.get('always_on', None) and values.get('idle_time_for_shutdown', None):
+		if values.get('always_on') and values.get('idle_time_for_shutdown', None):
 			raise ValueError('if always_on is true, idle_time_for_shutdown must not be set')
-		if not values.get('always_on', False) and not values.get('idle_time_for_shutdown', None):
+		if not values.get('always_on') and not values.get('idle_time_for_shutdown', None):
 			raise ValueError('if always_on is false or not set, idle_time_for_shutdown must be set')
 		return values
 

@@ -10,7 +10,7 @@ from tests.util import create_apps_from_docker_compose, WAITING_DOCKER_IMAGE
 def test_app_starts_and_stops(api_client):
 	docker_client = docker.from_env()
 	app = AppToInstall(**{
-		'v': '3.0',
+		'v': '3.1',
 		'name': 'foo-app',
 		'image': WAITING_DOCKER_IMAGE,
 		'version': '1.2.3',
