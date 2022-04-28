@@ -1,3 +1,6 @@
+import pytest
+
+from portal_core.model.app import Lifecycle
 from portal_core.model.util import PropertyBaseModel
 
 
@@ -22,3 +25,14 @@ def test_property_base_model():
 	assert 'prop_field_included' in instance_dict
 	assert instance_dict['prop_field_included'] == 'fooprop'
 	assert 'prop_field_excluded' not in instance_dict
+
+
+def test_lifecycle():
+	Lifecycle(always_on=True)
+	Lifecycle(idle_time_for_shutdown=5)
+	with pytest.raises(ValueError):
+		Lifecycle(idle_time_for_shutdown=4)
+	with pytest.raises(ValueError):
+		Lifecycle()
+	with pytest.raises(ValueError):
+		Lifecycle(always_on=True, idle_time_for_shutdown=10)

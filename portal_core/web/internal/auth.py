@@ -1,5 +1,6 @@
 import logging
 
+import gconf
 from cachetools import cached, TTLCache
 from fastapi import HTTPException, APIRouter, Cookie, Response, status, Header
 from jinja2 import Template
@@ -9,7 +10,7 @@ from tinydb.table import Table
 from portal_core.database.database import apps_table, identities_table
 from portal_core.model.app import InstalledApp, Access, Path
 from portal_core.model.identity import Identity, SafeIdentity
-from portal_core.service import pairing
+from portal_core.service import pairing, app_lifecycle
 
 log = logging.getLogger(__name__)
 
@@ -53,6 +54,8 @@ def authenticate_and_authorize(
 				.render(auth=auth_header_values, portal=portal_header_values)
 	log.debug(f'granted auth for {x_forwarded_host}{x_forwarded_uri} with headers {response.headers.items()}')
 
+	app_lifecycle.ensure_app_is_running(app)
+
 
 def _get_app(x_forwarded_host):
 	app_name = x_forwarded_host.split('.')[0]
@@ -63,14 +66,14 @@ def _get_app(x_forwarded_host):
 	return app
 
 
-@cached(cache=TTLCache(maxsize=8, ttl=3))
+@cached(cache=TTLCache(maxsize=8, ttl=gconf.get('tests.cache_ttl', default=3)))
 def _get_portal_identity():
 	with identities_table() as identities:
 		default_identity = Identity(**identities.get(Query().is_default == True))
 	return SafeIdentity.from_identity(default_identity)
 
 
-@cached(cache=TTLCache(maxsize=32, ttl=3))
+@cached(cache=TTLCache(maxsize=32, ttl=gconf.get('tests.cache_ttl', default=3)))
 def _find_app(app_name):
 	with apps_table() as apps:  # type: Table
 		app = InstalledApp(**apps.get(Query().name == app_name))
