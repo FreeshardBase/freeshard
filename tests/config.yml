@@ -11,7 +11,6 @@ services:
 apps:
   lifecycle:
     refresh_interval: 2
-    default_idle_time_for_shutdown: 3
   initial_apps:
     filebrowser: null
     app-foo:

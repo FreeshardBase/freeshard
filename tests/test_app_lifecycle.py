@@ -10,14 +10,15 @@ from tests.util import create_apps_from_docker_compose, WAITING_DOCKER_IMAGE
 def test_app_starts_and_stops(api_client):
 	docker_client = docker.from_env()
 	app = AppToInstall(**{
+		'v': '3.0',
 		'name': 'foo-app',
 		'image': WAITING_DOCKER_IMAGE,
 		'version': '1.2.3',
 		'port': 1,
-		'authentication': {
-			'default_access': 'public',
-			'private_paths': ['/private1', '/private2']
+		'paths': {
+			'': {'access': 'public'},
 		},
+		'lifecycle': {'idle_time_for_shutdown': 5},
 		'reason': InstallationReason.CUSTOM,
 	})
 	with apps_table() as apps:
@@ -38,7 +39,7 @@ def test_app_starts_and_stops(api_client):
 			assert docker_client.containers.get('foo-app').status == 'exited'
 
 		retry(assert_app_running, timeout=10, retry_errors=[AssertionError])
-		retry(assert_app_exited, timeout=10, retry_errors=[AssertionError])
+		retry(assert_app_exited, timeout=15, retry_errors=[AssertionError])
 
 		api_client.get('internal/auth', headers={
 			'X-Forwarded-Host': 'foo-app.myportal.org',

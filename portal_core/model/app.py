@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Optional, List, Dict, Union
 
-from pydantic import BaseModel, root_validator
+from pydantic import BaseModel, root_validator, conint, validator
 
 from portal_core.model import app_migration
 
@@ -58,6 +58,25 @@ class Path(BaseModel):
 	headers: Optional[Dict[str, str]]
 
 
+class Lifecycle(BaseModel):
+	always_on: Optional[bool]
+	idle_time_for_shutdown: Optional[int]
+
+	@validator('idle_time_for_shutdown')
+	def validate_idle_time_for_shutdown(cls, v):
+		if v < 5:
+			raise ValueError(f'idle_time_for_shutdown must be at least 5, was {v}')
+		return v
+
+	@root_validator
+	def validate(cls, values):
+		if values.get('always_on', None) and values.get('idle_time_for_shutdown', None):
+			raise ValueError('if always_on is true, idle_time_for_shutdown must not be set')
+		if not values.get('always_on', False) and not values.get('idle_time_for_shutdown', None):
+			raise ValueError('if always_on is false or not set, idle_time_for_shutdown must be set')
+		return values
+
+
 class App(BaseModel):
 	v: str
 	name: str
@@ -67,6 +86,7 @@ class App(BaseModel):
 	env_vars: Optional[Dict[str, str]]
 	services: Optional[List[Service]]
 	paths: Dict[str, Path]
+	lifecycle: Lifecycle = Lifecycle(idle_time_for_shutdown=60)
 	store_info: Optional[StoreInfo]
 
 	@root_validator(pre=True)

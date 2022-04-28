@@ -36,13 +36,15 @@ async def stop_apps():
 		for app in [InstalledApp(**a) for a in apps.all()]:
 			try:
 				container: Container = containers[app.name]
-			except KeyError as e:
+			except KeyError:
 				log.error(f'no container found for app {app.name}')
 				continue
 
-			if container.status == 'running':
+			if container.status == 'running' and not app.lifecycle.always_on:
 				last_access = last_access_dict.get(app.name, default=0.0)
-				if last_access < time.time() - gconf.get('apps.lifecycle.default_idle_time_for_shutdown'):
+				idle_time_for_shutdown = app.lifecycle.idle_time_for_shutdown
+				print(f'{app.name} - last_access={last_access} idle_time={idle_time_for_shutdown}')
+				if last_access < time.time() - idle_time_for_shutdown:
 					log.debug(f'Stopping {app.name} due to inactivity')
 					container.stop()
 
