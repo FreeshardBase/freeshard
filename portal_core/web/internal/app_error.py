@@ -2,7 +2,8 @@ import base64
 import logging
 from functools import lru_cache
 from pathlib import Path
-
+from docker import errors as docker_errors
+import docker
 import gconf
 import jinja2
 from fastapi import APIRouter, Request
@@ -15,18 +16,44 @@ router = APIRouter()
 
 @router.get('/app_error/{status}')
 def app_error(status: int, request: Request):
-	host_header: str = request.headers.get("host")
-	app_name = host_header.split('.')[0]
-	if status == 502:
-		with open(Path.cwd() / 'data' / 'splash.html', 'r') as f:
-			template = jinja2.Template(f.read())
-		return HTMLResponse(content=template.render(
-			status=status,
-			app_name=app_name,
-			icon_data=data_url(app_name),
-		), status_code=status)
+	app_name = get_app_name(request)
+	template = get_template()
+	container_status = get_container_status(app_name)
+	return HTMLResponse(content=template.render(
+		status=status,
+		app_name=app_name,
+		container_status=container_status,
+		icon_data=data_url(app_name),
+	), status_code=status)
 
 	return f'Error {status} for app {app_name}'
+
+
+def get_container_status(app_name):
+	docker_client = get_docker_client()
+	try:
+		status = docker_client.containers.get(app_name).status
+	except docker_errors.NotFound:
+		status = 'unknown'
+	return status
+
+
+def get_app_name(request):
+	host_header: str = request.headers.get("host")
+	app_name = host_header.split('.')[0]
+	return app_name
+
+
+@lru_cache()
+def get_docker_client():
+	return docker.from_env()
+
+
+@lru_cache()
+def get_template():
+	with open(Path.cwd() / 'data' / 'splash.html', 'r') as f:
+		template = jinja2.Template(f.read())
+	return template
 
 
 @lru_cache(maxsize=4)
