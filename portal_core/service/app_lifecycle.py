@@ -23,13 +23,13 @@ def ensure_app_is_running(app: InstalledApp):
 	try:
 		docker_client.containers.get(app.name).start()
 	except docker_errors.NotFound as e:
-		raise NoSuchApp from e
+		raise NoSuchApp(app.name) from e
 
 
 async def stop_apps():
 	global last_access_dict
 	docker_client = docker.from_env()
-	containers = {c.name: c for c in docker_client.containers.list()}
+	containers = {c.name: c for c in docker_client.containers.list(all=True)}
 
 	with apps_table() as apps:  # type: Table
 		for app in [InstalledApp(**a) for a in apps.all()]:

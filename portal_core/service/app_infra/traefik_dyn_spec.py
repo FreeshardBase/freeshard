@@ -14,28 +14,28 @@ def traefik_dyn_spec(apps: List[InstalledApp], portal: SafeIdentity) -> t.Model:
 					entryPoints=['https'],
 					service='portal_core',
 					middlewares=['strip', 'auth-public'],
-					tls=t.Tls1(certResolver='letsencrypt'),
+					tls=make_cert_resolver(portal),
 				),
 				'portal_core_private': t.HttpRouter(
 					rule='PathPrefix(`/core/protected`)',
 					entryPoints=['https'],
 					service='portal_core',
 					middlewares=['strip', 'auth-private'],
-					tls=t.Tls1(certResolver='letsencrypt'),
+					tls=make_cert_resolver(portal),
 				),
 				'web-terminal': t.HttpRouter(
 					rule='PathPrefix(`/`)',
 					priority=1,
 					entryPoints=['https'],
 					service='web-terminal',
-					tls=t.Tls1(certResolver='letsencrypt'),
+					tls=make_cert_resolver(portal),
 				),
 				'traefik': t.HttpRouter(
 					rule=f'HostRegexp(`traefik.{portal.domain}`)',
 					entryPoints=['https'],
 					service='api@internal',
 					middlewares=['auth-private'],
-					tls=t.Tls1(certResolver='letsencrypt'),
+					tls=make_cert_resolver(portal),
 				),
 				**{a.name: make_app_router(a, portal) for a in apps}
 			},
@@ -115,5 +115,15 @@ def make_app_router(app: InstalledApp, portal: SafeIdentity) -> t.HttpRouter:
 		entryPoints=['https'],
 		service=app.name,
 		middlewares=['app-error', 'auth'],
-		tls=t.Tls1(certResolver='letsencrypt'),
+		tls=make_cert_resolver(portal),
+	)
+
+
+def make_cert_resolver(portal: SafeIdentity):
+	return t.Tls1(
+		certResolver='letsencrypt',
+		domains=[t.Domain(
+			main=portal.domain,
+			sans=[f'*.{portal.domain}']
+		)]
 	)
