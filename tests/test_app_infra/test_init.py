@@ -1,4 +1,3 @@
-import re
 from pathlib import Path
 
 import gconf
@@ -9,7 +8,7 @@ from psycopg.conninfo import make_conninfo
 
 from portal_core.database.database import apps_table
 from portal_core.model.app import InstallationReason
-from portal_core.service import compose, identity
+from portal_core.service import app_infra, identity
 
 pytestmark = pytest.mark.usefixtures('tempfile_path_config')
 
@@ -32,34 +31,10 @@ def test_data_dirs_are_created():
 			'reason': InstallationReason.CUSTOM,
 		})
 
-	compose.refresh_docker_compose()
+	app_infra.refresh_app_infra()
 
 	assert (Path(gconf.get('apps.app_data_dir')) / 'foo-app' / 'user_data' / 'foo').is_dir()
 	assert (Path(gconf.get('apps.app_data_dir')) / 'foo-app' / 'user_data' / 'bar').is_dir()
-
-
-def test_template_is_written():
-	identity.init_default_identity()
-	with apps_table() as apps:
-		apps.insert({
-			'name': 'baz-app',
-			'image': 'baz-app:latest',
-			'version': '1.2.3',
-			'port': 2,
-			'env_vars': {
-				'baz-env': 'foo',
-				'url': 'https://{{ portal.domain }}/baz'
-			},
-			'reason': InstallationReason.CUSTOM,
-		})
-
-	compose.refresh_docker_compose()
-
-	with open(gconf.get('docker_compose.compose_filename'), 'r') as f:
-		output = yaml.safe_load(f)
-		baz_app = output['services']['baz-app']
-		assert 'baz-env=foo' in baz_app['environment']
-		assert any(re.search('url=https://.*\.p\.getportal\.org/baz', e) for e in baz_app['environment'])
 
 
 def test_postgres_is_setup(postgres):
@@ -78,7 +53,7 @@ def test_postgres_is_setup(postgres):
 			'reason': InstallationReason.CUSTOM,
 		})
 
-	compose.refresh_docker_compose()
+	app_infra.refresh_app_infra()
 
 	pg_host = gconf.get('services.postgres.host')
 	pg_port = gconf.get('services.postgres.port')
@@ -100,7 +75,7 @@ def test_postgres_is_setup(postgres):
 			current_db = cur.execute('SELECT current_database()').fetchall()
 			assert ('postgres-app',) in current_db
 
-	with open(gconf.get('docker_compose.compose_filename'), 'r') as f:
+	with open(gconf.get('app_infra.compose_filename'), 'r') as f:
 		output = yaml.safe_load(f)
 		postgres_app = output['services']['postgres-app']
 		assert 'pg_user=postgres-app' in postgres_app['environment']
@@ -119,9 +94,9 @@ def test_docker_socket_is_mounted():
 			'services': ['docker_sock_ro']
 		})
 
-	compose.refresh_docker_compose()
+	app_infra.refresh_app_infra()
 
-	with open(gconf.get('docker_compose.compose_filename'), 'r') as f:
+	with open(gconf.get('app_infra.compose_filename'), 'r') as f:
 		output = yaml.safe_load(f)
 		app = output['services']['app-with-docker']
 		assert '/var/run/docker.sock:/var/run/docker.sock:ro' in app['volumes']

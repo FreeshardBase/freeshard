@@ -5,8 +5,9 @@ dns:
   zone: p.getportal.org
   prefix length: 6
 
-docker_compose:
+app_infra:
   compose_filename: /core/docker-compose-apps.yml
+  traefik_dyn_filename: /core/traefik_dyn/traefik_dyn.yml
 
 services:
   postgres:
@@ -20,6 +21,8 @@ apps:
   app_store:
     project_id: 25524454
     sync_dir: /core/appstore
+  lifecycle:
+    refresh_interval: 10
   initial_apps:
     filebrowser:
       image: portalapps.azurecr.io/ptl-apps/filebrowser:master

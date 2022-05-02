@@ -78,8 +78,18 @@ def migrate_2_0_to_3_0(app_json: dict) -> dict:
 	return app_json
 
 
+def migrate_3_0_to_3_1(app_json: dict) -> dict:
+	app_json['lifecycle'] = {
+		'always_on': False,
+		'idle_time_for_shutdown': 60,
+	}
+	app_json['v'] = '3.1'
+	return app_json
+
+
 migrations = {
 	'0.0': migrate_0_0_to_1_0,
 	'1.0': migrate_1_0_to_2_0,
 	'2.0': migrate_2_0_to_3_0,
+	'3.0': migrate_3_0_to_3_1,
 }

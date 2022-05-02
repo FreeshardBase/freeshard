@@ -1,3 +1,6 @@
+tests:
+  cache_ttl: 0
+
 services:
   postgres:
     host: localhost
@@ -6,10 +9,12 @@ services:
     password: postgres
 
 apps:
+  lifecycle:
+    refresh_interval: 2
   initial_apps:
     filebrowser: null
     app-foo:
-      image: bar
+      image: jannash/noop
       port: 80
       data_dirs:
         - /data

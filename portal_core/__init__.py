@@ -9,7 +9,8 @@ from fastapi import FastAPI
 
 from portal_core.database import database, migration
 from .model.identity import Identity
-from .service import app_store, init_apps, compose, identity
+from .service import app_store, init_apps, app_infra, identity, app_lifecycle
+from .util.background_task import BackgroundTaskHandler
 from .web import internal, public, protected
 
 log = logging.getLogger(__name__)
@@ -31,8 +32,11 @@ def create_app():
 	init_apps.refresh_init_apps()
 	log.debug('refreshed initial apps')
 
-	compose.refresh_docker_compose()
-	log.debug('launched docker-compose')
+	app_infra.refresh_app_infra()
+	log.debug('written app infra files (docker-compose and traefik)')
+
+	bg_tasks = BackgroundTaskHandler([(app_lifecycle.stop_apps, gconf.get('apps.lifecycle.refresh_interval'))])
+	bg_tasks.start()
 
 	app_meta = metadata('portal_core')
 	app = FastAPI(
@@ -44,6 +48,10 @@ def create_app():
 	app.include_router(internal.router)
 	app.include_router(public.router)
 	app.include_router(protected.router)
+
+	@app.on_event('shutdown')
+	def shutdown_event():
+		bg_tasks.stop().wait()
 
 	return app
 

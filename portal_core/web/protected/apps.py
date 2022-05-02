@@ -13,7 +13,7 @@ from fastapi import APIRouter, status, HTTPException
 from fastapi.responses import StreamingResponse
 from tinydb import where
 
-from portal_core.service import compose
+from portal_core.service import app_infra
 from portal_core.database.database import apps_table
 from portal_core.model.app import InstallationReason, InstalledApp, App
 
@@ -73,14 +73,14 @@ def install_app(input_app: App):
 			**input_app.dict(),
 			'reason': InstallationReason.CUSTOM,
 		})
-		compose.refresh_docker_compose()
+		app_infra.refresh_app_infra()
 
 
 @router.delete('/{name}', status_code=status.HTTP_204_NO_CONTENT)
 def uninstall_app(name: str):
 	with apps_table() as apps:
 		apps.remove(where('name') == name)
-	compose.refresh_docker_compose()
+	app_infra.refresh_app_infra()
 
 
 def _get_metadata_tar(name) -> tarfile.TarFile:

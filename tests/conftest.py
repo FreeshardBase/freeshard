@@ -6,15 +6,13 @@ import psycopg
 import pytest
 from fastapi.testclient import TestClient
 from psycopg.conninfo import make_conninfo
+from tinydb import Query
 
 import portal_core
+from portal_core import Identity
+from portal_core.database.database import identities_table
 
 log = logging.getLogger(__name__)
-
-
-@pytest.fixture(scope='session', autouse=True)
-def load_gconf():
-	gconf.load('../config.yml', 'config.yml')
 
 
 @pytest.fixture
@@ -26,7 +24,10 @@ def tempfile_path_config(tmp_path):
 			'app_data_dir': tmp_path / 'app_data',
 			'app_store': {'sync_dir': tmp_path / 'app_store'},
 		},
-		'docker_compose': {'compose_filename': tmp_path / 'docker-compose-apps.yml'}
+		'app_infra': {
+			'compose_filename': tmp_path / 'docker-compose-apps.yml',
+			'traefik_dyn_filename': tmp_path / 'traefik_dyn.yml',
+		}
 	}
 	with gconf.override_conf(override):
 		yield

@@ -1,9 +1,5 @@
-import pytest
-
 from portal_core.model.identity import Identity
 from portal_core.web.protected.identities import OutputIdentity
-
-pytestmark = pytest.mark.usefixtures('tempfile_path_config')
 
 
 def test_add_and_get(api_client):

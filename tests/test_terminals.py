@@ -1,11 +1,8 @@
 from time import sleep
 
-import pytest
 from starlette import status
 
 from tests.util import get_pairing_code, add_terminal
-
-pytestmark = pytest.mark.usefixtures('tempfile_path_config')
 
 
 def _delete_terminal(api_client, t_id):

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>{{ app_name }}</title>
+</head>
+<body onload="timeRefresh(2000);">
+<div class="center">
+<img src="{{ icon_data }}">
+<h1>{{ app_name }}</h1>
+</div>
+<p>{{ status }} - {{ container_status }}</p>
+<script>
+    function timeRefresh(time) {
+        setTimeout("location.reload();", time)
+    }
+</script>
+</body>
+<style>
+    body {
+        justify-content: center;
+        display: grid;
+    }
+
+    img {
+        height: 7em;
+    }
+
+    h1 {
+        font-family: Avenir,Helvetica,Arial,sans-serif;
+    }
+
+    p {
+        font-family: Avenir,Helvetica,Arial,sans-serif;
+        color: #6c757d;
+        bottom: 0;
+        position: fixed;
+        right: 0;
+        left: 0;
+        text-align: center;
+        font-size: 80%;
+        font-weight: 400;
+        margin-bottom: 1rem;
+    }
+
+    .center {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        margin-right: -50%;
+        transform: translate(-50%, -50%);
+        text-align: center;
+    }
+</style>
+</html>
