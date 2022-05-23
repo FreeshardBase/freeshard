@@ -2,6 +2,7 @@ from time import sleep
 
 from starlette import status
 
+from portal_core.model.terminal import Terminal, InputTerminal
 from tests.util import get_pairing_code, add_terminal
 
 
@@ -24,6 +25,26 @@ def test_add_delete(api_client):
 
 	response = api_client.get('protected/terminals')
 	assert len(response.json()) == 0
+
+
+def test_edit(api_client):
+	t_name_1 = 'T1'
+	pairing_code = get_pairing_code(api_client)
+	response = add_terminal(api_client, pairing_code['code'], t_name_1)
+	assert response.status_code == 201
+	response = api_client.get(f'protected/terminals/name/{t_name_1}')
+	assert response.status_code == 200
+	response_terminal = Terminal(**response.json())
+	assert response_terminal.name == t_name_1
+
+	t_name_2 = 'T2'
+	response = api_client.put(
+		f'protected/terminals/id/{response_terminal.id}',
+		json=InputTerminal(name=t_name_2).dict())
+	assert response.status_code == 200
+	response = api_client.get(f'protected/terminals/id/{response_terminal.id}')
+	assert response.status_code == 200
+	assert Terminal(**response.json()).name == t_name_2
 
 
 def test_pairing_happy(api_client):

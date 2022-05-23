@@ -5,11 +5,10 @@ from typing import List
 from fastapi import APIRouter, status, HTTPException
 from pydantic import BaseModel
 from tinydb import Query
-from tinydb.table import Table
 
 from portal_core.database.database import terminals_table
+from portal_core.model.terminal import Terminal, InputTerminal
 from portal_core.service import pairing
-from portal_core.model.terminal import Terminal
 
 log = logging.getLogger(__name__)
 
@@ -30,11 +29,31 @@ def list_all_terminals():
 		return terminals.all()
 
 
+@router.get('/id/{id_}')
+def get_terminal_by_id(id_: str):
+	with terminals_table() as terminals:
+		if t := terminals.get(Query().id == id_):
+			return t
+		else:
+			raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+
 @router.get('/name/{name}', response_model=Terminal)
 def get_terminal_by_name(name: str):
 	with terminals_table() as terminals:
 		if t := terminals.get(Query().name == name):
 			return t
+		else:
+			raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+
+@router.put('/id/{id_}')
+def edit_terminal(id_: str, terminal: InputTerminal):
+	with terminals_table() as terminals:  # type: Table
+		if t := terminals.get(Query().id == id_):
+			existing_terminal = Terminal(**t)
+			existing_terminal.name = terminal.name
+			terminals.update(existing_terminal.dict(), Query().id == id_)
 		else:
 			raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 

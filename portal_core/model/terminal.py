@@ -15,3 +15,7 @@ class Terminal(BaseModel):
 			id=human_encoding.random_string(6),
 			name=name,
 		)
+
+
+class InputTerminal(BaseModel):
+	name: str

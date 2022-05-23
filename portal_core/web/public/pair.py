@@ -1,13 +1,12 @@
 import logging
 
 from fastapi import APIRouter, HTTPException, status, Response
-from pydantic import BaseModel
 from tinydb import Query
 from tinydb.table import Table
 
 from portal_core.database.database import terminals_table, identities_table
 from portal_core.model.identity import Identity
-from portal_core.model.terminal import Terminal
+from portal_core.model.terminal import Terminal, InputTerminal
 from portal_core.service import pairing
 
 log = logging.getLogger(__name__)
@@ -15,10 +14,6 @@ log = logging.getLogger(__name__)
 router = APIRouter(
 	prefix='/pair',
 )
-
-
-class InputTerminal(BaseModel):
-	name: str
 
 
 @router.post('/terminal', status_code=status.HTTP_201_CREATED)
