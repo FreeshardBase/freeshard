@@ -26,6 +26,7 @@ setup(
 		'python-gitlab',
 		'psycopg[binary]',
 		'cachetools',
+		'blinker',
 		'common_py @ git+https://app_controller:MzJwN_VwwEyVmtj22LXx@gitlab.com/ptl/common_py.git',
 	],
 	extras_require={
