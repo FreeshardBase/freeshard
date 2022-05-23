@@ -2,7 +2,7 @@ from time import sleep
 
 from starlette import status
 
-from portal_core.model.terminal import Terminal, InputTerminal
+from portal_core.model.terminal import Terminal, InputTerminal, Icon
 from tests.util import get_pairing_code, add_terminal
 
 
@@ -36,15 +36,18 @@ def test_edit(api_client):
 	assert response.status_code == 200
 	response_terminal = Terminal(**response.json())
 	assert response_terminal.name == t_name_1
+	assert response_terminal.icon == Icon.UNKNOWN
 
-	t_name_2 = 'T2'
+	response_terminal.name = 'T2'
+	response_terminal.icon = Icon.NOTEBOOK
 	response = api_client.put(
 		f'protected/terminals/id/{response_terminal.id}',
-		json=InputTerminal(name=t_name_2).dict())
+		json=response_terminal.dict())
 	assert response.status_code == 200
 	response = api_client.get(f'protected/terminals/id/{response_terminal.id}')
 	assert response.status_code == 200
-	assert Terminal(**response.json()).name == t_name_2
+	assert Terminal(**response.json()).name == response_terminal.name
+	assert Terminal(**response.json()).icon == response_terminal.icon
 
 
 def test_pairing_happy(api_client):

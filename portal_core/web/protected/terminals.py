@@ -53,6 +53,7 @@ def edit_terminal(id_: str, terminal: InputTerminal):
 		if t := terminals.get(Query().id == id_):
 			existing_terminal = Terminal(**t)
 			existing_terminal.name = terminal.name
+			existing_terminal.icon = terminal.icon
 			terminals.update(existing_terminal.dict(), Query().id == id_)
 		else:
 			raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)

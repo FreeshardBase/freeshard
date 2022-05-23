@@ -4,6 +4,8 @@ from pathlib import Path
 
 import gconf
 
+from portal_core.model.terminal import InputTerminal, Icon
+
 WAITING_DOCKER_IMAGE = 'nginx:alpine'
 
 
