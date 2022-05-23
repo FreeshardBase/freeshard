@@ -1,7 +1,6 @@
 import logging
 
 import gconf
-from blinker import Signal
 from cachetools import cached, TTLCache
 from fastapi import HTTPException, APIRouter, Cookie, Response, status, Header
 from jinja2 import Template
@@ -12,10 +11,9 @@ from portal_core.database.database import apps_table, identities_table
 from portal_core.model.app import InstalledApp, Access, Path
 from portal_core.model.identity import Identity, SafeIdentity
 from portal_core.service import pairing
+from portal_core.util.signals import on_terminal_auth, on_request_to_app
 
 log = logging.getLogger(__name__)
-on_terminal_auth = Signal()
-on_request_to_app = Signal()
 
 router = APIRouter()
 
