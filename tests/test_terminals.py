@@ -1,8 +1,10 @@
 from time import sleep
 
 from starlette import status
+from tinydb.operations import delete
+from tinydb.table import Table
 
-from portal_core.database.database import apps_table
+from portal_core.database.database import apps_table, terminals_table
 from portal_core.model.app import AppToInstall, InstallationReason
 from portal_core.model.terminal import Terminal, Icon
 from portal_core.service import app_infra
@@ -202,6 +204,11 @@ def test_last_connection(api_client):
 
 	app_infra.refresh_app_infra()
 	with create_apps_from_docker_compose():
+		with terminals_table() as terminals: # type: Table
+			terminals.update(delete('last_connection'))
+		last_connection_missing = Terminal(**api_client.get(f'protected/terminals/name/{t_name}').json())
+		assert not last_connection_missing.last_connection
+
 		sleep(0.1)
 		assert api_client.get('internal/auth', headers={
 			'X-Forwarded-Host': 'foo-app.myportal.org',

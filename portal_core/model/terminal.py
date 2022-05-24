@@ -1,5 +1,6 @@
 from datetime import datetime
 from enum import Enum
+from typing import Optional
 
 from common_py import human_encoding
 from pydantic import BaseModel
@@ -22,7 +23,7 @@ class Terminal(BaseModel):
 	id: str
 	name: str
 	icon: Icon = Icon.UNKNOWN
-	last_connection: datetime
+	last_connection: Optional[datetime]
 
 	def __str__(self):
 		return f'Terminal[{self.id}, {self.name}]'
