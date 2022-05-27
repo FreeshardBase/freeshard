@@ -10,7 +10,8 @@ from tinydb.table import Table
 from portal_core.database.database import apps_table, identities_table
 from portal_core.model.app import InstalledApp, Access, Path
 from portal_core.model.identity import Identity, SafeIdentity
-from portal_core.service import pairing, app_lifecycle
+from portal_core.service import pairing
+from portal_core.util.signals import on_terminal_auth, on_request_to_app
 
 log = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ def authenticate_terminal(response: Response, authorization: str = Cookie(None))
 		response.headers['X-Ptl-Client-Type'] = 'terminal'
 		response.headers['X-Ptl-Client-Id'] = terminal.id
 		response.headers['X-Ptl-Client-Name'] = terminal.name
+		on_terminal_auth.send(terminal)
 
 
 @router.get('/auth', status_code=status.HTTP_200_OK)
@@ -40,21 +42,21 @@ def authenticate_and_authorize(
 		x_forwarded_uri: str = Header(None),
 ):
 	app = _get_app(x_forwarded_host)
-	access_path = _determine_access_path(x_forwarded_uri, app)
+	path_object = _get_path_object(x_forwarded_uri, app)
 	auth_header_values = _make_auth_header_values(authorization)
 	portal_header_values = _get_portal_identity()
 
-	if access_path.access == Access.PRIVATE and auth_header_values['client_type'] != 'terminal':
+	if path_object.access == Access.PRIVATE and auth_header_values['client_type'] != 'terminal':
 		log.debug(f'denied auth for {x_forwarded_host}{x_forwarded_uri} -> no valid auth token')
 		raise HTTPException(status.HTTP_401_UNAUTHORIZED)
 
-	if access_path.headers:
-		for header_key, header_template in access_path.headers.items():
+	if path_object.headers:
+		for header_key, header_template in path_object.headers.items():
 			response.headers[header_key] = Template(header_template) \
 				.render(auth=auth_header_values, portal=portal_header_values)
 	log.debug(f'granted auth for {x_forwarded_host}{x_forwarded_uri} with headers {response.headers.items()}')
 
-	app_lifecycle.ensure_app_is_running(app)
+	on_request_to_app.send(app)
 
 
 def _get_app(x_forwarded_host):
@@ -80,7 +82,7 @@ def _find_app(app_name):
 	return app
 
 
-def _determine_access_path(uri, app: InstalledApp) -> Path:
+def _get_path_object(uri, app: InstalledApp) -> Path:
 	for path, props in sorted(app.paths.items(), key=lambda x: len(x[0]), reverse=True):  # type: (str, Path)
 		if uri.startswith(path):
 			return props
@@ -96,4 +98,5 @@ def _make_auth_header_values(authorization):
 		header_values['client_type'] = 'terminal'
 		header_values['client_id'] = terminal.id
 		header_values['client_name'] = terminal.name
+		on_terminal_auth.send(terminal)
 	return header_values
