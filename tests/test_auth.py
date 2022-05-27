@@ -11,7 +11,6 @@ def test_default_public(api_client):
 		apps.insert(AppToInstall(**{
 			'name': 'foo-app',
 			'image': WAITING_DOCKER_IMAGE,
-			'version': '1.2.3',
 			'port': 1,
 			'authentication': {
 				'default_access': 'public',

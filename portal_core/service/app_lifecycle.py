@@ -7,6 +7,7 @@ from docker import errors as docker_errors
 from docker.models.containers import Container
 from tinydb.table import Table
 
+import portal_core.util.signals
 from portal_core.database.database import apps_table
 from portal_core.model.app import InstalledApp, Lifecycle
 
@@ -15,6 +16,7 @@ log = logging.getLogger(__name__)
 last_access_dict: Dict[str, float] = dict()
 
 
+@portal_core.util.signals.on_request_to_app.connect
 def ensure_app_is_running(app: InstalledApp):
 	global last_access_dict
 	last_access_dict[app.name] = time.time()
