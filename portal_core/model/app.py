@@ -5,7 +5,7 @@ from pydantic import BaseModel, root_validator, conint, validator
 
 from portal_core.model import app_migration
 
-CURRENT_VERSION = '3.1'
+CURRENT_VERSION = '3.2'
 
 
 class InstallationReason(str, Enum):
