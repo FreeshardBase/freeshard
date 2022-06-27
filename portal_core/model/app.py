@@ -5,7 +5,7 @@ from pydantic import BaseModel, root_validator, conint, validator
 
 from portal_core.model import app_migration
 
-CURRENT_VERSION = '3.1'
+CURRENT_VERSION = '3.2'
 
 
 class InstallationReason(str, Enum):
@@ -30,6 +30,12 @@ class Service(str, Enum):
 	DOCKER_SOCK_RO = 'docker_sock_ro'
 
 
+class SharedDir(str, Enum):
+	DOCUMENTS = 'documents'
+	MEDIA = 'media'
+	MUSIC = 'music'
+
+
 class StoreInfo(BaseModel):
 	description_short: Optional[str]
 	description_long: Optional[Union[str, List[str]]]
@@ -49,8 +55,9 @@ class Postgres(BaseModel):
 
 class DataDir(BaseModel):
 	path: str
-	uid: int
-	gid: int
+	uid: Optional[int]
+	gid: Optional[int]
+	shared_dir: Optional[SharedDir]
 
 
 class Path(BaseModel):

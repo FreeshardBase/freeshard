@@ -38,15 +38,15 @@ def refresh_app_infra():
 
 
 def create_data_dirs(app):
-	app_data_dir = Path(gconf.get('apps.app_data_dir')) / app.name
+	app_data_dir = Path(gconf.get('user_data_dir')) / 'app_data' / app.name
 	for data_dir in app.data_dirs or []:
 		if isinstance(data_dir, str):
 			dir_ = (app_data_dir / str(data_dir).strip('/ '))
 			dir_.mkdir(exist_ok=True, parents=True)
-		else:
+		elif not data_dir.shared_dir:
 			dir_ = (app_data_dir / str(data_dir.path).strip('/ '))
 			dir_.mkdir(exist_ok=True, parents=True)
-			shutil.chown(dir_, user=data_dir.uid, group=data_dir.gid)
+			shutil.chown(dir_, user=data_dir.uid or None, group=data_dir.gid or None)
 
 
 def setup_services(app: InstalledApp):

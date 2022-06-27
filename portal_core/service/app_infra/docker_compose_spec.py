@@ -34,7 +34,10 @@ def volumes(app: InstalledApp) -> List[str]:
 		if isinstance(data_dir, str):
 			result.append(f'/home/portal/user_data/app_data/{app.name}/{data_dir}:{data_dir}')
 		else:
-			result.append(f'/home/portal/user_data/app_data/{app.name}/{data_dir.path}:{data_dir.path}')
+			if data_dir.shared_dir:
+				result.append(f'/home/portal/user_data/shared/{data_dir.shared_dir}:{data_dir.path}')
+			else:
+				result.append(f'/home/portal/user_data/app_data/{app.name}/{data_dir.path}:{data_dir.path}')
 	if app.services and Service.DOCKER_SOCK_RO in app.services:
 		result.append('/var/run/docker.sock:/var/run/docker.sock:ro')
 	return result

@@ -33,7 +33,7 @@ class Terminal(BaseModel):
 		return Terminal(
 			id=human_encoding.random_string(6),
 			name=name,
-			last_connection=datetime.now()
+			last_connection=datetime.utcnow()
 		)
 
 

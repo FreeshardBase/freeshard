@@ -122,8 +122,8 @@ v2_0_app_json = {
 	'installation_reason': 'config',
 }
 
-v3_1_app_json = {
-	'v': '3.1',
+v3_2_app_json = {
+	'v': '3.2',
 	'name': 'filebrowser',
 	'env_vars': {
 		'DATABASE_URL': '{{ postgres.connection_string }}'
@@ -177,14 +177,14 @@ v3_1_app_json = {
 }
 
 
-
 def test_app_needs_migration():
 	assert migration._needs_migration({'foo': 2, 'bar': 3})
 	assert migration._needs_migration({'v': '0.0', 'foo': 2, 'bar': 3})
 	assert migration._needs_migration({'v': '1.0', 'foo': 2, 'bar': 3})
 	assert migration._needs_migration({'v': '2.0', 'foo': 2, 'bar': 3})
 	assert migration._needs_migration({'v': '3.0', 'foo': 2, 'bar': 3})
-	assert not migration._needs_migration({'v': '3.1', 'foo': 2, 'bar': 3})
+	assert migration._needs_migration({'v': '3.1', 'foo': 2, 'bar': 3})
+	assert not migration._needs_migration({'v': '3.2', 'foo': 2, 'bar': 3})
 
 
 def test_migration_from_0_0(init_db):
@@ -197,7 +197,7 @@ def test_migration_from_0_0(init_db):
 	migration.migrate_all()
 
 	with database.apps_table() as apps:  # type: Table
-		assert apps.get(Query().name == 'filebrowser') == v3_1_app_json
+		assert apps.get(Query().name == 'filebrowser') == v3_2_app_json
 
 
 def test_migration_from_1_0(init_db):
@@ -210,4 +210,4 @@ def test_migration_from_1_0(init_db):
 	migration.migrate_all()
 
 	with database.apps_table() as apps:  # type: Table
-		assert apps.get(Query().name == 'filebrowser') == v3_1_app_json
+		assert apps.get(Query().name == 'filebrowser') == v3_2_app_json

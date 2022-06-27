@@ -17,24 +17,56 @@ def test_data_dirs_are_created():
 	identity.init_default_identity()
 	with apps_table() as apps:
 		apps.insert({
+			'v': '3.1',
 			'name': 'foo-app',
 			'image': 'foo-app:latest',
-			'version': '1.2.3',
 			'port': 1,
 			'data_dirs': [
 				'/user_data/foo',
 				'user_data/bar/'
 			],
-			'authentication': {
-				'default_access': 'public',
+			'paths': {
+				'': {
+					'access': 'public'
+				}
 			},
 			'reason': InstallationReason.CUSTOM,
 		})
 
 	app_infra.refresh_app_infra()
 
-	assert (Path(gconf.get('apps.app_data_dir')) / 'foo-app' / 'user_data' / 'foo').is_dir()
-	assert (Path(gconf.get('apps.app_data_dir')) / 'foo-app' / 'user_data' / 'bar').is_dir()
+	assert (Path(gconf.get('user_data_dir')) / 'app_data' / 'foo-app' / 'user_data' / 'foo').is_dir()
+	assert (Path(gconf.get('user_data_dir')) / 'app_data' / 'foo-app' / 'user_data' / 'bar').is_dir()
+
+
+def test_shared_dirs_are_mounted():
+	identity.init_default_identity()
+	with apps_table() as apps:
+		apps.insert({
+			'v': '3.1',
+			'name': 'foo-app',
+			'image': 'foo-app:latest',
+			'port': 1,
+			'data_dirs': [
+				{
+					'path': '/datafoo',
+					'shared_dir': 'documents'
+				}
+			],
+			'paths': {
+				'': {
+					'access': 'public'
+				}
+			},
+			'reason': InstallationReason.CUSTOM,
+		})
+
+	app_infra.refresh_app_infra()
+
+	with open(gconf.get('app_infra.compose_filename'), 'r') as f:
+		output = yaml.safe_load(f)
+		app = output['services']['foo-app']
+		assert '/home/portal/user_data/shared/documents:/datafoo' in app['volumes']
 
 
 def test_postgres_is_setup(postgres):

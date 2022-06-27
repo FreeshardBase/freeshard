@@ -1,4 +1,5 @@
 import logging
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -9,6 +10,8 @@ from tinydb_serialization import SerializationMiddleware
 from tinydb_serialization.serializers import DateTimeSerializer
 
 log = logging.getLogger(__name__)
+
+global_db_lock = threading.RLock()
 
 
 def init_database():
@@ -28,8 +31,9 @@ def get_db() -> TinyDB:
 	serialization = SerializationMiddleware(JSONStorage)
 	serialization.register_serializer(DateTimeSerializer(), 'TinyDate')
 
-	with TinyDB(gconf.get('database.filename'), storage=serialization, sort_keys=True, indent=2) as db_:
-		yield db_
+	with global_db_lock:
+		with TinyDB(gconf.get('database.filename'), storage=serialization, sort_keys=True, indent=2) as db_:
+			yield db_
 
 
 @contextmanager
