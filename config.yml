@@ -25,17 +25,7 @@ apps:
   lifecycle:
     refresh_interval: 10
   initial_apps:
-    filebrowser:
-      image: portalapps.azurecr.io/ptl-apps/filebrowser:master
-      port: 80
-      data_dirs:
-        - /data
-      authentication:
-        default_access: private
-        public_paths:
-          - /share/
-          - /static/
-          - /api/public/
+    - filebrowser
 
 log:
   portal_core: debug

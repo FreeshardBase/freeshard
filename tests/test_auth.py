@@ -1,4 +1,5 @@
 from starlette import status
+from tinydb.table import Table
 
 from portal_core.database.database import apps_table
 from portal_core.model.app import InstallationReason, AppToInstall
@@ -7,7 +8,8 @@ from tests.util import get_pairing_code, add_terminal, create_apps_from_docker_c
 
 
 def test_default_public(api_client):
-	with apps_table() as apps:
+	with apps_table() as apps:  # type: Table
+		apps.truncate()
 		apps.insert(AppToInstall(**{
 			'name': 'foo-app',
 			'image': WAITING_DOCKER_IMAGE,
@@ -43,7 +45,8 @@ def test_default_public(api_client):
 
 def test_empty_path_headers(api_client):
 	app_name = 'app-with-empty-path-headers'
-	with apps_table() as apps:
+	with apps_table() as apps:  # type: Table
+		apps.truncate()
 		apps.insert(AppToInstall(**{
 			'description': 'n/a',
 			'env_vars': None,
@@ -76,7 +79,8 @@ def test_empty_path_headers(api_client):
 
 def test_no_path_headers(api_client):
 	app_name = 'app-with-no-path-headers'
-	with apps_table() as apps:
+	with apps_table() as apps:  # type: Table
+		apps.truncate()
 		apps.insert(AppToInstall(**{
 			'description': 'n/a',
 			'env_vars': None,
@@ -108,7 +112,8 @@ def test_no_path_headers(api_client):
 
 def test_normal_headers(api_client):
 	app_name = 'app-with-normal-headers'
-	with apps_table() as apps:
+	with apps_table() as apps:  # type: Table
+		apps.truncate()
 		apps.insert(AppToInstall(**{
 			'description': 'n/a',
 			'env_vars': None,
