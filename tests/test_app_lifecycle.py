@@ -1,5 +1,6 @@
 import docker
 from common_py.util import retry
+from tinydb.table import Table
 
 from portal_core.database.database import apps_table
 from portal_core.model.app import AppToInstall, InstallationReason
@@ -21,7 +22,8 @@ def test_app_starts_and_stops(api_client):
 		'lifecycle': {'idle_time_for_shutdown': 5},
 		'reason': InstallationReason.CUSTOM,
 	})
-	with apps_table() as apps:
+	with apps_table() as apps:  # type: Table
+		apps.truncate()
 		apps.insert(app.dict())
 
 	app_infra.refresh_app_infra()
