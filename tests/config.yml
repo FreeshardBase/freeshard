@@ -11,13 +11,3 @@ services:
 apps:
   lifecycle:
     refresh_interval: 2
-  initial_apps:
-    filebrowser: null
-    app-foo:
-      image: jannash/noop
-      port: 80
-      data_dirs:
-        - /data
-        - /config
-      authentication:
-        default_access: private

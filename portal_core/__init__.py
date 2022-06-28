@@ -28,7 +28,6 @@ def create_app():
 	_ensure_traefik_config(default_identity)
 
 	app_store.refresh_app_store()
-
 	init_apps.refresh_init_apps()
 	log.debug('refreshed initial apps')
 
