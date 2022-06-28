@@ -194,7 +194,8 @@ def test_last_connection(api_client):
 	assert response.status_code == 201
 	last_connection_0 = Terminal(**api_client.get(f'protected/terminals/name/{t_name}').json()).last_connection
 
-	with apps_table() as apps:
+	with apps_table() as apps:  # type: Table
+		apps.truncate()
 		apps.insert(AppToInstall(**{
 			'name': 'foo-app',
 			'image': WAITING_DOCKER_IMAGE,
@@ -204,7 +205,7 @@ def test_last_connection(api_client):
 
 	app_infra.refresh_app_infra()
 	with create_apps_from_docker_compose():
-		with terminals_table() as terminals: # type: Table
+		with terminals_table() as terminals:  # type: Table
 			terminals.update(delete('last_connection'))
 		last_connection_missing = Terminal(**api_client.get(f'protected/terminals/name/{t_name}').json())
 		assert not last_connection_missing.last_connection
