@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import List
 
 from fastapi import APIRouter, status, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel
 from tinydb import Query
 
@@ -59,7 +60,7 @@ def edit_terminal(id_: str, terminal: InputTerminal):
 			raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
 
-@router.delete('/id/{id_}', status_code=status.HTTP_204_NO_CONTENT)
+@router.delete('/id/{id_}', status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def delete_terminal_by_id(id_: str):
 	with terminals_table() as terminals:  # type: Table
 		terminals.remove(Query().id == id_)

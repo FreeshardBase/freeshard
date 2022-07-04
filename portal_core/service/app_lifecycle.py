@@ -39,14 +39,14 @@ async def stop_apps():
 			try:
 				container: Container = containers[app.name]
 			except KeyError:
-				log.error(f'no container found for app {app.name}')
+				log.debug(f'container for {app.name} not found')
 				continue
 
 			if container.status == 'running' and not lifecycle.always_on:
 				last_access = last_access_dict.get(app.name, 0.0)
 				idle_time_for_shutdown = lifecycle.idle_time_for_shutdown
 				if last_access < time.time() - idle_time_for_shutdown:
-					log.debug(f'Stopping {app.name} due to inactivity')
+					log.debug(f'stopping {app.name} due to inactivity')
 					container.stop()
 
 

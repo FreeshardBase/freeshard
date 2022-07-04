@@ -3,6 +3,7 @@ from enum import Enum
 from typing import List
 
 from fastapi import APIRouter, status, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel
 from tinydb import Query
 from tinydb.table import Table
@@ -30,7 +31,7 @@ class Tour(BaseModel):
 	status: TourStatus
 
 
-@tour_router.put('', status_code=status.HTTP_204_NO_CONTENT)
+@tour_router.put('', status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def put_tour(tour: Tour):
 	with tours_table() as tours:  # type: Table
 		tours.upsert(tour.dict(), Query().name == tour.name)
@@ -51,7 +52,7 @@ def list_tours():
 		return [Tour(**t) for t in tours]
 
 
-@tour_router.delete('', status_code=status.HTTP_204_NO_CONTENT)
+@tour_router.delete('', status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def reset_tours():
 	with tours_table() as tours:  # type: Table
 		tours.truncate()
