@@ -28,15 +28,13 @@ def test_add_init_app(init_db, monkeypatch):
 	monkeypatch.setattr(app_infra, 'refresh_app_infra', lambda: None)
 
 	with database.apps_table() as apps:
-		for name in ['app-bar', 'app-baz']:
-			apps.insert({
-				'name': name,
-				'description': f'this is {name}',
-				'image': f'image-{name}',
-				'port': 1,
-				'installation_reason': InstallationReason.CONFIG,
-			})
-
+		apps.insert({
+			'name': 'app-bar',
+			'description': f'this is app-bar',
+			'image': f'image-app-bar',
+			'port': 1,
+			'installation_reason': InstallationReason.CONFIG,
+		})
 		apps.insert({
 			'name': 'app-boo',
 			'description': 'this is app-boo',
