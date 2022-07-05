@@ -52,13 +52,9 @@ def create_app():
 
 	if gconf.get('log.requests', default=False):
 		@app.middleware('http')
-		async def log_request(request: Request, call_next):
-			log.info('>' * 10)
-			await _log_request(request)
+		async def log_http(request: Request, call_next):
 			response: Response = await call_next(request)
-			log.info('=' * 10)
-			await _log_response(response)
-			log.info('<' * 10)
+			await _log_request_and_response(request, response)
 			return response
 
 	@app.on_event('shutdown')
@@ -105,16 +101,18 @@ def _ensure_traefik_config(id_: Identity):
 	log.info('created traefik config')
 
 
-async def _log_request(r: Request):
-	log.info(f'{r.method} {r.url}')
-	log.info('-' * 10)
-	for k, v in r.headers.items():
-		log.info(f'{k}: {v}')
-	log.info('-' * 10)
-	log.info(await r.body())
-
-
-async def _log_response(r: Response):
-	log.info(r.status_code)
-	for k, v in r.headers.items():
-		log.info(f'{k}: {v}')
+async def _log_request_and_response(request: Request, response: Response):
+	entry = [
+		'### HTTP ###',
+		'>' * 10,
+		f'{request.method} {request.url}',
+		'-' * 10,
+		*[f'{k}: {v}' for k, v in request.headers.items()],
+		'-' * 10,
+		str(await request.body()),
+		'=' * 10,
+		str(response.status_code),
+		*[f'{k}: {v}' for k, v in response.headers.items()],
+		'<' * 10,
+	]
+	log.info('\n'.join(entry))
