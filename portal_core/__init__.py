@@ -53,12 +53,12 @@ def create_app():
 	if gconf.get('log.requests', default=False):
 		@app.middleware('http')
 		async def log_request(request: Request, call_next):
-			print('>' * 10)
+			log.info('>' * 10)
 			await _log_request(request)
 			response: Response = await call_next(request)
-			print('=' * 10)
+			log.info('=' * 10)
 			await _log_response(response)
-			print('<' * 10)
+			log.info('<' * 10)
 			return response
 
 	@app.on_event('shutdown')
@@ -106,15 +106,15 @@ def _ensure_traefik_config(id_: Identity):
 
 
 async def _log_request(r: Request):
-	print(f'{r.method} {r.url}')
-	print('-' * 10)
+	log.info(f'{r.method} {r.url}')
+	log.info('-' * 10)
 	for k, v in r.headers.items():
-		print(f'{k}: {v}')
-	print('-' * 10)
-	print(await r.body())
+		log.info(f'{k}: {v}')
+	log.info('-' * 10)
+	log.info(await r.body())
 
 
 async def _log_response(r: Response):
-	print(r.status_code)
+	log.info(r.status_code)
 	for k, v in r.headers.items():
-		print(f'{k}: {v}')
+		log.info(f'{k}: {v}')
