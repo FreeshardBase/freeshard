@@ -5,7 +5,7 @@ from pathlib import Path
 
 import gconf
 import jinja2
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 
 from portal_core.database import database, migration
 from .model.identity import Identity
@@ -17,9 +17,11 @@ log = logging.getLogger(__name__)
 
 
 def create_app():
-	loaded_config = gconf.load('config.yml')
+	shipped_config = gconf.load('config.yml')
+	additional_config = gconf.load('core/portal_core_config.yml', required=False)
 	configure_logging()
-	log.debug(f'loaded config {loaded_config}')
+	log.debug(f'loaded shipped config {shipped_config}')
+	log.debug(f'loaded additional config {additional_config}')
 
 	database.init_database()
 	migration.migrate_all()
@@ -48,6 +50,17 @@ def create_app():
 	app.include_router(public.router)
 	app.include_router(protected.router)
 
+	if gconf.get('log.requests', default=False):
+		@app.middleware('http')
+		async def log_request(request: Request, call_next):
+			print('>' * 10)
+			await _log_request(request)
+			response: Response = await call_next(request)
+			print('=' * 10)
+			await _log_response(response)
+			print('<' * 10)
+			return response
+
 	@app.on_event('shutdown')
 	def shutdown_event():
 		bg_tasks.stop().wait()
@@ -59,7 +72,7 @@ def configure_logging():
 	logging.basicConfig(
 		format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
 		handlers=[logging.StreamHandler(sys.stdout)])
-	for module, level in gconf.get('log').items():  # type: str, str
+	for module, level in gconf.get('log.levels').items():  # type: str, str
 		logger = logging.getLogger() if module == 'root' else logging.getLogger(module)
 		logger.setLevel(getattr(logging, level.upper()))
 
@@ -90,3 +103,18 @@ def _ensure_traefik_config(id_: Identity):
 		f_traefik.write(template.render(identity=id_.id[:prefix_length]))
 
 	log.info('created traefik config')
+
+
+async def _log_request(r: Request):
+	print(f'{r.method} {r.url}')
+	print('-' * 10)
+	for k, v in r.headers.items():
+		print(f'{k}: {v}')
+	print('-' * 10)
+	print(await r.body())
+
+
+async def _log_response(r: Response):
+	print(r.status_code)
+	for k, v in r.headers.items():
+		print(f'{k}: {v}')

@@ -28,5 +28,6 @@ apps:
     - filebrowser
 
 log:
-  portal_core: info
-  gunicorn: warning
+  levels:
+    portal_core: info
+    gunicorn: warning
