@@ -1,4 +1,5 @@
 import base64
+from typing import Optional
 
 from pydantic import BaseModel
 
@@ -6,7 +7,7 @@ from pydantic import BaseModel
 class Peer(BaseModel):
 	id: str
 	name: str
-	public_bytes: bytes
+	public_bytes_b64: Optional[str]
 
 	def __str__(self):
 		return f'Peer[{self.short_id}, {self.name}]'
@@ -14,7 +15,3 @@ class Peer(BaseModel):
 	@property
 	def short_id(self):
 		return self.id[0:6]
-
-	@property
-	def public_bytes_b64(self) -> str:
-		return str(base64.b64encode(self.public_bytes))
