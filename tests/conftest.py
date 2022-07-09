@@ -31,7 +31,18 @@ def tempfile_path_config(tmp_path):
 
 
 @pytest.fixture
-def init_db(tempfile_path_config):
+def additional_config_override(request):
+	"""
+	Detects the variable named *config_override* of a test module
+	and adds its content as a gconf override.
+	"""
+	config = getattr(request.module, 'config_override', {})
+	with gconf.override_conf(config):
+		yield
+
+
+@pytest.fixture
+def init_db(tempfile_path_config, additional_config_override):
 	portal_core.database.init_database()
 
 
@@ -42,8 +53,7 @@ def api_client(init_db) -> TestClient:
 	# Cookies are scoped for the domain, so we have configure the TestClient with it.
 	# This way, the TestClient remembers cookies
 	whoareyou = TestClient(app).get('public/meta/whoareyou').json()
-	domain = whoareyou['domain'][:6].lower()
-	yield TestClient(app, base_url=f'https://{domain}.p.getportal.org')
+	yield TestClient(app, base_url=f'https://{whoareyou["domain"]}')
 
 
 @pytest.fixture(scope='session')

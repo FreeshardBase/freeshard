@@ -1,14 +1,12 @@
 import logging
 
+import gconf
 from fastapi import APIRouter, Cookie
 from pydantic import BaseModel
 
-from tinydb import Query
-
+from portal_core.service import pairing, identity
+from portal_core.service.signed_call import signed_request
 from portal_core.web.dependencies import AuthValues
-from portal_core.database.database import identities_table
-from portal_core.model.identity import Identity
-from portal_core.service import pairing
 
 log = logging.getLogger(__name__)
 
@@ -26,8 +24,7 @@ class OutputWhoAreYou(BaseModel):
 
 @router.get('/whoareyou', response_model=OutputWhoAreYou)
 def who_are_you():
-	with identities_table() as identities:
-		default_identity = Identity(**identities.get(Query().is_default == True))
+	default_identity = identity.get_default_identity()
 	return OutputWhoAreYou(
 		status='OK',
 		domain=default_identity.domain,
@@ -61,3 +58,10 @@ def who_am_i(authorization: str = Cookie(None)):
 			id=terminal.id,
 			name=terminal.name,
 		)
+
+
+@router.get('/profile')
+def profile():
+	api_url = gconf.get('management.api_url')
+	response = signed_request('GET', f'{api_url}/profile')
+	return response.json()

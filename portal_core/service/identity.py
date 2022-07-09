@@ -34,3 +34,8 @@ def make_default(name):
 			log.info(f'set as default {new_default.name}')
 		else:
 			KeyError(name)
+
+
+def get_default_identity() -> Identity:
+	with identities_table() as identities:
+		return Identity(**identities.get(Query().is_default == True))

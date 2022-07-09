@@ -27,6 +27,7 @@ setup(
 		'psycopg[binary]',
 		'cachetools',
 		'blinker',
+		'requests',
 		'requests-http-signature',
 		'common_py @ git+https://app_controller:MzJwN_VwwEyVmtj22LXx@gitlab.com/ptl/common_py.git',
 	],
@@ -34,6 +35,7 @@ setup(
 		'dev': [
 			'pytest',
 			'pytest-docker',
+			'responses',
 			'datamodel-code-generator[http]'
 		]
 	},
