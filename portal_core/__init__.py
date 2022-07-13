@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 from importlib.metadata import metadata
 from pathlib import Path
@@ -18,10 +19,11 @@ log = logging.getLogger(__name__)
 
 def create_app():
 	shipped_config = gconf.load('config.yml')
-	additional_config = gconf.load('core/portal_core_config.yml', required=False)
+	additional_config = gconf.load(os.environ['CONFIG']) if 'CONFIG' in os.environ else None
 	configure_logging()
 	log.debug(f'loaded shipped config {shipped_config}')
-	log.debug(f'loaded additional config {additional_config}')
+	if additional_config:
+		log.debug(f'loaded additional config {additional_config}')
 
 	database.init_database()
 	migration.migrate_all()

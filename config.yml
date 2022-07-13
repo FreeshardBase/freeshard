@@ -17,6 +17,10 @@ services:
     port: 5432
     user: postgres
     password: ES9BOPusdVKoydq6
+  backup:
+    included_dirs:
+      - /core
+      - /user_data
 
 apps:
   app_store:
