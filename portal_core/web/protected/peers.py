@@ -2,23 +2,17 @@ import logging
 from typing import List
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel
 from tinydb import Query
 from tinydb.table import Table
 
 from portal_core.database.database import peers_table
+from portal_core.model.peer import Peer
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(
 	prefix='/peers',
 )
-
-
-class Peer(BaseModel):
-	id: str
-	name: str
-	public_bytes_b64: str
 
 
 @router.get('', response_model=List[Peer])
@@ -40,7 +34,7 @@ def get_peer_by_id(id_):
 
 
 @router.post('', response_model=Peer, status_code=status.HTTP_201_CREATED)
-def add_identity(p: Peer):
+def add_peer(p: Peer):
 	with peers_table() as peers:  # type: Table
 		if peers.get(Query().id == p.id):
 			raise HTTPException(status_code=status.HTTP_409_CONFLICT)
