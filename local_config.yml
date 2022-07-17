@@ -1,21 +1,12 @@
-database:
-  filename: run/core/portal_core_db.json
-
-user_data_dir: run/user_data
-
-app_infra:
-  compose_filename: run/core/docker-compose-apps.yml
-  traefik_dyn_filename: run/core/traefik_dyn/traefik_dyn.yml
+path:
+  core: run/core
+  user_data: run/user_data
 
 services:
   backup:
     included_dirs:
       - run/core
       - run/user_data
-
-apps:
-  app_store:
-    sync_dir: run/core/appstore
 
 log:
   levels:

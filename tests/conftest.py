@@ -12,22 +12,30 @@ import portal_core
 log = logging.getLogger(__name__)
 
 
-@pytest.fixture
-def tempfile_path_config(tmp_path):
+@pytest.fixture(autouse=True)
+def config_override(tmp_path, request):
 	print(f'\nUsing temp path: {tmp_path}')
-	override = {
-		'database': {'filename': tmp_path / 'portal_core_db.json'},
-		'user_data_dir': tmp_path / 'user_data',
-		'apps': {
-			'app_store': {'sync_dir': tmp_path / 'app_store'},
+	tempfile_override = {
+		'path': {
+			'core': f'{tmp_path}/core',
+			'user_data': f'{tmp_path}/user_data',
 		},
-		'app_infra': {
-			'compose_filename': tmp_path / 'docker-compose-apps.yml',
-			'traefik_dyn_filename': tmp_path / 'traefik_dyn.yml',
+		'services': {
+			'backup': {
+				'included_dirs': [
+					f'{tmp_path}/core',
+					f'{tmp_path}/user_data',
+				]
+			}
 		}
 	}
-	with gconf.override_conf(override):
-		yield
+
+	# Detects the variable named *config_override* of a test module
+	additional_override = getattr(request.module, 'config_override', {})
+
+	with gconf.override_conf(tempfile_override):
+		with gconf.override_conf(additional_override):
+			yield
 
 
 @pytest.fixture
@@ -42,7 +50,7 @@ def additional_config_override(request):
 
 
 @pytest.fixture
-def init_db(tempfile_path_config, additional_config_override):
+def init_db(additional_config_override):
 	portal_core.database.init_database()
 
 

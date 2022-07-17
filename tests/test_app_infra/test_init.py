@@ -2,15 +2,12 @@ from pathlib import Path
 
 import gconf
 import psycopg
-import pytest
 import yaml
 from psycopg.conninfo import make_conninfo
 
 from portal_core.database.database import apps_table
 from portal_core.model.app import InstallationReason
 from portal_core.service import app_infra, identity
-
-pytestmark = pytest.mark.usefixtures('tempfile_path_config')
 
 
 def test_data_dirs_are_created():
@@ -35,8 +32,8 @@ def test_data_dirs_are_created():
 
 	app_infra.refresh_app_infra()
 
-	assert (Path(gconf.get('user_data_dir')) / 'app_data' / 'foo-app' / 'user_data' / 'foo').is_dir()
-	assert (Path(gconf.get('user_data_dir')) / 'app_data' / 'foo-app' / 'user_data' / 'bar').is_dir()
+	assert (Path(gconf.get('path.user_data')) / 'app_data' / 'foo-app' / 'user_data' / 'foo').is_dir()
+	assert (Path(gconf.get('path.user_data')) / 'app_data' / 'foo-app' / 'user_data' / 'bar').is_dir()
 
 
 def test_shared_dirs_are_mounted():
@@ -63,7 +60,7 @@ def test_shared_dirs_are_mounted():
 
 	app_infra.refresh_app_infra()
 
-	with open(gconf.get('app_infra.compose_filename'), 'r') as f:
+	with open(Path(gconf.get('path.core')) / 'docker-compose-apps.yml', 'r') as f:
 		output = yaml.safe_load(f)
 		app = output['services']['foo-app']
 		assert '/home/portal/user_data/shared/documents:/datafoo' in app['volumes']
@@ -107,7 +104,7 @@ def test_postgres_is_setup(postgres):
 			current_db = cur.execute('SELECT current_database()').fetchall()
 			assert ('postgres-app',) in current_db
 
-	with open(gconf.get('app_infra.compose_filename'), 'r') as f:
+	with open(Path(gconf.get('path.core')) / 'docker-compose-apps.yml', 'r') as f:
 		output = yaml.safe_load(f)
 		postgres_app = output['services']['postgres-app']
 		assert 'pg_user=postgres-app' in postgres_app['environment']
@@ -128,7 +125,7 @@ def test_docker_socket_is_mounted():
 
 	app_infra.refresh_app_infra()
 
-	with open(gconf.get('app_infra.compose_filename'), 'r') as f:
+	with open(Path(gconf.get('path.core')) / 'docker-compose-apps.yml', 'r') as f:
 		output = yaml.safe_load(f)
 		app = output['services']['app-with-docker']
 		assert '/var/run/docker.sock:/var/run/docker.sock:ro' in app['volumes']
