@@ -58,7 +58,7 @@ def get_template():
 
 @lru_cache(maxsize=4)
 def data_url(app_name):
-	app_store_dir = Path(gconf.get('path.core')) / 'appstore'
+	app_store_dir = Path(gconf.get('path_root')) / 'core' / 'appstore'
 	try:
 		app_dir = list(app_store_dir.glob(app_name))[0]
 	except IndexError:

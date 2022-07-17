@@ -1,6 +1,4 @@
-path:
-  core: core
-  user_data: user_data
+path_root: "/"
 
 dns:
   zone: p.getportal.org
@@ -14,8 +12,8 @@ services:
     password: ES9BOPusdVKoydq6
   backup:
     included_dirs:
-      - /core
-      - /user_data
+      - core
+      - user_data
 
 apps:
   app_store:

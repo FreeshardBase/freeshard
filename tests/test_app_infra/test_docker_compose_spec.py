@@ -26,7 +26,7 @@ def test_template_is_written():
 
 	app_infra.refresh_app_infra()
 
-	with open(Path(gconf.get('path.core')) / 'docker-compose-apps.yml', 'r') as f:
+	with open(Path(gconf.get('path_root')) / 'core' / 'docker-compose-apps.yml', 'r') as f:
 		output = yaml.safe_load(f)
 		baz_app = output['services']['baz-app']
 		assert 'baz-env=foo' in baz_app['environment']

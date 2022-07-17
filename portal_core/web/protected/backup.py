@@ -25,11 +25,12 @@ def export_backup():
 	with identities_table() as identities:
 		default_identity = Identity(**identities.get(Query().is_default == True))
 
+	path_root = Path(gconf.get('path_root'))
 	included_dirs = gconf.get('services.backup.included_dirs')
-	all_paths = chain.from_iterable(Path(d).rglob('*') for d in included_dirs)
+	all_paths = chain.from_iterable((path_root / d).rglob('*') for d in included_dirs)
 	zip_paths = [{
 		'fs': str(p.absolute()),
-		'n': p,
+		'n': p.relative_to(path_root),
 	} for p in all_paths if not p.is_dir()]
 
 	zfly = zipfly.ZipFly(paths=zip_paths, compression=zipfile.ZIP_STORED)

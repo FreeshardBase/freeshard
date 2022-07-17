@@ -15,7 +15,7 @@ global_db_lock = threading.RLock()
 
 
 def init_database():
-	file = Path(gconf.get('path.core')) / 'portal_core_db.json'
+	file = Path(gconf.get('path_root')) / 'core' / 'portal_core_db.json'
 	if file.is_dir():
 		raise Exception(f'{file} is a directory, should be a file or not existing')
 	if not file.exists():
@@ -33,7 +33,7 @@ def get_db() -> TinyDB:
 
 	with global_db_lock:
 		with TinyDB(
-				Path(gconf.get('path.core')) / 'portal_core_db.json',
+				Path(gconf.get('path_root')) / 'core' / 'portal_core_db.json',
 				storage=serialization,
 				sort_keys=True,
 				indent=2,

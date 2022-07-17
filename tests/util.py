@@ -23,7 +23,7 @@ def add_terminal(api_client, pairing_code, t_name):
 
 @contextlib.contextmanager
 def create_apps_from_docker_compose():
-	dc = Path(gconf.get('path.core')) / 'docker-compose-apps.yml'
+	dc = Path(gconf.get('path_root')) / 'core' / 'docker-compose-apps.yml'
 	subprocess.run(
 		f'docker-compose -p apps -f {dc.name} up --remove-orphans --no-start',
 		cwd=dc.parent,

@@ -16,18 +16,7 @@ log = logging.getLogger(__name__)
 def config_override(tmp_path, request):
 	print(f'\nUsing temp path: {tmp_path}')
 	tempfile_override = {
-		'path': {
-			'core': f'{tmp_path}/core',
-			'user_data': f'{tmp_path}/user_data',
-		},
-		'services': {
-			'backup': {
-				'included_dirs': [
-					f'{tmp_path}/core',
-					f'{tmp_path}/user_data',
-				]
-			}
-		}
+		'path_root': f'{tmp_path}/path_root',
 	}
 
 	# Detects the variable named *config_override* of a test module

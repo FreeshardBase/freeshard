@@ -1,3 +1,4 @@
+from pathlib import Path
 from zipfile import ZipFile
 
 
@@ -12,3 +13,11 @@ def test_backup(api_client, tmp_path):
 
 	zip_file = ZipFile(zip_path)
 	zip_file.extractall(tmp_path / 'backup')
+
+	assert _filenames_match(tmp_path / 'path_root', tmp_path / 'backup')
+
+
+def _filenames_match(dir1, dir2) -> bool:
+	files1 = {p.relative_to(dir1) for p in Path(dir1).rglob('*') if p.is_file()}
+	files2 = {p.relative_to(dir2) for p in Path(dir2).rglob('*') if p.is_file()}
+	return files1 == files2
