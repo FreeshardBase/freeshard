@@ -84,26 +84,22 @@ def test_postgres_is_setup(postgres):
 
 	app_infra.refresh_app_infra()
 
-	pg_host = gconf.get('services.postgres.host')
-	pg_port = gconf.get('services.postgres.port')
-	pg_user = gconf.get('services.postgres.user')
-	pg_password = gconf.get('services.postgres.password')
-
-	admin_connection_string = make_conninfo('', host=pg_host, port=pg_port, user=pg_user, password=pg_password)
-	with psycopg.connect(admin_connection_string) as conn:
+	# app database exists
+	with psycopg.connect(postgres) as conn:
 		with conn.cursor() as cur:
 			dbs = cur.execute('SELECT datname FROM pg_database')
 			assert ('postgres-app',) in dbs
 
-	app_connection_string = make_conninfo(admin_connection_string, user='postgres-app', password='foo')
+	# app database is current database when connecting with app's connection string
+	app_connection_string = make_conninfo(postgres, user='postgres-app', password='foo')
 	with psycopg.connect(app_connection_string) as conn:
 		with conn.cursor() as cur:
 			dbs = list(cur.execute('SELECT datname FROM pg_database'))
-			print(dbs)
 			assert ('postgres-app',) in dbs
 			current_db = cur.execute('SELECT current_database()').fetchall()
 			assert ('postgres-app',) in current_db
 
+	# postgres values are set as env vars for the app
 	with open(Path(gconf.get('path_root')) / 'core' / 'docker-compose-apps.yml', 'r') as f:
 		output = yaml.safe_load(f)
 		postgres_app = output['services']['postgres-app']

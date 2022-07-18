@@ -36,9 +36,7 @@ def export_backup():
 	zfly = zipfly.ZipFly(paths=zip_paths, compression=zipfile.ZIP_STORED)
 
 	filename = f'Backup of Portal {default_identity.short_id} - {datetime.now().strftime("%Y-%m-%d %H-%M")}.zip'
-
 	log.info('exported full backup')
-
 	return StreamingResponse(
 		zfly.generator(),
 		media_type='application/zip',
