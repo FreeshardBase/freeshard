@@ -1,4 +1,5 @@
 import logging
+import subprocess
 from datetime import datetime
 from pathlib import Path
 
@@ -26,6 +27,9 @@ def export_backup():
 	path_root = Path(gconf.get('path_root'))
 	included_dirs = gconf.get('services.backup.included_dirs')
 
+	postgres_user = gconf.get('services.postgres.user')
+	postgres_password = gconf.get('services.postgres.password')
+
 	def files_generator():
 		for included_dir in included_dirs:
 			for path in (path_root / included_dir).rglob('*'):
@@ -35,6 +39,17 @@ def export_backup():
 						'name': str(path.relative_to(path_root)),
 						'compression': 'deflate',
 					}
+
+		def pg_dumpall_generator():
+			pg_dumpall_cmd = ['docker', 'exec', '-i', 'postgres', '/bin/bash', '-c', f'PGPASSWORD={postgres_password} pg_dumpall --username {postgres_user}']
+			with subprocess.Popen(pg_dumpall_cmd, stdout=subprocess.PIPE) as pg_dumpall:
+				for line in pg_dumpall.stdout:
+					yield line
+
+		yield {
+			'stream': pg_dumpall_generator(),
+			'name': 'postgres_dump.sql'
+		}
 
 	zs = ZipStream(files_generator())
 

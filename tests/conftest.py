@@ -61,7 +61,7 @@ def postgres(request):
 	pg_password = gconf.get('services.postgres.password')
 	postgres_conn_string = make_conninfo('', host=pg_host, port=pg_port, user=pg_user, password=pg_password)
 
-	print(f'Postgres connection: {postgres_conn_string}')
+	print(f'\nPostgres connection: {postgres_conn_string}')
 
 	if gconf.get('services.postgres.host') == 'localhost':
 		request.getfixturevalue('docker_services')
