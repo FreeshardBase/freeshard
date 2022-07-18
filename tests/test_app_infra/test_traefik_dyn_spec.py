@@ -1,12 +1,11 @@
+from pathlib import Path
+
 import gconf
-import pytest
 import yaml
 
 from portal_core.database.database import apps_table
 from portal_core.model.app import InstallationReason
 from portal_core.service import identity, app_infra
-
-pytestmark = pytest.mark.usefixtures('tempfile_path_config')
 
 
 def test_template_is_written():
@@ -26,7 +25,7 @@ def test_template_is_written():
 
 	app_infra.refresh_app_infra()
 
-	with open(gconf.get('app_infra.traefik_dyn_filename'), 'r') as f:
+	with open(Path(gconf.get('path_root')) / 'core' / 'traefik_dyn.yml', 'r') as f:
 		output = yaml.safe_load(f)
 		out_middlewares: dict = output['http']['middlewares']
 

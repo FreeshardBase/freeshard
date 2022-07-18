@@ -40,7 +40,7 @@ def list_all_apps():
 def get_app_icon(name: str):
 	matcher = re.compile(r'^icon\..+$')
 
-	app_repo = Path(gconf.get('apps.app_store.sync_dir')) / name
+	app_repo = Path(gconf.get('path_root')) / 'core' / 'appstore' / name
 	if app_repo.exists() and app_repo.is_dir():
 		try:
 			icon_filename = [f for f in app_repo.iterdir() if matcher.match(f.name)][0]

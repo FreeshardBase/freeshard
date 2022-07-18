@@ -30,15 +30,15 @@ def refresh_app_infra():
 		default_identity = Identity(**identities.get(Query().is_default == True))
 	portal = SafeIdentity.from_identity(default_identity)
 
-	docker_compose_filename = Path(gconf.get('app_infra.compose_filename'))
+	docker_compose_filename = Path(gconf.get('path_root')) / 'core' / 'docker-compose-apps.yml'
 	write_to_yaml(compose_spec(apps, portal), docker_compose_filename)
 
-	traefik_dyn_filename = Path(gconf.get('app_infra.traefik_dyn_filename'))
+	traefik_dyn_filename = Path(gconf.get('path_root')) / 'core' / 'traefik_dyn.yml'
 	write_to_yaml(traefik_dyn_spec(apps, portal), traefik_dyn_filename)
 
 
 def create_data_dirs(app):
-	app_data_dir = Path(gconf.get('user_data_dir')) / 'app_data' / app.name
+	app_data_dir = Path(gconf.get('path_root')) / 'user_data' / 'app_data' / app.name
 	for data_dir in app.data_dirs or []:
 		if isinstance(data_dir, str):
 			dir_ = (app_data_dir / str(data_dir).strip('/ '))
