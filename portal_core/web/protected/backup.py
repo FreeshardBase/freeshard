@@ -1,16 +1,15 @@
 import logging
-import subprocess
 from datetime import datetime
 from pathlib import Path
 
+import docker
 import gconf
+from docker.models.containers import Container
 from fastapi import APIRouter
 from starlette.responses import StreamingResponse
-from tinydb import Query
 from zipstream import ZipStream
 
-from portal_core.database.database import identities_table
-from portal_core.model.identity import Identity
+from portal_core.service.identity import get_default_identity
 
 log = logging.getLogger(__name__)
 
@@ -21,42 +20,50 @@ router = APIRouter(
 
 @router.get('/export')
 def export_backup():
-	with identities_table() as identities:
-		default_identity = Identity(**identities.get(Query().is_default == True))
+	def content_generator():
+		yield from included_dirs()
+		yield postgres_dump()
 
-	path_root = Path(gconf.get('path_root'))
-	included_dirs = gconf.get('services.backup.included_dirs')
+	zs = ZipStream(content_generator())
 
-	postgres_user = gconf.get('services.postgres.user')
-	postgres_password = gconf.get('services.postgres.password')
+	default_identity_id = get_default_identity().short_id
+	formatted_now = datetime.now().strftime("%Y-%m-%d %H-%M")
+	filename = f'Backup of Portal {default_identity_id} - {formatted_now}.zip'
 
-	def files_generator():
-		for included_dir in included_dirs:
-			for path in (path_root / included_dir).rglob('*'):
-				if path.is_file():
-					yield {
-						'file': str(path),
-						'name': str(path.relative_to(path_root)),
-						'compression': 'deflate',
-					}
-
-		def pg_dumpall_generator():
-			pg_dumpall_cmd = ['docker', 'exec', '-i', 'postgres', '/bin/bash', '-c', f'PGPASSWORD={postgres_password} pg_dumpall --username {postgres_user}']
-			with subprocess.Popen(pg_dumpall_cmd, stdout=subprocess.PIPE) as pg_dumpall:
-				for line in pg_dumpall.stdout:
-					yield line
-
-		yield {
-			'stream': pg_dumpall_generator(),
-			'name': 'postgres_dump.sql'
-		}
-
-	zs = ZipStream(files_generator())
-
-	filename = f'Backup of Portal {default_identity.short_id} - {datetime.now().strftime("%Y-%m-%d %H-%M")}.zip'
-	log.info('exported full backup')
+	log.info('exporting full backup')
 	return StreamingResponse(
 		zs.stream(),
 		media_type='application/zip',
 		headers={'Content-Disposition': f'attachment; filename={filename}'}
 	)
+
+
+def included_dirs():
+	path_root = Path(gconf.get('path_root'))
+	dirs = gconf.get('services.backup.included_dirs')
+	for d in dirs:
+		for path in (path_root / d).rglob('*'):
+			if path.is_file():
+				yield {
+					'file': str(path),
+					'name': str(path.relative_to(path_root)),
+					'compression': 'deflate',
+				}
+
+
+def postgres_dump():
+	postgres_user = gconf.get('services.postgres.user')
+	postgres_password = gconf.get('services.postgres.password')
+
+	docker_client = docker.from_env()
+	postgres_container: Container = docker_client.containers.get('postgres')
+	pg_dumpall = postgres_container.exec_run(
+		['pg_dumpall', '--username', postgres_user],
+		environment={'PGPASSWORD': postgres_password},
+		stdout=True, stream=True,
+	)
+
+	return {
+		'stream': pg_dumpall.output,
+		'name': 'postgres_dump.sql'
+	}
