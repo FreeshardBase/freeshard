@@ -20,10 +20,6 @@ router = APIRouter(
 
 @router.get('/export')
 def export_backup():
-	def content_generator():
-		yield from included_dirs()
-		yield postgres_dump()
-
 	zs = ZipStream(content_generator())
 
 	default_identity_id = get_default_identity().short_id
@@ -36,6 +32,11 @@ def export_backup():
 		media_type='application/zip',
 		headers={'Content-Disposition': f'attachment; filename={filename}'}
 	)
+
+
+def content_generator():
+	yield from included_dirs()
+	yield postgres_dump()
 
 
 def included_dirs():
