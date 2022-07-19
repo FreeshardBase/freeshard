@@ -1,3 +1,5 @@
+from time import sleep
+
 import pytest
 import responses
 from http_message_signatures import algorithms, HTTPSignatureKeyResolver, InvalidSignature
@@ -16,7 +18,7 @@ def management_api_mock():
 			f'{management_api}/profile',
 			json={'name': 'test'},
 		)
-		rsps.add_passthru('.*')
+		rsps.add_passthru('')
 		yield rsps
 
 
