@@ -2,6 +2,7 @@ import logging
 from typing import Optional, List
 
 from fastapi import APIRouter, HTTPException, status
+from fastapi.responses import Response
 from pydantic import BaseModel
 from tinydb import Query
 from tinydb.table import Table
@@ -66,7 +67,7 @@ def add_identity(i: InputIdentity):
 			return new_identity
 
 
-@router.post('/{name}/make-default', status_code=status.HTTP_204_NO_CONTENT)
+@router.post('/{name}/make-default', status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def make_identity_default(name):
 	try:
 		identity_service.make_default(name)

@@ -1,0 +1,13 @@
+path:
+  core: run/core
+  user_data: run/user_data
+
+services:
+  backup:
+    included_dirs:
+      - run/core
+      - run/user_data
+
+log:
+  levels:
+    portal_core: debug

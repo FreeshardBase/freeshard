@@ -6,7 +6,7 @@ log = logging.getLogger(__name__)
 
 setup(
 	name='portal_core',
-	version='0.12.1',
+	version='0.13.0',
 	packages=find_packages(),
 	url='https://gitlab.com/ptl/portal_core',
 	author='Max von Tettenborn',
@@ -27,12 +27,16 @@ setup(
 		'psycopg[binary]',
 		'cachetools',
 		'blinker',
+		'requests',
+		'requests-http-signature',
+		'aiozipstream',
 		'common_py @ git+https://app_controller:MzJwN_VwwEyVmtj22LXx@gitlab.com/ptl/common_py.git',
 	],
 	extras_require={
 		'dev': [
 			'pytest',
 			'pytest-docker',
+			'responses',
 			'datamodel-code-generator[http]'
 		]
 	},

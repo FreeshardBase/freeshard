@@ -1,15 +1,8 @@
-database:
-  filename: /core/portal_core_db.json
-
-user_data_dir: /user_data
+path_root: "/"
 
 dns:
   zone: p.getportal.org
   prefix length: 6
-
-app_infra:
-  compose_filename: /core/docker-compose-apps.yml
-  traefik_dyn_filename: /core/traefik_dyn/traefik_dyn.yml
 
 services:
   postgres:
@@ -17,15 +10,24 @@ services:
     port: 5432
     user: postgres
     password: ES9BOPusdVKoydq6
+  backup:
+    included_globs:
+      - core/portal_core_config.yml
+      - core/portal_core_db.json
+      - user_data/**/*
 
 apps:
   app_store:
     project_id: 25524454
-    sync_dir: /core/appstore
   lifecycle:
     refresh_interval: 10
   initial_apps:
     - filebrowser
 
+management:
+  # api_url: foo
+
 log:
-  portal_core: debug
+  levels:
+    portal_core: info
+    gunicorn: warning

@@ -1,11 +1,12 @@
 import logging
+import os
 import sys
 from importlib.metadata import metadata
 from pathlib import Path
 
 import gconf
 import jinja2
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 
 from portal_core.database import database, migration
 from .model.identity import Identity
@@ -17,9 +18,12 @@ log = logging.getLogger(__name__)
 
 
 def create_app():
-	loaded_config = gconf.load('config.yml')
+	shipped_config = gconf.load('config.yml')
+	additional_config = gconf.load(os.environ['CONFIG']) if 'CONFIG' in os.environ else None
 	configure_logging()
-	log.debug(f'loaded config {loaded_config}')
+	log.debug(f'loaded shipped config {shipped_config}')
+	if additional_config:
+		log.debug(f'loaded additional config {additional_config}')
 
 	database.init_database()
 	migration.migrate_all()
@@ -48,6 +52,13 @@ def create_app():
 	app.include_router(public.router)
 	app.include_router(protected.router)
 
+	if gconf.get('log.requests', default=False):
+		@app.middleware('http')
+		async def log_http(request: Request, call_next):
+			response: Response = await call_next(request)
+			await _log_request_and_response(request, response)
+			return response
+
 	@app.on_event('shutdown')
 	def shutdown_event():
 		bg_tasks.stop().wait()
@@ -59,7 +70,7 @@ def configure_logging():
 	logging.basicConfig(
 		format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
 		handlers=[logging.StreamHandler(sys.stdout)])
-	for module, level in gconf.get('log').items():  # type: str, str
+	for module, level in gconf.get('log.levels').items():  # type: str, str
 		logger = logging.getLogger() if module == 'root' else logging.getLogger(module)
 		logger.setLevel(getattr(logging, level.upper()))
 
@@ -90,3 +101,20 @@ def _ensure_traefik_config(id_: Identity):
 		f_traefik.write(template.render(identity=id_.id[:prefix_length]))
 
 	log.info('created traefik config')
+
+
+async def _log_request_and_response(request: Request, response: Response):
+	entry = [
+		'### HTTP ###',
+		'>' * 10,
+		f'{request.method} {request.url}',
+		'-' * 10,
+		*[f'{k}: {v}' for k, v in request.headers.items()],
+		'-' * 10,
+		str(await request.body()),
+		'=' * 10,
+		str(response.status_code),
+		*[f'{k}: {v}' for k, v in response.headers.items()],
+		'<' * 10,
+	]
+	log.info('\n'.join(entry))

@@ -18,13 +18,13 @@ log = logging.getLogger(__name__)
 
 
 def get_store_apps() -> Iterable[StoreApp]:
-	sync_dir = Path(gconf.get('apps.app_store.sync_dir'))
+	sync_dir = Path(gconf.get('path_root')) / 'core' / 'appstore'
 	for app_dir in sync_dir.iterdir():
 		yield get_store_app(app_dir.name)
 
 
 def get_store_app(name) -> StoreApp:
-	sync_dir = Path(gconf.get('apps.app_store.sync_dir'))
+	sync_dir = Path(gconf.get('path_root')) / 'core' / 'appstore'
 	app_dir = sync_dir / name
 	if not app_dir.exists():
 		raise KeyError(f'no app named {name}')
@@ -48,7 +48,7 @@ def install_store_app(name: str):
 
 def refresh_app_store(ref: str = None):
 	log.debug(f'refreshing app store with ref {ref}')
-	fs_sync_dir = Path(gconf.get('apps.app_store.sync_dir'))
+	fs_sync_dir = Path(gconf.get('path_root')) / 'core' / 'appstore'
 
 	apps_project = Gitlab('https://gitlab.com').projects.get(gconf.get('apps.app_store.project_id'))
 	archive = tarfile.open(fileobj=io.BytesIO(apps_project.repository_archive(sha=ref or 'master')))

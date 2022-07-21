@@ -12,26 +12,34 @@ import portal_core
 log = logging.getLogger(__name__)
 
 
-@pytest.fixture
-def tempfile_path_config(tmp_path):
+@pytest.fixture(autouse=True)
+def config_override(tmp_path, request):
 	print(f'\nUsing temp path: {tmp_path}')
-	override = {
-		'database': {'filename': tmp_path / 'portal_core_db.json'},
-		'user_data_dir': tmp_path / 'user_data',
-		'apps': {
-			'app_store': {'sync_dir': tmp_path / 'app_store'},
-		},
-		'app_infra': {
-			'compose_filename': tmp_path / 'docker-compose-apps.yml',
-			'traefik_dyn_filename': tmp_path / 'traefik_dyn.yml',
-		}
+	tempfile_override = {
+		'path_root': f'{tmp_path}/path_root',
 	}
-	with gconf.override_conf(override):
+
+	# Detects the variable named *config_override* of a test module
+	additional_override = getattr(request.module, 'config_override', {})
+
+	with gconf.override_conf(tempfile_override):
+		with gconf.override_conf(additional_override):
+			yield
+
+
+@pytest.fixture
+def additional_config_override(request):
+	"""
+	Detects the variable named *config_override* of a test module
+	and adds its content as a gconf override.
+	"""
+	config = getattr(request.module, 'config_override', {})
+	with gconf.override_conf(config):
 		yield
 
 
 @pytest.fixture
-def init_db(tempfile_path_config):
+def init_db(additional_config_override):
 	portal_core.database.init_database()
 
 
@@ -42,8 +50,7 @@ def api_client(init_db) -> TestClient:
 	# Cookies are scoped for the domain, so we have configure the TestClient with it.
 	# This way, the TestClient remembers cookies
 	whoareyou = TestClient(app).get('public/meta/whoareyou').json()
-	domain = whoareyou['domain'][:6].lower()
-	yield TestClient(app, base_url=f'https://{domain}.p.getportal.org')
+	yield TestClient(app, base_url=f'https://{whoareyou["domain"]}')
 
 
 @pytest.fixture(scope='session')
@@ -54,7 +61,7 @@ def postgres(request):
 	pg_password = gconf.get('services.postgres.password')
 	postgres_conn_string = make_conninfo('', host=pg_host, port=pg_port, user=pg_user, password=pg_password)
 
-	print(f'Postgres connection: {postgres_conn_string}')
+	print(f'\nPostgres connection: {postgres_conn_string}')
 
 	if gconf.get('services.postgres.host') == 'localhost':
 		request.getfixturevalue('docker_services')

@@ -10,12 +10,12 @@ from typing import List
 import gconf
 from docker import DockerClient, errors as docker_errors
 from fastapi import APIRouter, status, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from tinydb import where
 
-from portal_core.service import app_infra
 from portal_core.database.database import apps_table
 from portal_core.model.app import InstallationReason, InstalledApp, App
+from portal_core.service import app_infra
 
 log = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ def list_all_apps():
 def get_app_icon(name: str):
 	matcher = re.compile(r'^icon\..+$')
 
-	app_repo = Path(gconf.get('apps.app_store.sync_dir')) / name
+	app_repo = Path(gconf.get('path_root')) / 'core' / 'appstore' / name
 	if app_repo.exists() and app_repo.is_dir():
 		try:
 			icon_filename = [f for f in app_repo.iterdir() if matcher.match(f.name)][0]
@@ -76,7 +76,7 @@ def install_app(input_app: App):
 		app_infra.refresh_app_infra()
 
 
-@router.delete('/{name}', status_code=status.HTTP_204_NO_CONTENT)
+@router.delete('/{name}', status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def uninstall_app(name: str):
 	with apps_table() as apps:
 		apps.remove(where('name') == name)
