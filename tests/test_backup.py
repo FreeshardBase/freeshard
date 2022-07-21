@@ -17,11 +17,7 @@ def test_backup(api_client, tmp_path, postgres):
 
 	only_left, only_right = _filenames_compare(tmp_path / 'path_root', tmp_path / 'backup')
 	assert len(only_left) == 0
-	assert len(only_right) == 1
-
-	right_file = tmp_path / 'backup' / only_right.pop()
-	assert right_file.name == 'postgres_dump.sql'
-	assert 'PostgreSQL database cluster dump' in right_file.read_text()
+	assert len(only_right) == 0
 
 
 def _filenames_compare(dir_left, dir_right) -> Tuple[Set, Set]:
