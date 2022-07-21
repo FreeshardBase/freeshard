@@ -1,9 +1,13 @@
 from pathlib import Path
-from typing import Tuple, Set
 from zipfile import ZipFile
 
 
 def test_backup(api_client, tmp_path, postgres):
+	root_ = tmp_path / 'path_root'
+	backup_ = tmp_path / 'backup'
+	file_not_included = Path('not included')
+	(root_ / file_not_included).touch()
+
 	zip_path = tmp_path / 'backup.zip'
 
 	with api_client.get('protected/backup/export', stream=True) as r:
@@ -13,16 +17,11 @@ def test_backup(api_client, tmp_path, postgres):
 				f.write(chunk)
 
 	zip_file = ZipFile(zip_path)
-	zip_file.extractall(tmp_path / 'backup')
+	zip_file.extractall(backup_)
 
-	only_left, only_right = _filenames_compare(tmp_path / 'path_root', tmp_path / 'backup')
-	assert len(only_left) == 0
-	assert len(only_right) == 0
+	files_in_root = {p.relative_to(root_) for p in Path(root_).rglob('*') if p.is_file()}
+	files_in_backup = {p.relative_to(backup_) for p in Path(backup_).rglob('*') if p.is_file()}
 
-
-def _filenames_compare(dir_left, dir_right) -> Tuple[Set, Set]:
-	files_left = {p.relative_to(dir_left) for p in Path(dir_left).rglob('*') if p.is_file()}
-	files_right = {p.relative_to(dir_right) for p in Path(dir_right).rglob('*') if p.is_file()}
-	only_left = files_left - files_right
-	only_right = files_right - files_left
-	return only_left, only_right
+	assert file_not_included in files_in_root - files_in_backup
+	assert Path('core/portal_core_db.json') in files_in_backup
+	assert files_in_backup - files_in_root == set()

@@ -40,9 +40,9 @@ def content_generator():
 
 def included_dirs():
 	path_root = Path(gconf.get('path_root'))
-	dirs = gconf.get('services.backup.included_dirs')
-	for d in dirs:
-		for path in (path_root / d).rglob('*'):
+	globs = gconf.get('services.backup.included_globs')
+	for glob in globs:
+		for path in path_root.glob(glob):
 			if path.is_file():
 				yield {
 					'file': str(path),

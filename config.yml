@@ -11,9 +11,10 @@ services:
     user: postgres
     password: ES9BOPusdVKoydq6
   backup:
-    included_dirs:
-      - core
-      - user_data
+    included_globs:
+      - core/portal_core_config.yml
+      - core/portal_core_db.json
+      - user_data/**/*
 
 apps:
   app_store:
