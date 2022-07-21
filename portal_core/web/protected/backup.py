@@ -36,7 +36,6 @@ def export_backup():
 
 def content_generator():
 	yield from included_dirs()
-	yield postgres_dump()
 
 
 def included_dirs():
