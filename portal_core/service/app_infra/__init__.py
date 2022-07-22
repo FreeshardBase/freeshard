@@ -33,7 +33,7 @@ def refresh_app_infra():
 	docker_compose_filename = Path(gconf.get('path_root')) / 'core' / 'docker-compose-apps.yml'
 	write_to_yaml(compose_spec(apps, portal), docker_compose_filename)
 
-	traefik_dyn_filename = Path(gconf.get('path_root')) / 'core' / 'traefik_dyn.yml'
+	traefik_dyn_filename = Path(gconf.get('path_root')) / 'core' / 'traefik_dyn' / 'traefik_dyn.yml'
 	write_to_yaml(traefik_dyn_spec(apps, portal), traefik_dyn_filename)
 
 
