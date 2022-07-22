@@ -25,7 +25,7 @@ def test_template_is_written():
 
 	app_infra.refresh_app_infra()
 
-	with open(Path(gconf.get('path_root')) / 'core' / 'traefik_dyn.yml', 'r') as f:
+	with open(Path(gconf.get('path_root')) / 'core' / 'traefik_dyn' / 'traefik_dyn.yml', 'r') as f:
 		output = yaml.safe_load(f)
 		out_middlewares: dict = output['http']['middlewares']
 
