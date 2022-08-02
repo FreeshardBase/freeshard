@@ -23,6 +23,7 @@ def management_api_mock():
 
 
 def test_call_management_api_verified(api_client, management_api_mock):
+	portal_id = api_client.get('public/meta/whoareyou').json()['id']
 	profile_response = api_client.get('public/meta/profile')
 	assert profile_response.json()['name'] == 'test'
 
@@ -32,14 +33,16 @@ def test_call_management_api_verified(api_client, management_api_mock):
 			pass
 
 		def resolve_public_key(self, key_id: str):
+			assert portal_id.startswith(key_id)
 			whoareyou = api_client.get('public/meta/whoareyou')
 			return whoareyou.json()['public_key_pem'].encode()
 
-	HTTPSignatureAuth.verify(
+	v = HTTPSignatureAuth.verify(
 		management_api_mock.calls[0].request,
 		signature_algorithm=algorithms.RSA_PSS_SHA512,
 		key_resolver=KR(),
 	)
+	assert portal_id.startswith(v.parameters['keyid'])
 
 
 def test_call_management_api_fail_verify(api_client, management_api_mock):
