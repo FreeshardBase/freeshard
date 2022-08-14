@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>{{ app_name }}</title>
+</head>
+<body onload="timeRefresh(2000);">
+<div class="center">
+<img src="{{ icon_data }}">
+<h1>Access Denied</h1>
+</div>
+</body>
+<style>
+    body {
+        justify-content: center;
+        display: grid;
+    }
+
+    img {
+        height: 7em;
+    }
+
+    h1 {
+        font-family: Avenir,Helvetica,Arial,sans-serif;
+    }
+
+    .center {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        margin-right: -50%;
+        transform: translate(-50%, -50%);
+        text-align: center;
+    }
+</style>
+</html>
