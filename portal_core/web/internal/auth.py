@@ -41,8 +41,8 @@ def authenticate_and_authorize(
 		x_forwarded_host: str = Header(None),
 		x_forwarded_uri: str = Header(None),
 ):
-	app = _get_app(x_forwarded_host)
-	path_object = _get_path_object(x_forwarded_uri, app)
+	app = _match_app(x_forwarded_host)
+	path_object = _match_path(x_forwarded_uri, app)
 	auth_header_values = _make_auth_header_values(authorization)
 	portal_header_values = _get_portal_identity()
 
@@ -59,7 +59,7 @@ def authenticate_and_authorize(
 	on_request_to_app.send(app)
 
 
-def _get_app(x_forwarded_host):
+def _match_app(x_forwarded_host):
 	app_name = x_forwarded_host.split('.')[0]
 	app = _find_app(app_name)
 	if not app:
@@ -82,7 +82,7 @@ def _find_app(app_name):
 	return app
 
 
-def _get_path_object(uri, app: InstalledApp) -> Path:
+def _match_path(uri, app: InstalledApp) -> Path:
 	for path, props in sorted(app.paths.items(), key=lambda x: len(x[0]), reverse=True):  # type: (str, Path)
 		if uri.startswith(path):
 			return props

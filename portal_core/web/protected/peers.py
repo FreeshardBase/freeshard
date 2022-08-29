@@ -33,12 +33,9 @@ def get_peer_by_id(id_):
 			raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
 
-@router.post('', response_model=Peer, status_code=status.HTTP_201_CREATED)
-def add_peer(p: Peer):
+@router.put('', response_model=Peer, status_code=status.HTTP_201_CREATED)
+def put_peer(p: Peer):
 	with peers_table() as peers:  # type: Table
-		if peers.get(Query().id == p.id):
-			raise HTTPException(status_code=status.HTTP_409_CONFLICT)
-		else:
-			peers.insert(p.dict())
-			log.info(f'added {p}')
-			return p
+		peers.upsert(p.dict(), Query().id == p.id)
+		log.info(f'added {p}')
+		return p
