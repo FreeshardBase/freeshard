@@ -63,5 +63,9 @@ def who_am_i(authorization: str = Cookie(None)):
 @router.get('/profile')
 def profile():
 	api_url = gconf.get('management.api_url')
-	response = signed_request('GET', f'{api_url}/profile')
+	url = f'{api_url}/profile'
+	log.debug(f'Getting profile from {url}')
+	response = signed_request('GET', url)
+	log.debug(f'profile response status: {response.status_code}')
+	response.raise_for_status()
 	return response.json()
