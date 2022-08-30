@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from portal_core.service import pairing, identity
 from portal_core.service.signed_call import signed_request
 from portal_core.web.dependencies import AuthValues
+from portal_core.model.profile import Profile
 
 log = logging.getLogger(__name__)
 
@@ -60,7 +61,7 @@ def who_am_i(authorization: str = Cookie(None)):
 		)
 
 
-@router.get('/profile')
+@router.get('/profile', response_model=Profile)
 def profile():
 	api_url = gconf.get('management.api_url')
 	url = f'{api_url}/profile'
@@ -68,4 +69,4 @@ def profile():
 	response = signed_request('GET', url)
 	log.debug(f'profile response status: {response.status_code}')
 	response.raise_for_status()
-	return response.json()
+	return Profile(**response.json())

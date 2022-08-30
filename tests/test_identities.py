@@ -71,6 +71,6 @@ def test_make_default(api_client):
 def test_apply_profile_on_init(management_api_mock, api_client):
 	def public_name_verify():
 		response = api_client.get('protected/identities/default_identity')
-		assert response.json()['public_name'] == 'test'
+		assert response.json()['public_name'] == 'test owner'
 
 	retry(public_name_verify, timeout=10)

@@ -13,6 +13,7 @@ from tinydb import Query
 
 from portal_core.database import database, migration
 from .database.database import identities_table
+from .model.profile import Profile
 from .model.identity import Identity
 from .service import app_store, init_apps, app_infra, identity, app_lifecycle
 from .service.signed_call import signed_request
@@ -119,10 +120,10 @@ async def apply_profile():
 		response.raise_for_status()
 	except HTTPError:
 		return
-	owner = response.json()['owner']
+	profile = Profile(**response.json())
 
 	with identities_table() as identities:  # type: Table
-		identities.update({'public_name': owner}, Query().is_default == True)
+		identities.update({'public_name': profile.owner}, Query().is_default == True)
 	raise CancelledError
 
 

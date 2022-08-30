@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timedelta
 from time import sleep
 
 import gconf
@@ -9,6 +10,7 @@ from fastapi.testclient import TestClient
 from psycopg.conninfo import make_conninfo
 
 import portal_core
+from portal_core.model.profile import Profile
 
 log = logging.getLogger(__name__)
 
@@ -86,10 +88,16 @@ def postgres(request):
 def management_api_mock():
 	management_api = 'https://management-mock'
 	config_override = {'management': {'api_url': management_api}}
+	mock_profile = Profile(
+		vm_id='portal_foobar',
+		owner='test owner',
+		time_created=datetime.now() - timedelta(days=2),
+		time_assigned=datetime.now() - timedelta(days=1),
+	)
 	with responses.RequestsMock() as rsps, gconf.override_conf(config_override):
 		rsps.get(
 			f'{management_api}/profile',
-			json={'owner': 'test'},
+			body=mock_profile.json(),
 		)
 		rsps.add_passthru('')
 		yield rsps
