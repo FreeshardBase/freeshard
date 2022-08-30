@@ -21,6 +21,7 @@ router = APIRouter(
 class OutputIdentity(BaseModel):
 	id: str
 	name: str
+	public_name: Optional[str]
 	description: Optional[str]
 	is_default: bool
 	public_key_pem: str
@@ -28,6 +29,7 @@ class OutputIdentity(BaseModel):
 
 class InputIdentity(BaseModel):
 	name: str
+	public_name: Optional[str] = ''
 	description: Optional[str] = ''
 
 
@@ -55,11 +57,12 @@ def get_identity_by_name(name):
 			raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
 
-@router.post('', response_model=OutputIdentity, status_code=status.HTTP_201_CREATED)
-def add_identity(i: InputIdentity):
+@router.put('', response_model=OutputIdentity, status_code=status.HTTP_201_CREATED)
+def put_identity(i: InputIdentity):
 	with identities_table() as identities:  # type: Table
 		if identities.get(Query().name == i.name):
-			raise HTTPException(status_code=status.HTTP_409_CONFLICT)
+			identities.update(i.dict(), Query().name == i.name)
+			return OutputIdentity(**identities.get(Query().name == i.name))
 		else:
 			new_identity = Identity.create(i.name, i.description)
 			identities.insert(new_identity.dict())

@@ -9,6 +9,7 @@ from portal_core.model.util import PropertyBaseModel
 class Identity(PropertyBaseModel):
 	id: str
 	name: str
+	public_name: Optional[str]
 	description: Optional[str]
 	private_key: str
 	is_default: bool = False

@@ -4,6 +4,7 @@ from time import sleep
 import gconf
 import psycopg
 import pytest
+import responses
 from fastapi.testclient import TestClient
 from psycopg.conninfo import make_conninfo
 
@@ -79,3 +80,16 @@ def postgres(request):
 		raise TimeoutError('Postgres did not start in time')
 
 	return postgres_conn_string
+
+
+@pytest.fixture
+def management_api_mock():
+	management_api = 'https://management-mock'
+	config_override = {'management': {'api_url': management_api}}
+	with responses.RequestsMock() as rsps, gconf.override_conf(config_override):
+		rsps.get(
+			f'{management_api}/profile',
+			json={'owner': 'test'},
+		)
+		rsps.add_passthru('')
+		yield rsps

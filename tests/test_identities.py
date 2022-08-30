@@ -1,10 +1,12 @@
+from common_py.util import retry
+
 from portal_core.model.identity import Identity
 from portal_core.web.protected.identities import OutputIdentity
 
 
 def test_add_and_get(api_client):
 	i = Identity.create('test id')
-	response_post = api_client.post('protected/identities', json=i.dict())
+	response_post = api_client.put('protected/identities', json=i.dict())
 	assert response_post.status_code == 201
 	response = api_client.get('protected/identities')
 	assert response.status_code == 200
@@ -25,7 +27,7 @@ def test_get_default(api_client):
 
 
 def test_add_another(api_client):
-	response = api_client.post('protected/identities', json={
+	response = api_client.put('protected/identities', json={
 		'name': 'I2',
 		'description': 'a second identity'
 	})
@@ -35,19 +37,21 @@ def test_add_another(api_client):
 	assert len(response.json()) == 2
 
 
-def test_add_conflict(api_client):
-	response = api_client.post('protected/identities', json={
+def test_update(api_client):
+	response = api_client.put('protected/identities', json={
 		'name': 'default_identity',
-		'description': 'a second identity'
+		'public_name': 'me',
+		'description': 'updated identity',
 	})
-	assert response.status_code == 409
+	assert response.status_code == 201
 
 	response = api_client.get('protected/identities')
 	assert len(response.json()) == 1
+	assert response.json()[0]['public_name'] == 'me'
 
 
 def test_make_default(api_client):
-	response = api_client.post('protected/identities', json={
+	response = api_client.put('protected/identities', json={
 		'name': 'I2',
 		'description': 'a second identity'
 	})
@@ -62,3 +66,11 @@ def test_make_default(api_client):
 	assert response.json()['is_default'] is False
 	response = api_client.get('protected/identities/default')
 	assert response.json()['name'] == 'I2'
+
+
+def test_apply_profile_on_init(management_api_mock, api_client):
+	def public_name_verify():
+		response = api_client.get('protected/identities/default_identity')
+		assert response.json()['public_name'] == 'test'
+
+	retry(public_name_verify, timeout=10)

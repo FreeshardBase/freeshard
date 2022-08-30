@@ -1,27 +1,12 @@
 import pytest
-import responses
 from common_py.crypto import PublicKey
 from http_message_signatures import algorithms, HTTPSignatureKeyResolver, InvalidSignature
 from requests_http_signature import HTTPSignatureAuth
 
 from portal_core.model.identity import Identity
 
-management_api = 'https://management-mock'
-config_override = {'management': {'api_url': management_api}}
 
-
-@pytest.fixture
-def management_api_mock():
-	with responses.RequestsMock() as rsps:
-		rsps.get(
-			f'{management_api}/profile',
-			json={'name': 'test'},
-		)
-		rsps.add_passthru('')
-		yield rsps
-
-
-def test_call_management_api_verified(api_client, management_api_mock):
+def test_call_management_api_verified(management_api_mock, api_client):
 	portal_id = api_client.get('public/meta/whoareyou').json()['id']
 	profile_response = api_client.get('public/meta/profile')
 	assert profile_response.json()['name'] == 'test'
@@ -46,7 +31,7 @@ def test_call_management_api_verified(api_client, management_api_mock):
 	assert portal_id.startswith(v.parameters['keyid'])
 
 
-def test_call_management_api_fail_verify(api_client, management_api_mock):
+def test_call_management_api_fail_verify(management_api_mock, api_client):
 	profile_response = api_client.get('public/meta/profile')
 	assert profile_response.json()['name'] == 'test'
 
