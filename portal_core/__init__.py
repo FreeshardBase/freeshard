@@ -16,6 +16,7 @@ from .database.database import identities_table
 from .model.profile import Profile
 from .model.identity import Identity
 from .service import app_store, init_apps, app_infra, identity, app_lifecycle
+from .service.peer import update_all_peer_pubkeys
 from .service.signed_call import signed_request
 from .util.background_task import BackgroundTaskHandler
 from .web import internal, public, protected
@@ -47,6 +48,7 @@ def create_app():
 	bg_tasks = BackgroundTaskHandler([
 		(app_lifecycle.stop_apps, gconf.get('apps.lifecycle.refresh_interval')),
 		(apply_profile, 3),
+		(update_all_peer_pubkeys, 60),
 	])
 	bg_tasks.start()
 

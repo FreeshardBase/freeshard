@@ -3,10 +3,10 @@ from typing import List
 
 from fastapi import APIRouter, HTTPException, status
 from tinydb import Query
-from tinydb.table import Table
 
 from portal_core.database.database import peers_table
 from portal_core.model.peer import Peer
+from portal_core.util import signals
 
 log = logging.getLogger(__name__)
 
@@ -37,5 +37,7 @@ def get_peer_by_id(id_):
 def put_peer(p: Peer):
 	with peers_table() as peers:  # type: Table
 		peers.upsert(p.dict(), Query().id == p.id)
-		log.info(f'added {p}')
-		return p
+
+	signals.on_peer_write.send(p)
+	log.info(f'put {p}')
+	return p
