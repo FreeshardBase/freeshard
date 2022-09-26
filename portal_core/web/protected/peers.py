@@ -1,6 +1,7 @@
 import logging
 from typing import List
 
+from common_py.crypto import PublicKey
 from fastapi import APIRouter, HTTPException, status
 from tinydb import Query
 
@@ -25,9 +26,9 @@ def list_all_peers(name: str = None):
 
 
 @router.get('/{id}', response_model=Peer)
-def get_peer_by_id(id_):
+def get_peer_by_id(id):
 	with peers_table() as peers:
-		if p := peers.get(Query().id == id_):
+		if p := peers.get(Query().id == id):
 			return p
 		else:
 			raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
@@ -35,6 +36,12 @@ def get_peer_by_id(id_):
 
 @router.put('', response_model=Peer, status_code=status.HTTP_201_CREATED)
 def put_peer(p: Peer):
+	if p.public_bytes_b64:
+		if not PublicKey(p.public_bytes_b64).to_hash_id().startswith(p.id):
+			raise HTTPException(
+				status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+				detail='public key and id do not match')
+
 	with peers_table() as peers:  # type: Table
 		peers.upsert(p.dict(), Query().id == p.id)
 

@@ -1,7 +1,7 @@
-import logging
 from datetime import datetime, timedelta
 from time import sleep
 
+import aioresponses
 import gconf
 import psycopg
 import pytest
@@ -13,8 +13,6 @@ from psycopg.conninfo import make_conninfo
 import portal_core
 from portal_core.model.profile import Profile
 from portal_core.web.public.meta import OutputWhoAreYou
-
-log = logging.getLogger(__name__)
 
 
 @pytest.fixture(autouse=True)
@@ -111,16 +109,17 @@ def peer_mock():
 	hash_id = privkey.get_public_key().to_hash_id()
 	peer_domain = f'{hash_id[:6]}.p.getportal.org'
 	peer_whoareyou_url = f'https://{peer_domain}/core/public/meta/whoareyou'
+	print(f'mocking peer endpoint {peer_whoareyou_url}')
 	mock_whoareyou = OutputWhoAreYou(
 		status='OK',
 		domain=peer_domain,
 		id=hash_id,
 		public_key_pem=privkey.get_public_key().to_bytes().decode()
 	)
-	with responses.RequestsMock() as rsps:
+	with aioresponses.aioresponses() as rsps:
 		rsps.get(
 			peer_whoareyou_url,
 			body=mock_whoareyou.json(),
+			repeat=True,
 		)
-		rsps.add_passthru('')
 		yield mock_whoareyou

@@ -22,6 +22,10 @@ class OutputWhoAreYou(BaseModel):
 	id: str
 	public_key_pem: str
 
+	@property
+	def short_id(self):
+		return self.id[:6]
+
 
 @router.get('/whoareyou', response_model=OutputWhoAreYou)
 def who_are_you():

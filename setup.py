@@ -38,6 +38,7 @@ setup(
 			'pytest',
 			'pytest-docker',
 			'responses',
+			'aioresponses',
 			'datamodel-code-generator[http]'
 		]
 	},

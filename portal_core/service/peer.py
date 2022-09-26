@@ -1,5 +1,4 @@
 import asyncio
-from base64 import b64encode
 
 import aiohttp
 from common_py.crypto import PublicKey
@@ -14,20 +13,20 @@ from portal_core.util import signals
 async def update_all_peer_pubkeys():
 	with peers_table() as peers:  # type: Table
 		peers_without_pubkey = peers.search(Query().public_bytes_b64.exists())
-		futures = (_update_peer_with_pubkey(Peer(**p)) for p in peers_without_pubkey)
-		await asyncio.gather(futures)
+	futures = (_update_peer_with_pubkey(Peer(**p)) for p in peers_without_pubkey)
+	await asyncio.gather(futures)
 
 
 async def update_peer_pubkey(portal_id: str):
 	with peers_table() as peers:  # type: Table
-		if peer := Peer(**peers.get(Query().id.startswith(portal_id))):
+		if peer := Peer(**peers.get(Query().id.matches(f'{portal_id}:*'))):
 			peer = await _update_peer_with_pubkey(peer)
-			peers.update(peer.dict(), Query().id.startswith(portal_id))
+			peers.update(peer.dict(), Query().id.matches(f'{portal_id}:*'))
 
 
 async def _update_peer_with_pubkey(peer: Peer) -> Peer:
 	pubkey = await _query_peer_for_public_key(peer.short_id)
-	peer.public_bytes_b64 = b64encode(pubkey.to_bytes())
+	peer.public_bytes_b64 = pubkey.to_bytes().decode()
 	return peer
 
 
