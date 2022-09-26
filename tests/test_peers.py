@@ -20,9 +20,9 @@ def test_add(api_client):
 	assert len(response.json()) == 2
 
 
-def test_add_only_id(api_client):
+def test_add_only_id(peer_mock, api_client):
 	response = api_client.put('protected/peers', json={
-		'id': 'foobar',
+		'id': peer_mock.id[:6],
 	})
 	assert response.status_code == 201
 
