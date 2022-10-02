@@ -1,6 +1,7 @@
 from typing import Optional
 
-from pydantic import BaseModel, validator
+from common_py.crypto import PublicKey
+from pydantic import BaseModel, validator, root_validator
 
 
 class Peer(BaseModel):
@@ -13,6 +14,14 @@ class Peer(BaseModel):
 		if len(v) < 6:
 			raise ValueError(f'{v} is too short, must be at least 6 characters')
 		return v
+
+	@root_validator
+	def public_bytes_must_match_id(cls, values):
+		if values['public_bytes_b64']:
+			pubkey = PublicKey(values['public_bytes_b64'])
+			if not pubkey.to_hash_id().startswith(values['id']):
+				raise ValueError('public key and id do not match')
+		return values
 
 	def __str__(self):
 		return f'Peer[{self.short_id}]'

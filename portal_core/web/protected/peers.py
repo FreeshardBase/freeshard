@@ -1,9 +1,9 @@
 import logging
 from typing import List
 
-from common_py.crypto import PublicKey
 from fastapi import APIRouter, HTTPException, status
 from tinydb import Query
+from tinydb.table import Table
 
 from portal_core.database.database import peers_table
 from portal_core.model.peer import Peer
@@ -34,17 +34,20 @@ def get_peer_by_id(id):
 			raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
 
-@router.put('', response_model=Peer, status_code=status.HTTP_201_CREATED)
+@router.put('', response_model=Peer)
 def put_peer(p: Peer):
-	if p.public_bytes_b64:
-		if not PublicKey(p.public_bytes_b64).to_hash_id().startswith(p.id):
-			raise HTTPException(
-				status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-				detail='public key and id do not match')
-
 	with peers_table() as peers:  # type: Table
 		peers.upsert(p.dict(), Query().id == p.id)
 
 	signals.on_peer_write.send(p)
 	log.info(f'put {p}')
 	return p
+
+
+@router.delete('/{id}', status_code=status.HTTP_204_NO_CONTENT)
+def delete_peer(id):
+	with peers_table() as peers:  # type: Table
+		deleted = peers.remove(Query().id == id)
+		if len(deleted) > 1:
+			log.critical(f'during deleting of peer {id}, {len(deleted)} peers were deleted')
+		log.info(f'removed peer {deleted[0]}')
