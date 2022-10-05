@@ -1,19 +1,20 @@
-from common_py.util import retry
-
 from portal_core.model.identity import Identity
 from portal_core.web.protected.identities import OutputIdentity
 
 
+test_identity = i = Identity.create('test id', email='hello@getportal.org')
+
+
 def test_add_and_get(api_client):
-	i = Identity.create('test id')
-	response_post = api_client.put('protected/identities', json=i.dict())
+	response_post = api_client.put('protected/identities', json=test_identity.dict())
 	assert response_post.status_code == 201
 	response = api_client.get('protected/identities')
 	assert response.status_code == 200
 	result = response.json()
 	assert len(result) == 2
 	result_i = OutputIdentity(**(result[1]))
-	assert result_i.name == i.name
+	assert result_i.name == test_identity.name
+	assert result_i.email == test_identity.email
 
 
 def test_get_default(api_client):
@@ -40,37 +41,26 @@ def test_add_another(api_client):
 def test_update(api_client):
 	response = api_client.put('protected/identities', json={
 		'name': 'default_identity',
-		'public_name': 'me',
+		'email': 'hello@getportal.org',
 		'description': 'updated identity',
 	})
 	assert response.status_code == 201
 
 	response = api_client.get('protected/identities')
 	assert len(response.json()) == 1
-	assert response.json()[0]['public_name'] == 'me'
+	assert response.json()[0]['email'] == 'hello@getportal.org'
 
 
 def test_make_default(api_client):
-	response = api_client.put('protected/identities', json={
-		'name': 'I2',
-		'description': 'a second identity'
-	})
-	assert response.status_code == 201
+	response = api_client.put('protected/identities', json=test_identity.dict())
+	response.raise_for_status()
 
-	response = api_client.post('protected/identities/I2/make-default')
-	assert response.status_code == 204
+	response = api_client.post(f'protected/identities/{test_identity.name}/make-default')
+	response.raise_for_status()
 
-	response = api_client.get('protected/identities/I2')
+	response = api_client.get(f'protected/identities/{test_identity.name}')
 	assert response.json()['is_default'] is True
 	response = api_client.get('protected/identities/default_identity')
 	assert response.json()['is_default'] is False
 	response = api_client.get('protected/identities/default')
-	assert response.json()['name'] == 'I2'
-
-
-def test_apply_profile_on_init(management_api_mock, api_client):
-	def public_name_verify():
-		response = api_client.get('protected/identities/default_identity')
-		assert response.json()['public_name'] == 'test owner'
-
-	retry(public_name_verify, timeout=10)
+	assert response.json()['name'] == test_identity.name

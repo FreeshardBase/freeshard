@@ -21,7 +21,7 @@ router = APIRouter(
 class OutputIdentity(BaseModel):
 	id: str
 	name: str
-	public_name: Optional[str]
+	email: Optional[str]
 	description: Optional[str]
 	is_default: bool
 	public_key_pem: str
@@ -29,7 +29,7 @@ class OutputIdentity(BaseModel):
 
 class InputIdentity(BaseModel):
 	name: str
-	public_name: Optional[str] = ''
+	email: Optional[str] = ''
 	description: Optional[str] = ''
 
 
@@ -64,7 +64,7 @@ def put_identity(i: InputIdentity):
 			identities.update(i.dict(), Query().name == i.name)
 			return OutputIdentity(**identities.get(Query().name == i.name))
 		else:
-			new_identity = Identity.create(i.name, i.description)
+			new_identity = Identity.create(**i.dict())
 			identities.insert(new_identity.dict())
 			log.info(f'added {new_identity}')
 			return new_identity

@@ -114,7 +114,8 @@ def peer_mock():
 		status='OK',
 		domain=peer_domain,
 		id=hash_id,
-		public_key_pem=privkey.get_public_key().to_bytes().decode()
+		public_key_pem=privkey.get_public_key().to_bytes().decode(),
+		owner='me@example.com',
 	)
 	with aioresponses.aioresponses() as rsps:
 		rsps.get(

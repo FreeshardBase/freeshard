@@ -1,10 +1,14 @@
 import logging
 
+import gconf
+from requests import HTTPError
 from tinydb import Query
 from tinydb.table import Table
 
-from portal_core import Identity
 from portal_core.database.database import identities_table
+from portal_core.model.identity import Identity
+from portal_core.model.profile import Profile
+from portal_core.service.signed_call import signed_request
 
 log = logging.getLogger(__name__)
 
@@ -39,3 +43,20 @@ def make_default(name):
 def get_default_identity() -> Identity:
 	with identities_table() as identities:
 		return Identity(**identities.get(Query().is_default == True))
+
+
+def enrich_identity_from_profile():
+	api_url = gconf.get('management.api_url')
+	url = f'{api_url}/profile'
+	response = signed_request('GET', url)
+	try:
+		response.raise_for_status()
+	except HTTPError:
+		return
+	profile = Profile(**response.json())
+
+	with identities_table() as identities:  # type: Table
+		identities.update({
+			'name': profile.owner,
+			'email': profile.owner_email,
+		}, Query().is_default == True)

@@ -1,19 +1,15 @@
 import logging
 import os
 import sys
-from asyncio import CancelledError
 from importlib.metadata import metadata
 from pathlib import Path
 
 import gconf
 import jinja2
 from fastapi import FastAPI, Request, Response
-from requests import HTTPError
-from tinydb import Query
 
 from portal_core.database import database, migration
 from .database.database import identities_table
-from .model.profile import Profile
 from .model.identity import Identity
 from .service import app_store, init_apps, app_infra, identity, app_lifecycle
 from .service.peer import update_all_peer_pubkeys
@@ -47,7 +43,6 @@ def create_app():
 
 	bg_tasks = BackgroundTaskHandler([
 		(app_lifecycle.stop_apps, gconf.get('apps.lifecycle.refresh_interval')),
-		(apply_profile, 3),
 		(update_all_peer_pubkeys, 60),
 	])
 	bg_tasks.start()
@@ -112,21 +107,6 @@ def _ensure_traefik_config(id_: Identity):
 		f_traefik.write(template.render(identity=id_.id[:prefix_length]))
 
 	log.info('created traefik config')
-
-
-async def apply_profile():
-	api_url = gconf.get('management.api_url')
-	url = f'{api_url}/profile'
-	response = signed_request('GET', url)
-	try:
-		response.raise_for_status()
-	except HTTPError:
-		return
-	profile = Profile(**response.json())
-
-	with identities_table() as identities:  # type: Table
-		identities.update({'public_name': profile.owner}, Query().is_default == True)
-	raise CancelledError
 
 
 async def _log_request_and_response(request: Request, response: Response):

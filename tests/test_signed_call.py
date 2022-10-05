@@ -9,6 +9,7 @@ from portal_core.model.identity import Identity
 def test_call_management_api_verified(management_api_mock, api_client):
 	portal_id = api_client.get('public/meta/whoareyou').json()['id']
 	profile_response = api_client.get('public/meta/profile')
+	profile_response.raise_for_status()
 	assert profile_response.json()['owner'] == 'test owner'
 
 	# attempt to verify the request that was just sent
@@ -33,6 +34,7 @@ def test_call_management_api_verified(management_api_mock, api_client):
 
 def test_call_management_api_fail_verify(management_api_mock, api_client):
 	profile_response = api_client.get('public/meta/profile')
+	profile_response.raise_for_status()
 	assert profile_response.json()['owner'] == 'test owner'
 
 	# attempt to verify the request that was just sent

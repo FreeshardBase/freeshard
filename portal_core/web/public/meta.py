@@ -4,10 +4,10 @@ import gconf
 from fastapi import APIRouter, Cookie
 from pydantic import BaseModel
 
+from portal_core.model.profile import Profile
 from portal_core.service import pairing, identity
 from portal_core.service.signed_call import signed_request
 from portal_core.web.dependencies import AuthValues
-from portal_core.model.profile import Profile
 
 log = logging.getLogger(__name__)
 
@@ -21,6 +21,7 @@ class OutputWhoAreYou(BaseModel):
 	domain: str
 	id: str
 	public_key_pem: str
+	owner: str
 
 	@property
 	def short_id(self):
@@ -35,6 +36,7 @@ def who_are_you():
 		domain=default_identity.domain,
 		id=default_identity.id,
 		public_key_pem=default_identity.public_key_pem,
+		owner=default_identity.name,
 	)
 
 
