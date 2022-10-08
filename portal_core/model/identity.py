@@ -55,6 +55,10 @@ class SafeIdentity(PropertyBaseModel):
 	id: str
 	public_key_pem: str
 
+	@property
+	def short_id(self) -> str:
+		return self.id[:6]
+
 	@classmethod
 	def from_identity(cls, identity: Identity):
 		return cls(
