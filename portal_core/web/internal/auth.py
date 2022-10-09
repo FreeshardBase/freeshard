@@ -72,7 +72,7 @@ def _match_app(x_forwarded_host):
 def _get_portal_identity():
 	with identities_table() as identities:
 		default_identity = Identity(**identities.get(Query().is_default == True))
-	return SafeIdentity.from_identity(default_identity)
+	return SafeIdentity(**default_identity.dict())
 
 
 @cached(cache=TTLCache(maxsize=32, ttl=gconf.get('tests.cache_ttl', default=3)))

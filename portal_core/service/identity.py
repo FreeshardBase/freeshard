@@ -27,17 +27,17 @@ def init_default_identity():
 		return default_identity
 
 
-def make_default(name):
+def make_default(id):
 	with identities_table() as identities:  # type: Table
 		last_default = Identity(**identities.get(Query().is_default == True))
-		if new_default := Identity(**identities.get(Query().name == name)):
+		if new_default := Identity(**identities.get(Query().id == id)):
 			last_default.is_default = False
 			new_default.is_default = True
 			identities.update(last_default.dict(), Query().name == last_default.name)
 			identities.update(new_default.dict(), Query().name == new_default.name)
-			log.info(f'set as default {new_default.name}')
+			log.info(f'set as default {new_default.id}')
 		else:
-			KeyError(name)
+			KeyError(id)
 
 
 def get_default_identity() -> Identity:

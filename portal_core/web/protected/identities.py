@@ -28,7 +28,8 @@ class OutputIdentity(BaseModel):
 
 
 class InputIdentity(BaseModel):
-	name: str
+	id: Optional[str] = None
+	name: Optional[str] = ''
 	email: Optional[str] = ''
 	description: Optional[str] = ''
 
@@ -48,10 +49,10 @@ def get_default_identity():
 		return identities.get(Query().is_default == True)
 
 
-@router.get('/{name}', response_model=OutputIdentity)
-def get_identity_by_name(name):
+@router.get('/{id}', response_model=OutputIdentity)
+def get_identity_by_id(id):
 	with identities_table() as identities:
-		if i := identities.get(Query().name == name):
+		if i := identities.get(Query().id == id):
 			return i
 		else:
 			raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
@@ -60,19 +61,22 @@ def get_identity_by_name(name):
 @router.put('', response_model=OutputIdentity, status_code=status.HTTP_201_CREATED)
 def put_identity(i: InputIdentity):
 	with identities_table() as identities:  # type: Table
-		if identities.get(Query().name == i.name):
-			identities.update(i.dict(), Query().name == i.name)
-			return OutputIdentity(**identities.get(Query().name == i.name))
+		if i.id:
+			if identities.get(Query().id == i.id):
+				identities.update(i.dict(exclude_unset=True), Query().id == i.id)
+				return OutputIdentity(**identities.get(Query().id == i.id))
+			else:
+				raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 		else:
-			new_identity = Identity.create(**i.dict())
+			new_identity = Identity.create(**i.dict(exclude_unset=True))
 			identities.insert(new_identity.dict())
 			log.info(f'added {new_identity}')
 			return new_identity
 
 
-@router.post('/{name}/make-default', status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
-def make_identity_default(name):
+@router.post('/{id}/make-default', status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+def make_identity_default(id):
 	try:
-		identity_service.make_default(name)
+		identity_service.make_default(id)
 	except KeyError:
 		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
