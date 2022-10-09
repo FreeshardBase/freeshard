@@ -6,13 +6,13 @@ import gconf
 import psycopg
 import pytest
 import responses
-from common_py import crypto
 from fastapi.testclient import TestClient
 from psycopg.conninfo import make_conninfo
 
 import portal_core
+from portal_core import Identity
+from portal_core.model.identity import OutputIdentity
 from portal_core.model.profile import Profile
-from portal_core.web.public.meta import OutputWhoAreYou
 
 
 @pytest.fixture(autouse=True)
@@ -105,22 +105,13 @@ def management_api_mock():
 
 @pytest.fixture
 def peer_mock():
-	privkey = crypto.PrivateKey()
-	hash_id = privkey.get_public_key().to_hash_id()
-	peer_domain = f'{hash_id[:6]}.p.getportal.org'
-	peer_whoareyou_url = f'https://{peer_domain}/core/public/meta/whoareyou'
+	peer_identity = Identity.create('peer')
+	peer_whoareyou_url = f'https://{peer_identity.domain}/core/public/meta/whoareyou'
 	print(f'mocking peer endpoint {peer_whoareyou_url}')
-	mock_whoareyou = OutputWhoAreYou(
-		status='OK',
-		domain=peer_domain,
-		id=hash_id,
-		public_key_pem=privkey.get_public_key().to_bytes().decode(),
-		owner='me@example.com',
-	)
 	with aioresponses.aioresponses() as rsps:
 		rsps.get(
 			peer_whoareyou_url,
-			body=mock_whoareyou.json(),
+			body=OutputIdentity(**peer_identity.dict()).json(),
 			repeat=True,
 		)
-		yield mock_whoareyou
+		yield peer_identity

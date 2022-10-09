@@ -1,14 +1,13 @@
 import logging
-from typing import Optional, List
+from typing import List
 
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import Response
-from pydantic import BaseModel
 from tinydb import Query
 from tinydb.table import Table
 
 from portal_core.database.database import identities_table
-from portal_core.model.identity import Identity
+from portal_core.model.identity import Identity, OutputIdentity, InputIdentity
 from portal_core.service import identity as identity_service
 
 log = logging.getLogger(__name__)
@@ -16,22 +15,6 @@ log = logging.getLogger(__name__)
 router = APIRouter(
 	prefix='/identities',
 )
-
-
-class OutputIdentity(BaseModel):
-	id: str
-	name: str
-	email: Optional[str]
-	description: Optional[str]
-	is_default: bool
-	public_key_pem: str
-
-
-class InputIdentity(BaseModel):
-	id: Optional[str] = None
-	name: Optional[str] = ''
-	email: Optional[str] = ''
-	description: Optional[str] = ''
 
 
 @router.get('', response_model=List[OutputIdentity])

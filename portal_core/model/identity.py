@@ -3,7 +3,7 @@ from typing import Optional
 import gconf
 from common_py import crypto
 from email_validator import validate_email, EmailNotValidError
-from pydantic import validator
+from pydantic import validator, BaseModel
 
 from portal_core.model.util import PropertyBaseModel
 
@@ -68,3 +68,20 @@ class SafeIdentity(PropertyBaseModel):
 	domain: str
 	id: str
 	public_key_pem: str
+
+
+class OutputIdentity(BaseModel):
+	id: str
+	name: str
+	email: Optional[str]
+	description: Optional[str]
+	is_default: bool
+	public_key_pem: str
+	domain: str
+
+
+class InputIdentity(BaseModel):
+	id: Optional[str] = None
+	name: Optional[str] = ''
+	email: Optional[str] = ''
+	description: Optional[str] = ''

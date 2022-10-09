@@ -4,6 +4,7 @@ import gconf
 from fastapi import APIRouter, Cookie
 from pydantic import BaseModel
 
+from portal_core.model.identity import OutputIdentity
 from portal_core.model.profile import Profile
 from portal_core.service import pairing, identity
 from portal_core.service.signed_call import signed_request
@@ -16,28 +17,10 @@ router = APIRouter(
 )
 
 
-class OutputWhoAreYou(BaseModel):
-	status: str
-	domain: str
-	id: str
-	public_key_pem: str
-	owner: str
-
-	@property
-	def short_id(self):
-		return self.id[:6]
-
-
-@router.get('/whoareyou', response_model=OutputWhoAreYou)
+@router.get('/whoareyou', response_model=OutputIdentity)
 def who_are_you():
 	default_identity = identity.get_default_identity()
-	return OutputWhoAreYou(
-		status='OK',
-		domain=default_identity.domain,
-		id=default_identity.id,
-		public_key_pem=default_identity.public_key_pem,
-		owner=default_identity.name,
-	)
+	return OutputIdentity(**default_identity.dict())
 
 
 class OutputWhoAmI(BaseModel):

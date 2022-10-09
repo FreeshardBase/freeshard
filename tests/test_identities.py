@@ -1,4 +1,4 @@
-from portal_core.web.protected.identities import OutputIdentity
+from portal_core.model.identity import OutputIdentity
 
 
 def test_add_and_get(api_client):
