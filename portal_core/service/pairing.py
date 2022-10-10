@@ -2,7 +2,7 @@ import logging
 import random
 import secrets
 import string
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import gconf
 import jwt
@@ -27,10 +27,11 @@ class PairingCode(BaseModel):
 
 
 def make_pairing_code(deadline: int = None):
+	now = datetime.now(timezone.utc)
 	pairing_code = PairingCode(
 		code=(''.join(random.choices(string.digits, k=6))),
-		created=datetime.utcnow(),
-		valid_until=datetime.utcnow() + timedelta(
+		created=now,
+		valid_until=now + timedelta(
 			seconds=deadline or gconf.get('terminal.pairing code deadline', default=600))
 	)
 	database.set_value(STORE_KEY_PAIRING_CODE, pairing_code.dict())
@@ -45,7 +46,7 @@ def redeem_pairing_code(incoming_code: str):
 	if existing_pairing_code.code != incoming_code:
 		raise InvalidPairingCode(
 			f'code ({incoming_code}) does not match existing code ({existing_pairing_code.code})')
-	if datetime.now() > existing_pairing_code.valid_until:
+	if datetime.now(timezone.utc) > existing_pairing_code.valid_until:
 		raise PairingCodeExpired(f'issued code ({existing_pairing_code.code}) is expired')
 	else:
 		database.remove_value(STORE_KEY_PAIRING_CODE)
@@ -55,7 +56,7 @@ def create_terminal_jwt(terminal_id, **kwargs) -> str:
 	jwt_secret = _ensure_jwt_secret()
 	payload = {
 		'sub': terminal_id,
-		'iat': int(datetime.now().timestamp()),
+		'iat': int(datetime.now(timezone.utc).timestamp()),
 		**kwargs
 	}
 	return jwt.encode(payload, jwt_secret, algorithm='HS256')
