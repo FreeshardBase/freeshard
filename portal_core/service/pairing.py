@@ -29,8 +29,8 @@ class PairingCode(BaseModel):
 def make_pairing_code(deadline: int = None):
 	pairing_code = PairingCode(
 		code=(''.join(random.choices(string.digits, k=6))),
-		created=datetime.now(),
-		valid_until=datetime.now() + timedelta(
+		created=datetime.utcnow(),
+		valid_until=datetime.utcnow() + timedelta(
 			seconds=deadline or gconf.get('terminal.pairing code deadline', default=600))
 	)
 	database.set_value(STORE_KEY_PAIRING_CODE, pairing_code.dict())
