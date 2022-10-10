@@ -29,3 +29,14 @@ class Peer(BaseModel):
 	@property
 	def short_id(self):
 		return self.id[0:6]
+
+
+class InputPeer(BaseModel):
+	id: str
+	name: Optional[str]
+
+	@validator('id')
+	def must_be_long_enough(cls, v):
+		if len(v) < 6:
+			raise ValueError(f'{v} is too short, must be at least 6 characters')
+		return v

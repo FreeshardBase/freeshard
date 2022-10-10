@@ -9,7 +9,6 @@ def test_add_and_delete(peer_mock, api_client):
 	response = api_client.put('protected/peers', json={
 		'id': peer_mock.short_id,
 		'name': 'p1',
-		'public_bytes_b64': peer_mock.public_key_pem,
 	})
 	assert response.status_code == status.HTTP_200_OK
 
@@ -23,7 +22,7 @@ def test_add_and_delete(peer_mock, api_client):
 	assert len(response.json()) == 0
 
 
-def test_add_only_id(peer_mock, api_client):
+def test_pubkey_is_resolved(peer_mock, api_client):
 	response = api_client.put('protected/peers', json={
 		'id': peer_mock.short_id,
 	})
@@ -49,15 +48,6 @@ def test_add_invalid_id(api_client):
 
 	response = api_client.get('protected/peers')
 	assert len(response.json()) == 0
-
-
-def test_add_with_invalid_pubkey(peer_mock, api_client):
-	fake_pubkey = crypto.PrivateKey().get_public_key()
-	response = api_client.put('protected/peers', json={
-		'id': peer_mock.short_id,
-		'public_bytes_b64': fake_pubkey.to_bytes().decode(),
-	})
-	assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
 def test_update(peer_mock, api_client):
