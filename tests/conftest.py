@@ -6,7 +6,9 @@ import gconf
 import psycopg
 import pytest
 import responses
+import respx
 from fastapi.testclient import TestClient
+from httpx import Response
 from psycopg.conninfo import make_conninfo
 
 import portal_core
@@ -108,10 +110,8 @@ def peer_mock():
 	peer_identity = Identity.create('peer')
 	peer_whoareyou_url = f'https://{peer_identity.domain}/core/public/meta/whoareyou'
 	print(f'mocking peer endpoint {peer_whoareyou_url}')
-	with aioresponses.aioresponses() as rsps:
-		rsps.get(
-			peer_whoareyou_url,
-			body=OutputIdentity(**peer_identity.dict()).json(),
-			repeat=True,
-		)
-		yield peer_identity
+
+	with respx.mock(assert_all_called=False, base_url=f'https://{peer_identity.domain}/core/') as rx:
+		rx.get('/public/meta/whoareyou', name='whoareyou')\
+			.mock(Response(status_code=200, json=OutputIdentity(**peer_identity.dict()).dict()))
+		yield peer_identity, rx

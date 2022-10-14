@@ -1,6 +1,7 @@
 import asyncio
+import atexit
 
-import aiohttp
+import httpx
 from common_py.crypto import PublicKey
 from tinydb import Query
 from tinydb.table import Table
@@ -8,6 +9,9 @@ from tinydb.table import Table
 from portal_core.database.database import peers_table
 from portal_core.model.peer import Peer
 from portal_core.util import signals
+
+httpx_client = httpx.AsyncClient()
+atexit.register(asyncio.run, httpx_client.aclose())
 
 
 async def update_all_peer_pubkeys():
@@ -33,9 +37,8 @@ async def _update_peer_with_pubkey(peer: Peer) -> Peer:
 async def _query_peer_for_public_key(portal_id: str) -> PublicKey:
 	url = f'https://{portal_id}.p.getportal.org/core/public/meta/whoareyou'
 
-	async with aiohttp.ClientSession() as session:
-		async with session.get(url) as response:
-			whoareyou = await response.json()
+	response = await httpx_client.get(url)
+	whoareyou = response.json()
 
 	pubkey = PublicKey(whoareyou['public_key_pem'])
 	if not pubkey.to_hash_id().startswith(portal_id):
