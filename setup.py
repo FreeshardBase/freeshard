@@ -39,6 +39,7 @@ setup(
 		'dev': [
 			'pytest',
 			'pytest-docker',
+			'pytest-mock',
 			'responses',
 			'aioresponses',
 			'respx',

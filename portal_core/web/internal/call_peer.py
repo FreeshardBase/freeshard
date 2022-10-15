@@ -7,9 +7,10 @@ from typing import List
 import docker
 import httpx
 from docker.models.containers import Container
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Request
+from starlette.responses import StreamingResponse
 
-from portal_core.service.signed_call import get_default_signature_auth
+from portal_core import signed_request
 
 log = logging.getLogger(__name__)
 
@@ -20,22 +21,13 @@ atexit.register(asyncio.run, client.aclose())
 
 
 @router.api_route('/call_peer/{portal_id}/{rest}')
-async def call_peer(portal_id: str, rest: str, request: Request):
+def call_peer(portal_id: str, rest: str, request: Request):
 	source_host = request.client.host
 	app_name = _get_app_for_ip_address(source_host)
 	url = f'https://{app_name}.{portal_id}.p.getportal.org/{rest}'
 
-	async with client.stream(
-		method=request.method,
-		url=url,
-		params=request.query_params,
-		auth=get_default_signature_auth(),
-		content=request.stream(),
-	) as response:
-		return Response(
-			status_code=response.status,
-			content=response.aiter_bytes,
-		)
+	response = signed_request(request.method, url, stream=True)
+	return StreamingResponse(status_code=response.status_code, content=response.iter_content())
 
 
 @lru_cache()

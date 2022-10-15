@@ -10,6 +10,7 @@ import respx
 from fastapi.testclient import TestClient
 from httpx import Response
 from psycopg.conninfo import make_conninfo
+from responses import BaseResponse
 from respx import Route
 
 import portal_core
@@ -107,10 +108,38 @@ def management_api_mock():
 
 
 @pytest.fixture
+def peer_mock_requests(mocker):
+	mocker.patch('portal_core.web.internal.call_peer._get_app_for_ip_address', lambda x: 'myapp')
+	peer_identity = Identity.create('peer')
+	base_url = f'https://{peer_identity.domain}/core'
+	app_url = f'https://myapp.{peer_identity.domain}'
+
+	with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps, \
+			responses.RequestsMock(assert_all_requests_are_fired=False) as rspsa:
+		whoareyou = rsps.get(base_url + '/public/meta/whoareyou', json=OutputIdentity(**peer_identity.dict()).dict())
+		myapp_foo_bar = rspsa.get(app_url + '/foo')
+
+		rsps.add_passthru('')
+		rspsa.add_passthru('')
+
+		yield PeerMockRequests(
+			peer_identity,
+			whoareyou,
+			myapp_foo_bar,
+		)
+
+
+@dataclass
+class PeerMockRequests:
+	identity: Identity
+	route_whoareyou: BaseResponse
+	route_myapp_foo_bar: BaseResponse
+
+
+@pytest.fixture
 def peer_mock_httpx():
 	peer_identity = Identity.create('peer')
-	peer_whoareyou_url = f'https://{peer_identity.domain}/core/public/meta/whoareyou'
-	print(f'mocking peer endpoint {peer_whoareyou_url}')
+	print(f'mocking peer {peer_identity.short_id}')
 
 	with respx.mock(assert_all_called=False, base_url=f'https://{peer_identity.domain}/core/') as rx, \
 			respx.mock(assert_all_called=False, base_url=f'https://myapp.{peer_identity.domain}/core/') as rxa:
@@ -119,7 +148,7 @@ def peer_mock_httpx():
 		myapp_foo_bar = rxa.get('/foo/bar') \
 			.mock(Response(status_code=200))
 
-		yield PeerMock(
+		yield PeerMockHttpx(
 			peer_identity,
 			whoareyou,
 			myapp_foo_bar,
@@ -127,7 +156,7 @@ def peer_mock_httpx():
 
 
 @dataclass
-class PeerMock:
+class PeerMockHttpx:
 	identity: Identity
 	route_whoareyou: Route
 	route_myapp_foo_bar: Route
