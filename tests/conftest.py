@@ -10,7 +10,7 @@ import respx
 from fastapi.testclient import TestClient
 from httpx import Response
 from psycopg.conninfo import make_conninfo
-from responses import BaseResponse
+from responses import BaseResponse, RequestsMock
 from respx import Route
 
 import portal_core
@@ -116,24 +116,24 @@ def peer_mock_requests(mocker):
 
 	with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps, \
 			responses.RequestsMock(assert_all_requests_are_fired=False) as rspsa:
-		whoareyou = rsps.get(base_url + '/public/meta/whoareyou', json=OutputIdentity(**peer_identity.dict()).dict())
-		myapp_foo_bar = rspsa.get(app_url + '/foo')
+		rsps.get(base_url + '/public/meta/whoareyou', json=OutputIdentity(**peer_identity.dict()).dict())
+		rspsa.get(app_url + '/foo')
 
 		rsps.add_passthru('')
 		rspsa.add_passthru('')
 
 		yield PeerMockRequests(
 			peer_identity,
-			whoareyou,
-			myapp_foo_bar,
+			rsps,
+			rspsa,
 		)
 
 
 @dataclass
 class PeerMockRequests:
 	identity: Identity
-	route_whoareyou: BaseResponse
-	route_myapp_foo_bar: BaseResponse
+	base: RequestsMock
+	app: RequestsMock
 
 
 @pytest.fixture

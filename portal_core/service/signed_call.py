@@ -7,17 +7,12 @@ from portal_core.service import identity as identity_service
 
 
 def signed_request(*args, identity: Identity = None, **kwargs) -> requests.Response:
-	identity = identity or identity_service.get_default_identity()
-	auth = HTTPSignatureAuth(
-		signature_algorithm=algorithms.RSA_PSS_SHA512,
-		key_id=identity.short_id,
-		key=identity.private_key.encode(),
-	)
+	auth = get_signature_auth(identity)
 	return requests.request(*args, auth=auth, **kwargs)
 
 
-def get_default_signature_auth():
-	identity = identity_service.get_default_identity()
+def get_signature_auth(identity: Identity = None):
+	identity = identity or identity_service.get_default_identity()
 	return HTTPSignatureAuth(
 		signature_algorithm=algorithms.RSA_PSS_SHA512,
 		key_id=identity.short_id,

@@ -3,8 +3,10 @@ import subprocess
 from pathlib import Path
 
 import gconf
-
-from portal_core.model.terminal import InputTerminal, Icon
+from common_py.crypto import PublicKey
+from http_message_signatures import HTTPSignatureKeyResolver, algorithms, VerifyResult
+from requests import PreparedRequest
+from requests_http_signature import HTTPSignatureAuth
 
 WAITING_DOCKER_IMAGE = 'nginx:alpine'
 
@@ -38,3 +40,18 @@ def create_apps_from_docker_compose():
 			shell=True,
 			check=True,
 		)
+
+
+def verify_signature_auth(request: PreparedRequest, pubkey: PublicKey) -> VerifyResult:
+	class KR(HTTPSignatureKeyResolver):
+		def resolve_private_key(self, key_id: str):
+			pass
+
+		def resolve_public_key(self, key_id: str):
+			return pubkey.to_bytes()
+
+	return HTTPSignatureAuth.verify(
+		request,
+		signature_algorithm=algorithms.RSA_PSS_SHA512,
+		key_resolver=KR(),
+	)
