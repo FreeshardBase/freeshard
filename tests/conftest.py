@@ -1,7 +1,7 @@
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from time import sleep
 
-import aioresponses
 import gconf
 import psycopg
 import pytest
@@ -10,6 +10,7 @@ import respx
 from fastapi.testclient import TestClient
 from httpx import Response
 from psycopg.conninfo import make_conninfo
+from respx import Route
 
 import portal_core
 from portal_core import Identity
@@ -106,12 +107,27 @@ def management_api_mock():
 
 
 @pytest.fixture
-def peer_mock():
+def peer_mock_httpx():
 	peer_identity = Identity.create('peer')
 	peer_whoareyou_url = f'https://{peer_identity.domain}/core/public/meta/whoareyou'
 	print(f'mocking peer endpoint {peer_whoareyou_url}')
 
-	with respx.mock(assert_all_called=False, base_url=f'https://{peer_identity.domain}/core/') as rx:
-		rx.get('/public/meta/whoareyou', name='whoareyou')\
+	with respx.mock(assert_all_called=False, base_url=f'https://{peer_identity.domain}/core/') as rx, \
+			respx.mock(assert_all_called=False, base_url=f'https://myapp.{peer_identity.domain}/core/') as rxa:
+		whoareyou = rx.get('/public/meta/whoareyou') \
 			.mock(Response(status_code=200, json=OutputIdentity(**peer_identity.dict()).dict()))
-		yield peer_identity, rx
+		myapp_foo_bar = rxa.get('/foo/bar') \
+			.mock(Response(status_code=200))
+
+		yield PeerMock(
+			peer_identity,
+			whoareyou,
+			myapp_foo_bar,
+		)
+
+
+@dataclass
+class PeerMock:
+	identity: Identity
+	route_whoareyou: Route
+	route_myapp_foo_bar: Route
