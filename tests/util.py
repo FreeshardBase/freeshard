@@ -7,8 +7,17 @@ from common_py.crypto import PublicKey
 from http_message_signatures import HTTPSignatureKeyResolver, algorithms, VerifyResult
 from requests import PreparedRequest
 from requests_http_signature import HTTPSignatureAuth
+from fastapi import Response
 
 WAITING_DOCKER_IMAGE = 'nginx:alpine'
+
+
+def pair_new_terminal(api_client, name='my_terminal', assert_success=True) -> Response:
+	pairing_code = get_pairing_code(api_client)
+	response = add_terminal(api_client, pairing_code['code'], name)
+	if assert_success:
+		assert response.status_code == 201
+	return response
 
 
 def get_pairing_code(api_client, deadline=None):

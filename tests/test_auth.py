@@ -4,7 +4,8 @@ from tinydb.table import Table
 from portal_core.database.database import apps_table
 from portal_core.model.app import InstallationReason, AppToInstall
 from portal_core.service import app_infra
-from tests.util import get_pairing_code, add_terminal, create_apps_from_docker_compose, WAITING_DOCKER_IMAGE
+from tests.util import create_apps_from_docker_compose, WAITING_DOCKER_IMAGE, \
+	pair_new_terminal
 
 
 def test_default_public(api_client):
@@ -32,10 +33,7 @@ def test_default_public(api_client):
 			'X-Forwarded-Uri': '/private1'
 		}).status_code == status.HTTP_401_UNAUTHORIZED
 
-		t_name = 'T1'
-		pairing_code = get_pairing_code(api_client)
-		response = add_terminal(api_client, pairing_code['code'], t_name)
-		assert response.status_code == 201
+		pair_new_terminal(api_client)
 
 		assert api_client.get('internal/auth', headers={
 			'X-Forwarded-Host': 'foo-app.myportal.org',
@@ -66,11 +64,7 @@ def test_empty_path_headers(api_client):
 
 	app_infra.refresh_app_infra()
 	with create_apps_from_docker_compose():
-		t_name = 'T1'
-		pairing_code = get_pairing_code(api_client)
-		response = add_terminal(api_client, pairing_code['code'], t_name)
-		assert response.status_code == 201
-
+		pair_new_terminal(api_client)
 		assert api_client.get('internal/auth', headers={
 			'X-Forwarded-Host': f'{app_name}.myportal.org',
 			'X-Forwarded-Uri': '/private1'
@@ -99,11 +93,7 @@ def test_no_path_headers(api_client):
 
 	app_infra.refresh_app_infra()
 	with create_apps_from_docker_compose():
-		t_name = 'T1'
-		pairing_code = get_pairing_code(api_client)
-		response = add_terminal(api_client, pairing_code['code'], t_name)
-		assert response.status_code == 201
-
+		pair_new_terminal(api_client)
 		assert api_client.get('internal/auth', headers={
 			'X-Forwarded-Host': f'{app_name}.myportal.org',
 			'X-Forwarded-Uri': '/private1'
@@ -168,9 +158,7 @@ def test_normal_headers(api_client):
 		assert response_private.status_code == status.HTTP_401_UNAUTHORIZED
 
 		t_name = 'T1'
-		pairing_code = get_pairing_code(api_client)
-		response_terminal = add_terminal(api_client, pairing_code['code'], t_name)
-		assert response_terminal.status_code == 201
+		pair_new_terminal(api_client, t_name)
 
 		response_public_auth = api_client.get(
 			'internal/auth',

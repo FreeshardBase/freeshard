@@ -10,13 +10,14 @@ import respx
 from fastapi.testclient import TestClient
 from httpx import Response
 from psycopg.conninfo import make_conninfo
-from responses import BaseResponse, RequestsMock
+from responses import RequestsMock
 from respx import Route
 
 import portal_core
 from portal_core import Identity
 from portal_core.model.identity import OutputIdentity
 from portal_core.model.profile import Profile
+from portal_core.web.internal.call_peer import _get_app_for_ip_address
 
 
 @pytest.fixture(autouse=True)
@@ -110,6 +111,7 @@ def management_api_mock():
 @pytest.fixture
 def peer_mock_requests(mocker):
 	mocker.patch('portal_core.web.internal.call_peer._get_app_for_ip_address', lambda x: 'myapp')
+	_get_app_for_ip_address.cache_clear()
 	peer_identity = Identity.create('peer')
 	base_url = f'https://{peer_identity.domain}/core'
 	app_url = f'https://myapp.{peer_identity.domain}'
