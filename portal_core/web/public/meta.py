@@ -8,7 +8,7 @@ from portal_core.model.identity import OutputIdentity
 from portal_core.model.profile import Profile
 from portal_core.service import pairing, identity
 from portal_core.service.signed_call import signed_request
-from portal_core.model.auth import AuthValues
+from portal_core.model.auth import AuthState
 
 log = logging.getLogger(__name__)
 
@@ -24,13 +24,13 @@ def who_are_you():
 
 
 class OutputWhoAmI(BaseModel):
-	type: AuthValues.ClientType
+	type: AuthState.ClientType
 	id: str = None
 	name: str = None
 
 	@classmethod
 	def anonymous(cls):
-		return cls(type=AuthValues.ClientType.ANONYMOUS, id=None, name=None)
+		return cls(type=AuthState.ClientType.ANONYMOUS, id=None, name=None)
 
 
 @router.get('/whoami', response_model=OutputWhoAmI)
@@ -44,7 +44,7 @@ def who_am_i(authorization: str = Cookie(None)):
 		return OutputWhoAmI.anonymous()
 	else:
 		return OutputWhoAmI(
-			type=AuthValues.ClientType.TERMINAL,
+			type=AuthState.ClientType.TERMINAL,
 			id=terminal.id,
 			name=terminal.name,
 		)

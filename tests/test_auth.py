@@ -156,7 +156,7 @@ def test_normal_headers(api_client):
 			'internal/auth',
 			headers={'X-Forwarded-Host': f'{app_name}.myportal.org', 'X-Forwarded-Uri': '/public'})
 		assert response_public.status_code == status.HTTP_200_OK
-		assert response_public.headers['X-Ptl-Client-Type'] == 'public'
+		assert response_public.headers['X-Ptl-Client-Type'] == 'anonymous'
 		assert response_public.headers['X-Ptl-Client-Id'] == ''
 		assert response_public.headers['X-Ptl-Client-Name'] == ''
 		assert response_public.headers['X-Ptl-ID'] == default_identity['id']

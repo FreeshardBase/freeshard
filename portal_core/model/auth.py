@@ -1,7 +1,7 @@
 from enum import unique, Enum
 
 
-class AuthValues:
+class AuthState:
 	def __init__(self,
 			x_ptl_client_type: str,
 			x_ptl_client_id: str = None,
@@ -16,3 +16,11 @@ class AuthValues:
 		TERMINAL = 'terminal'
 		PEER = 'peer'
 		ANONYMOUS = 'anonymous'
+
+	@property
+	def header_values(self):
+		return {
+			'client_type': self.type.value,
+			'client_id': self.id or '',
+			'client_name': self.name or '',
+		}
