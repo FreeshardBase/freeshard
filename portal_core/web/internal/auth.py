@@ -2,7 +2,8 @@ import logging
 
 import gconf
 from cachetools import cached, TTLCache
-from fastapi import HTTPException, APIRouter, Cookie, Response, status, Header
+from fastapi import HTTPException, APIRouter, Cookie, Response, status, Header, Request
+from http_message_signatures import InvalidSignature
 from jinja2 import Template
 from tinydb import Query
 from tinydb.table import Table
@@ -10,12 +11,15 @@ from tinydb.table import Table
 from portal_core.database.database import apps_table, identities_table
 from portal_core.model.app import InstalledApp, Access, Path
 from portal_core.model.identity import Identity, SafeIdentity
-from portal_core.service import pairing
-from portal_core.util.signals import on_terminal_auth, on_request_to_app
+from portal_core.service import pairing, peer as peer_service
+from portal_core.util.signals import on_terminal_auth, on_request_to_app, on_peer_auth
+from portal_core.model.auth import AuthValues
+
 
 log = logging.getLogger(__name__)
 
 router = APIRouter()
+
 
 
 @router.get('/authenticate_terminal', status_code=status.HTTP_200_OK)
@@ -36,6 +40,7 @@ def authenticate_terminal(response: Response, authorization: str = Cookie(None))
 
 @router.get('/auth', status_code=status.HTTP_200_OK)
 def authenticate_and_authorize(
+		request: Request,
 		response: Response,
 		authorization: str = Cookie(None),
 		x_forwarded_host: str = Header(None),
@@ -43,7 +48,7 @@ def authenticate_and_authorize(
 ):
 	app = _match_app(x_forwarded_host)
 	path_object = _match_path(x_forwarded_uri, app)
-	auth_header_values = _make_auth_header_values(authorization)
+	auth_header_values = _make_auth_header_values(request, authorization)
 	portal_header_values = _get_portal_identity()
 
 	if path_object.access == Access.PRIVATE and auth_header_values['client_type'] != 'terminal':
@@ -88,15 +93,31 @@ def _match_path(uri, app: InstalledApp) -> Path:
 			return props
 
 
-def _make_auth_header_values(authorization):
-	header_values = {}
+def _make_auth_header_values(request, authorization) -> AuthValues:
 	try:
 		terminal = pairing.verify_terminal_jwt(authorization)
 	except pairing.InvalidJwt:
-		header_values['client_type'] = 'public'
+		pass
 	else:
-		header_values['client_type'] = 'terminal'
-		header_values['client_id'] = terminal.id
-		header_values['client_name'] = terminal.name
 		on_terminal_auth.send(terminal)
-	return header_values
+		return AuthValues(
+			x_ptl_client_type=AuthValues.ClientType.TERMINAL,
+			x_ptl_client_id=terminal.id,
+			x_ptl_client_name=terminal.name,
+		)
+
+	try:
+		peer = peer_service.verify_peer_auth(request)
+	except (InvalidSignature, KeyError):
+		pass
+	else:
+		on_peer_auth.send(peer)
+		return AuthValues(
+			x_ptl_client_type=AuthValues.ClientType.PEER,
+			x_ptl_client_id=peer.id,
+			x_ptl_client_name=peer.name,
+		)
+
+	return AuthValues(
+		x_ptl_client_type=AuthValues.ClientType.ANOYMOUS,
+	)

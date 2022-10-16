@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, status
 from tinydb import Query
 from tinydb.table import Table
 
+import portal_core.service.peer as peer_service
 from portal_core.database.database import peers_table
 from portal_core.model.peer import Peer, InputPeer
 from portal_core.util import signals
@@ -27,11 +28,10 @@ def list_all_peers(name: str = None):
 
 @router.get('/{id}', response_model=Peer)
 def get_peer_by_id(id):
-	with peers_table() as peers:
-		if p := peers.get(Query().id.matches(f'{id}:*')):
-			return p
-		else:
-			raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+	try:
+		return peer_service.get_peer_by_id(id)
+	except KeyError as e:
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e)
 
 
 @router.put('', response_model=Peer)

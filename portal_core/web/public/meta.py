@@ -8,7 +8,7 @@ from portal_core.model.identity import OutputIdentity
 from portal_core.model.profile import Profile
 from portal_core.service import pairing, identity
 from portal_core.service.signed_call import signed_request
-from portal_core.web.dependencies import AuthValues
+from portal_core.model.auth import AuthValues
 
 log = logging.getLogger(__name__)
 

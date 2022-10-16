@@ -30,6 +30,10 @@ class Peer(BaseModel):
 	def short_id(self):
 		return self.id[0:6]
 
+	@property
+	def pubkey(self):
+		return PublicKey(self.public_bytes_b64)
+
 
 class InputPeer(BaseModel):
 	id: str

@@ -3,6 +3,9 @@ import atexit
 
 import httpx
 from common_py.crypto import PublicKey
+from fastapi.requests import Request
+from http_message_signatures import HTTPSignatureKeyResolver, algorithms, VerifyResult
+from requests_http_signature import HTTPSignatureAuth
 from tinydb import Query
 from tinydb.table import Table
 
@@ -12,6 +15,14 @@ from portal_core.util import signals
 
 httpx_client = httpx.AsyncClient()
 atexit.register(asyncio.run, httpx_client.aclose())
+
+
+def get_peer_by_id(id: str):
+	with peers_table() as peers:
+		if p := peers.get(Query().id.matches(f'{id}:*')):
+			return Peer(**p)
+		else:
+			raise KeyError(id)
 
 
 async def update_all_peer_pubkeys():
@@ -26,6 +37,24 @@ async def update_peer_pubkey(portal_id: str):
 		if peer := Peer(**peers.get(Query().id.matches(f'{portal_id}:*'))):
 			peer = await _update_peer_with_pubkey(peer)
 			peers.update(peer.dict(), Query().id.matches(f'{portal_id}:*'))
+
+
+def verify_peer_auth(request: Request) -> Peer:
+	verify_result = HTTPSignatureAuth.verify(
+		request,
+		signature_algorithm=algorithms.RSA_PSS_SHA512,
+		key_resolver=_KR()
+	)
+	return get_peer_by_id(verify_result.parameters['keyid'])
+
+
+class _KR(HTTPSignatureKeyResolver):
+	def resolve_private_key(self, key_id: str):
+		pass
+
+	def resolve_public_key(self, key_id: str):
+		peer = get_peer_by_id(key_id)
+		return peer.public_bytes_b64.encode()
 
 
 async def _update_peer_with_pubkey(peer: Peer) -> Peer:
