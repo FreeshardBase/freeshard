@@ -1,7 +1,7 @@
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from time import sleep
-import re
 
 import gconf
 import psycopg
@@ -37,18 +37,7 @@ def config_override(tmp_path, request):
 
 
 @pytest.fixture
-def additional_config_override(request):
-	"""
-	Detects the variable named *config_override* of a test module
-	and adds its content as a gconf override.
-	"""
-	config = getattr(request.module, 'config_override', {})
-	with gconf.override_conf(config):
-		yield
-
-
-@pytest.fixture
-def init_db(additional_config_override):
+def init_db(config_override):
 	portal_core.database.init_database()
 
 
@@ -56,7 +45,7 @@ def init_db(additional_config_override):
 def api_client(init_db) -> TestClient:
 	app = portal_core.create_app()
 
-	# Cookies are scoped for the domain, so we have configure the TestClient with it.
+	# Cookies are scoped for the domain, so we have to configure the TestClient with it.
 	# This way, the TestClient remembers cookies
 	whoareyou = TestClient(app).get('public/meta/whoareyou').json()
 	yield TestClient(app, base_url=f'https://{whoareyou["domain"]}')
@@ -114,52 +103,23 @@ def peer_mock_requests(mocker):
 	mocker.patch('portal_core.web.internal.call_peer._get_app_for_ip_address', lambda x: 'myapp')
 	_get_app_for_ip_address.cache_clear()
 	peer_identity = Identity.create('peer')
+	print(f'mocking peer {peer_identity.short_id}')
 	base_url = f'https://{peer_identity.domain}/core'
 	app_url = f'https://myapp.{peer_identity.domain}'
 
-	with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps, \
-			responses.RequestsMock(assert_all_requests_are_fired=False) as rspsa:
+	with (responses.RequestsMock(assert_all_requests_are_fired=False) as rsps):
 		rsps.get(base_url + '/public/meta/whoareyou', json=OutputIdentity(**peer_identity.dict()).dict())
-		rspsa.get(re.compile(app_url + '/.*'))
+		rsps.get(re.compile(app_url + '/.*'))
 
 		rsps.add_passthru('')
-		rspsa.add_passthru('')
 
 		yield PeerMockRequests(
 			peer_identity,
 			rsps,
-			rspsa,
 		)
 
 
 @dataclass
 class PeerMockRequests:
 	identity: Identity
-	base: RequestsMock
-	app: RequestsMock
-
-
-@pytest.fixture
-def peer_mock_httpx():
-	peer_identity = Identity.create('peer')
-	print(f'mocking peer {peer_identity.short_id}')
-
-	with respx.mock(assert_all_called=False, base_url=f'https://{peer_identity.domain}/core/') as rx, \
-			respx.mock(assert_all_called=False, base_url=f'https://myapp.{peer_identity.domain}/core/') as rxa:
-		whoareyou = rx.get('/public/meta/whoareyou') \
-			.mock(Response(status_code=200, json=OutputIdentity(**peer_identity.dict()).dict()))
-		myapp_foo_bar = rxa.get('/foo/bar') \
-			.mock(Response(status_code=200))
-
-		yield PeerMockHttpx(
-			peer_identity,
-			whoareyou,
-			myapp_foo_bar,
-		)
-
-
-@dataclass
-class PeerMockHttpx:
-	identity: Identity
-	route_whoareyou: Route
-	route_myapp_foo_bar: Route
+	mock: RequestsMock

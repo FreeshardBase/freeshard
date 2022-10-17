@@ -1,10 +1,9 @@
 import asyncio
-import atexit
 
-import httpx
+import requests
 from common_py.crypto import PublicKey
 from fastapi.requests import Request
-from http_message_signatures import HTTPSignatureKeyResolver, algorithms, VerifyResult
+from http_message_signatures import HTTPSignatureKeyResolver, algorithms
 from requests_http_signature import HTTPSignatureAuth
 from tinydb import Query
 from tinydb.table import Table
@@ -12,9 +11,6 @@ from tinydb.table import Table
 from portal_core.database.database import peers_table
 from portal_core.model.peer import Peer
 from portal_core.util import signals
-
-httpx_client = httpx.AsyncClient()
-atexit.register(asyncio.run, httpx_client.aclose())
 
 
 def get_peer_by_id(id: str):
@@ -32,10 +28,10 @@ async def update_all_peer_pubkeys():
 	await asyncio.gather(futures)
 
 
-async def update_peer_pubkey(portal_id: str):
+def update_peer_pubkey(portal_id: str):
 	with peers_table() as peers:  # type: Table
 		if peer := Peer(**peers.get(Query().id.matches(f'{portal_id}:*'))):
-			peer = await _update_peer_with_pubkey(peer)
+			peer = _update_peer_with_pubkey(peer)
 			peers.update(peer.dict(), Query().id.matches(f'{portal_id}:*'))
 
 
@@ -57,16 +53,16 @@ class _KR(HTTPSignatureKeyResolver):
 		return peer.public_bytes_b64.encode()
 
 
-async def _update_peer_with_pubkey(peer: Peer) -> Peer:
-	pubkey = await _query_peer_for_public_key(peer.short_id)
+def _update_peer_with_pubkey(peer: Peer) -> Peer:
+	pubkey = _query_peer_for_public_key(peer.short_id)
 	peer.public_bytes_b64 = pubkey.to_bytes().decode()
 	return peer
 
 
-async def _query_peer_for_public_key(portal_id: str) -> PublicKey:
+def _query_peer_for_public_key(portal_id: str) -> PublicKey:
 	url = f'https://{portal_id}.p.getportal.org/core/public/meta/whoareyou'
 
-	response = await httpx_client.get(url)
+	response = requests.get(url)
 	whoareyou = response.json()
 
 	pubkey = PublicKey(whoareyou['public_key_pem'])
@@ -77,4 +73,4 @@ async def _query_peer_for_public_key(portal_id: str) -> PublicKey:
 
 @signals.on_peer_write.connect
 def _on_peer_write(peer: Peer):
-	asyncio.run(update_peer_pubkey(peer.id))
+	update_peer_pubkey(peer.id)

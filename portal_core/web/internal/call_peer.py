@@ -1,11 +1,8 @@
-import asyncio
-import atexit
 import logging
 from functools import lru_cache
 from typing import List
 
 import docker
-import httpx
 from docker.models.containers import Container
 from fastapi import APIRouter, Request
 from starlette.responses import StreamingResponse
@@ -15,9 +12,6 @@ from portal_core import signed_request
 log = logging.getLogger(__name__)
 
 router = APIRouter()
-
-client = httpx.AsyncClient()
-atexit.register(asyncio.run, client.aclose())
 
 
 @router.api_route('/call_peer/{portal_id}/{rest:path}')

@@ -1,13 +1,19 @@
 import contextlib
 import subprocess
+from contextlib import contextmanager
 from pathlib import Path
 
 import gconf
 from common_py.crypto import PublicKey
+from fastapi import Response
 from http_message_signatures import HTTPSignatureKeyResolver, algorithms, VerifyResult
 from requests import PreparedRequest
 from requests_http_signature import HTTPSignatureAuth
-from fastapi import Response
+from tinydb import where
+
+from portal_core.database.database import apps_table
+from portal_core.model.app import AppToInstall
+from portal_core.service import app_infra
 
 WAITING_DOCKER_IMAGE = 'nginx:alpine'
 
@@ -64,3 +70,48 @@ def verify_signature_auth(request: PreparedRequest, pubkey: PublicKey) -> Verify
 		signature_algorithm=algorithms.RSA_PSS_SHA512,
 		key_resolver=KR(),
 	)
+
+
+@contextmanager
+def install_test_app():
+	with apps_table() as apps:  # type: Table
+		apps.insert(AppToInstall(**{
+			'description': 'n/a',
+			'env_vars': None,
+			'image': WAITING_DOCKER_IMAGE,
+			'installation_reason': 'config',
+			'name': 'myapp',
+			'paths': {
+				'': {
+					'access': 'private',
+					'headers': {
+						'X-Ptl-Client-Id': '{{ auth.client_id }}',
+						'X-Ptl-Client-Name': '{{ auth.client_name }}',
+						'X-Ptl-Client-Type': '{{ auth.client_type }}',
+						'X-Ptl-ID': '{{ portal.id }}',
+						'X-Ptl-Foo': 'bar'
+					}
+				},
+				'/public': {
+					'access': 'public',
+					'headers': {
+						'X-Ptl-Client-Id': '{{ auth.client_id }}',
+						'X-Ptl-Client-Name': '{{ auth.client_name }}',
+						'X-Ptl-Client-Type': '{{ auth.client_type }}',
+						'X-Ptl-ID': '{{ portal.id }}',
+						'X-Ptl-Foo': 'baz'
+					}
+				}
+			},
+			'port': 80,
+			'services': None,
+			'v': '1.0'
+		}).dict())
+	app_infra.refresh_app_infra()
+
+	with create_apps_from_docker_compose():
+		yield
+
+	with apps_table() as apps:
+		apps.remove(where('name') == 'myapp')
+	app_infra.refresh_app_infra()

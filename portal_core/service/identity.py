@@ -46,6 +46,7 @@ def get_default_identity() -> Identity:
 
 
 def enrich_identity_from_profile():
+	# todo: remove if no longer needed
 	api_url = gconf.get('management.api_url')
 	url = f'{api_url}/profile'
 	response = signed_request('GET', url)
