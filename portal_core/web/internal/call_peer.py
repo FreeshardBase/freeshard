@@ -20,7 +20,7 @@ client = httpx.AsyncClient()
 atexit.register(asyncio.run, client.aclose())
 
 
-@router.api_route('/call_peer/{portal_id}/{rest}')
+@router.api_route('/call_peer/{portal_id}/{rest:path}')
 def call_peer(portal_id: str, rest: str, request: Request):
 	source_host = request.client.host
 	app_name = _get_app_for_ip_address(source_host)

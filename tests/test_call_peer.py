@@ -8,7 +8,7 @@ def test_call_peer_app_basic(peer_mock_requests, api_client):
 	portal_identity = OutputIdentity(**api_client.get('public/meta/whoareyou').json())
 	pubkey = PublicKey(portal_identity.public_key_pem)
 
-	path = 'foo'
+	path = 'foo/bar'
 	response = api_client.get(f'internal/call_peer/{peer_mock_requests.identity.short_id}/{path}')
 	assert response.status_code == 200
 

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from time import sleep
+import re
 
 import gconf
 import psycopg
@@ -119,7 +120,7 @@ def peer_mock_requests(mocker):
 	with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps, \
 			responses.RequestsMock(assert_all_requests_are_fired=False) as rspsa:
 		rsps.get(base_url + '/public/meta/whoareyou', json=OutputIdentity(**peer_identity.dict()).dict())
-		rspsa.get(app_url + '/foo')
+		rspsa.get(re.compile(app_url + '/.*'))
 
 		rsps.add_passthru('')
 		rspsa.add_passthru('')
