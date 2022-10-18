@@ -8,19 +8,21 @@ from fastapi import APIRouter, Request
 from starlette.responses import StreamingResponse
 
 from portal_core import signed_request
+from portal_core.web.util import ALL_HTTP_METHODS
 
 log = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
-@router.api_route('/call_peer/{portal_id}/{rest:path}')
-def call_peer(portal_id: str, rest: str, request: Request):
+@router.api_route('/call_peer/{portal_id}/{rest:path}', methods=ALL_HTTP_METHODS)
+async def call_peer(portal_id: str, rest: str, request: Request):
 	source_host = request.client.host
 	app_name = _get_app_for_ip_address(source_host)
 	url = f'https://{app_name}.{portal_id}.p.getportal.org/{rest}'
 
-	response = signed_request(request.method, url, stream=True)
+	body = await request.body()
+	response = signed_request(request.method, url, data=body)
 	return StreamingResponse(status_code=response.status_code, content=response.iter_content())
 
 

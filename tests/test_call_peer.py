@@ -1,13 +1,14 @@
 from common_py.crypto import PublicKey
 from fastapi import status
 from http_message_signatures import algorithms
+from requests import PreparedRequest
 from requests_http_signature import HTTPSignatureAuth
 
 from portal_core.model.identity import OutputIdentity
 from tests.util import verify_signature_auth, install_test_app
 
 
-def test_call_peer_app_basic(peer_mock_requests, api_client):
+def test_call_peer_from_app_basic(peer_mock_requests, api_client):
 	portal_identity = OutputIdentity(**api_client.get('public/meta/whoareyou').json())
 	pubkey = PublicKey(portal_identity.public_key_pem)
 
@@ -21,14 +22,30 @@ def test_call_peer_app_basic(peer_mock_requests, api_client):
 	assert received_request.path_url == path
 
 
-def test_peer_auth(peer_mock_requests, api_client):
+def test_call_peer_from_app_post(peer_mock_requests, api_client):
+	portal_identity = OutputIdentity(**api_client.get('public/meta/whoareyou').json())
+	pubkey = PublicKey(portal_identity.public_key_pem)
+
+	path = '/foo/bar'
+	response = api_client.post(
+		f'internal/call_peer/{peer_mock_requests.identity.short_id}/{path}',
+		data=b'foo data bar')
+	assert response.status_code == 200
+
+	received_request: PreparedRequest = peer_mock_requests.mock.calls[0].request
+	v = verify_signature_auth(received_request, pubkey)
+	assert portal_identity.id.startswith(v.parameters['keyid'])
+	assert received_request.path_url == path
+	assert received_request.body == b'foo data bar'
+
+
+def test_peer_auth_basic(peer_mock_requests, api_client):
 	peer = peer_mock_requests.identity
 	peer_auth = HTTPSignatureAuth(
 		signature_algorithm=algorithms.RSA_PSS_SHA512,
 		key_id=peer.short_id,
 		key=peer.private_key.encode(),
 	)
-	default_identity = api_client.get('protected/identities/default').json()
 
 	with install_test_app():
 		response = api_client.get(

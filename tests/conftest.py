@@ -110,6 +110,7 @@ def peer_mock_requests(mocker):
 	with (responses.RequestsMock(assert_all_requests_are_fired=False) as rsps):
 		rsps.get(base_url + '/public/meta/whoareyou', json=OutputIdentity(**peer_identity.dict()).dict())
 		rsps.get(re.compile(app_url + '/.*'))
+		rsps.post(re.compile(app_url + '/.*'))
 
 		rsps.add_passthru('')
 
