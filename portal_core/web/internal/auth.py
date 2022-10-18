@@ -39,7 +39,7 @@ def authenticate_terminal(response: Response, authorization: str = Cookie(None))
 
 
 @router.get('/auth', status_code=status.HTTP_200_OK)
-def authenticate_and_authorize(
+async def authenticate_and_authorize(
 		request: Request,
 		response: Response,
 		authorization: str = Cookie(None),
@@ -48,10 +48,14 @@ def authenticate_and_authorize(
 ):
 	app = _match_app(x_forwarded_host)
 	path_object = _match_path(x_forwarded_uri, app)
-	auth_state = _get_auth_state(request, authorization)
+	auth_state = await _get_auth_state(request, authorization)
 	portal_header_values = _get_portal_identity()
 
 	if path_object.access == Access.PRIVATE and auth_state.type != AuthState.ClientType.TERMINAL:
+		log.debug(f'denied auth for {x_forwarded_host}{x_forwarded_uri} -> no valid auth token')
+		raise HTTPException(status.HTTP_401_UNAUTHORIZED)
+
+	if path_object.access == Access.PEER and auth_state.type != AuthState.ClientType.PEER:
 		log.debug(f'denied auth for {x_forwarded_host}{x_forwarded_uri} -> no valid auth token')
 		raise HTTPException(status.HTTP_401_UNAUTHORIZED)
 
@@ -93,7 +97,7 @@ def _match_path(uri, app: InstalledApp) -> Path:
 			return props
 
 
-def _get_auth_state(request, authorization) -> AuthState:
+async def _get_auth_state(request, authorization) -> AuthState:
 	try:
 		terminal = pairing.verify_terminal_jwt(authorization)
 	except pairing.InvalidJwt:
@@ -107,8 +111,8 @@ def _get_auth_state(request, authorization) -> AuthState:
 		)
 
 	try:
-		peer = peer_service.verify_peer_auth(request)
-	except (InvalidSignature, KeyError):
+		peer = await peer_service.verify_peer_auth(request)
+	except (InvalidSignature, KeyError) as e:
 		pass
 	else:
 		on_peer_auth.send(peer)

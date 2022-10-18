@@ -11,6 +11,12 @@ class AuthState:
 		self.id = x_ptl_client_id
 		self.name = x_ptl_client_name
 
+	def __str__(self):
+		if self.type == self.ClientType.ANONYMOUS:
+			return self.type.value
+		else:
+			return f'{self.type.value}: {self.id} ({self.name})'
+
 	@unique
 	class ClientType(Enum):
 		TERMINAL = 'terminal'

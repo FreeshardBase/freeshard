@@ -35,9 +35,16 @@ def update_peer_pubkey(portal_id: str):
 			peers.update(peer.dict(), Query().id.matches(f'{portal_id}:*'))
 
 
-def verify_peer_auth(request: Request) -> Peer:
+async def verify_peer_auth(request: Request) -> Peer:
+	prepared_request = requests.Request(
+		method=request.method,
+		url=request.url,
+		headers=request.headers,
+		data=await request.body(),
+		params=request.query_params,
+	).prepare()
 	verify_result = HTTPSignatureAuth.verify(
-		request,
+		prepared_request,
 		signature_algorithm=algorithms.RSA_PSS_SHA512,
 		key_resolver=_KR()
 	)

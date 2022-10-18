@@ -101,6 +101,14 @@ def install_test_app():
 						'X-Ptl-ID': '{{ portal.id }}',
 						'X-Ptl-Foo': 'baz'
 					}
+				},
+				'/peer': {
+					'access': 'peer',
+					'headers': {
+						'X-Ptl-Client-Id': '{{ auth.client_id }}',
+						'X-Ptl-Client-Name': '{{ auth.client_name }}',
+						'X-Ptl-Client-Type': '{{ auth.client_type }}',
+					}
 				}
 			},
 			'port': 80,
