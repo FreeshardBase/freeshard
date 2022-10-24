@@ -75,6 +75,7 @@ def verify_signature_auth(request: PreparedRequest, pubkey: PublicKey) -> Verify
 @contextmanager
 def install_test_app():
 	with apps_table() as apps:  # type: Table
+		apps.truncate()
 		apps.insert(AppToInstall(**{
 			'description': 'n/a',
 			'env_vars': None,

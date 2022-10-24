@@ -116,6 +116,8 @@ def peer_mock_requests(mocker):
 			rsps,
 		)
 
+	_get_app_for_ip_address.cache_clear()
+
 
 @dataclass
 class PeerMockRequests:
