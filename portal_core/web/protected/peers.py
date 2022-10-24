@@ -43,7 +43,7 @@ def put_peer(p: InputPeer):
 		else:
 			peers.insert(p.dict())
 			log.info(f'added {p}')
-	signals.on_peer_write.send(p)
+	signals.on_peer_write.send(Peer(**p.dict()))
 	return p
 
 

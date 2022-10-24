@@ -1,5 +1,3 @@
-import asyncio
-
 import requests
 from common_py.crypto import PublicKey
 from fastapi.requests import Request
@@ -24,15 +22,15 @@ def get_peer_by_id(id: str):
 async def update_all_peer_pubkeys():
 	with peers_table() as peers:  # type: Table
 		peers_without_pubkey = peers.search(Query().public_bytes_b64.exists())
-	futures = (_update_peer_with_pubkey(Peer(**p)) for p in peers_without_pubkey)
-	await asyncio.gather(futures)
+	for peer in peers_without_pubkey:
+		update_peer_pubkey(Peer(**peer))
 
 
-def update_peer_pubkey(portal_id: str):
+def update_peer_pubkey(peer: Peer):
+	pubkey = _query_peer_for_public_key(peer.short_id)
+	peer.public_bytes_b64 = pubkey.to_bytes().decode()
 	with peers_table() as peers:  # type: Table
-		if peer := Peer(**peers.get(Query().id.matches(f'{portal_id}:*'))):
-			peer = _update_peer_with_pubkey(peer)
-			peers.update(peer.dict(), Query().id.matches(f'{portal_id}:*'))
+		peers.update(peer.dict(), Query().id == peer.id)
 
 
 async def verify_peer_auth(request: Request) -> Peer:
@@ -60,13 +58,8 @@ class _KR(HTTPSignatureKeyResolver):
 		return peer.public_bytes_b64.encode()
 
 
-def _update_peer_with_pubkey(peer: Peer) -> Peer:
-	pubkey = _query_peer_for_public_key(peer.short_id)
-	peer.public_bytes_b64 = pubkey.to_bytes().decode()
-	return peer
-
-
 def _query_peer_for_public_key(portal_id: str) -> PublicKey:
+	# todo: this should be done async
 	url = f'https://{portal_id}.p.getportal.org/core/public/meta/whoareyou'
 
 	response = requests.get(url)
@@ -80,4 +73,4 @@ def _query_peer_for_public_key(portal_id: str) -> PublicKey:
 
 @signals.on_peer_write.connect
 def _on_peer_write(peer: Peer):
-	update_peer_pubkey(peer.id)
+	update_peer_pubkey(peer)
