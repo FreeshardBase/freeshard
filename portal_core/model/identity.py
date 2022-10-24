@@ -85,3 +85,13 @@ class InputIdentity(BaseModel):
 	name: Optional[str] = ''
 	email: Optional[str] = ''
 	description: Optional[str] = ''
+
+	@validator('email')
+	def validate_email(cls, v):
+		if v:
+			try:
+				validate_email(v)
+			except EmailNotValidError as e:
+				raise ValueError(f'invalid email: {e}') from e
+		return v
+

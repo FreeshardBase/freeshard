@@ -1,3 +1,5 @@
+from starlette import status
+
 from portal_core.model.identity import OutputIdentity
 
 
@@ -72,3 +74,18 @@ def test_make_default(api_client):
 	assert response.json()['is_default'] is False
 	response = api_client.get('protected/identities/default')
 	assert response.json()['id'] == second_identity['id']
+
+
+def test_invalid_email(api_client):
+	response = api_client.get('protected/identities/default')
+	response.raise_for_status()
+	default_identity = response.json()
+
+	response = api_client.put('protected/identities', json={
+		'id': default_identity['id'],
+		'email': 'i am invalid',
+	})
+	assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+	response = api_client.get('protected/identities/default')
+	assert response.json()['email'] is None
