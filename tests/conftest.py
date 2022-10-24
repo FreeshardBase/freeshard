@@ -7,12 +7,9 @@ import gconf
 import psycopg
 import pytest
 import responses
-import respx
 from fastapi.testclient import TestClient
-from httpx import Response
 from psycopg.conninfo import make_conninfo
 from responses import RequestsMock
-from respx import Route
 
 import portal_core
 from portal_core import Identity
