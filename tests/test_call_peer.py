@@ -65,5 +65,5 @@ def test_peer_auth_basic(peer_mock_requests, api_client):
 			headers={'X-Forwarded-Host': 'myapp.myportal.org', 'X-Forwarded-Uri': '/peer'})
 		response.raise_for_status()
 		assert response.headers['X-Ptl-Client-Type'] == 'peer'
-		assert response.headers['X-Ptl-Client-Id'] == peer.short_id
+		assert response.headers['X-Ptl-Client-Id'] == peer.id
 		assert response.headers['X-Ptl-Client-Name'] == peer.name

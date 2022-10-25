@@ -4,9 +4,9 @@ from fastapi.requests import Request
 from http_message_signatures import HTTPSignatureKeyResolver, algorithms
 from requests_http_signature import HTTPSignatureAuth
 from tinydb import Query
-from tinydb.table import Table
 
 from portal_core.database.database import peers_table
+from portal_core.model.identity import OutputIdentity
 from portal_core.model.peer import Peer
 from portal_core.util import signals
 
@@ -23,14 +23,29 @@ async def update_all_peer_pubkeys():
 	with peers_table() as peers:  # type: Table
 		peers_without_pubkey = peers.search(Query().public_bytes_b64.exists())
 	for peer in peers_without_pubkey:
-		update_peer_pubkey(Peer(**peer))
+		update_peer_meta(Peer(**peer))
 
 
-def update_peer_pubkey(peer: Peer):
-	pubkey = _query_peer_for_public_key(peer.short_id)
-	peer.public_bytes_b64 = pubkey.to_bytes().decode()
+def update_peer_meta(peer: Peer):
+	# todo: this should be done async
+	url = f'https://{peer.short_id}.p.getportal.org/core/public/meta/whoareyou'
+	peer_identity = OutputIdentity(**requests.get(url).json())
+
+	if not peer_identity.id.startswith(peer.id):
+		raise KeyError(f'Portal {peer.short_id} responded with wrong identity {peer_identity.id}')
+
+	updated_peer = output_identity_to_peer(peer_identity)
 	with peers_table() as peers:  # type: Table
-		peers.update(peer.dict(), Query().id == peer.id)
+		peers.update(updated_peer.dict(), Query().id == peer.id)
+
+
+def output_identity_to_peer(identity: OutputIdentity) -> Peer:
+	pubkey = PublicKey(identity.public_key_pem)
+	return Peer(
+		id=identity.id,
+		name=identity.name,
+		public_bytes_b64=pubkey.to_bytes().decode()
+	)
 
 
 async def verify_peer_auth(request: Request) -> Peer:
@@ -55,22 +70,12 @@ class _KR(HTTPSignatureKeyResolver):
 
 	def resolve_public_key(self, key_id: str):
 		peer = get_peer_by_id(key_id)
-		return peer.public_bytes_b64.encode()
-
-
-def _query_peer_for_public_key(portal_id: str) -> PublicKey:
-	# todo: this should be done async
-	url = f'https://{portal_id}.p.getportal.org/core/public/meta/whoareyou'
-
-	response = requests.get(url)
-	whoareyou = response.json()
-
-	pubkey = PublicKey(whoareyou['public_key_pem'])
-	if not pubkey.to_hash_id().startswith(portal_id):
-		raise KeyError(f'Portal id {portal_id} does not match its public key')
-	return pubkey
+		if peer.public_bytes_b64:
+			return peer.public_bytes_b64.encode()
+		else:
+			raise KeyError(f'No public key known for peer id {key_id}')
 
 
 @signals.on_peer_write.connect
 def _on_peer_write(peer: Peer):
-	update_peer_pubkey(peer)
+	update_peer_meta(peer)

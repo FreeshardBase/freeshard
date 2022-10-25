@@ -99,7 +99,7 @@ def management_api_mock():
 def peer_mock_requests(mocker):
 	mocker.patch('portal_core.web.internal.call_peer._get_app_for_ip_address', lambda x: 'myapp')
 	_get_app_for_ip_address.cache_clear()
-	peer_identity = Identity.create('peer')
+	peer_identity = Identity.create('mock peer')
 	print(f'mocking peer {peer_identity.short_id}')
 	base_url = f'https://{peer_identity.domain}/core'
 	app_url = f'https://myapp.{peer_identity.domain}'
