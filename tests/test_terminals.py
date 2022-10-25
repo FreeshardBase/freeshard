@@ -8,7 +8,8 @@ from portal_core.database.database import apps_table, terminals_table
 from portal_core.model.app import AppToInstall, InstallationReason
 from portal_core.model.terminal import Terminal, Icon
 from portal_core.service import app_infra
-from tests.util import get_pairing_code, add_terminal, WAITING_DOCKER_IMAGE, create_apps_from_docker_compose
+from tests.util import get_pairing_code, add_terminal, WAITING_DOCKER_IMAGE, create_apps_from_docker_compose, \
+	pair_new_terminal
 
 
 def _delete_terminal(api_client, t_id):
@@ -17,9 +18,7 @@ def _delete_terminal(api_client, t_id):
 
 def test_add_delete(api_client):
 	t_name = 'T1'
-	pairing_code = get_pairing_code(api_client)
-	response = add_terminal(api_client, pairing_code['code'], t_name)
-	assert response.status_code == 201
+	pair_new_terminal(api_client, t_name)
 
 	response = api_client.get(f'protected/terminals/name/{t_name}')
 	assert response.status_code == 200
@@ -34,9 +33,7 @@ def test_add_delete(api_client):
 
 def test_edit(api_client):
 	t_name_1 = 'T1'
-	pairing_code = get_pairing_code(api_client)
-	response = add_terminal(api_client, pairing_code['code'], t_name_1)
-	assert response.status_code == 201
+	pair_new_terminal(api_client, t_name_1)
 	response = api_client.get(f'protected/terminals/name/{t_name_1}')
 	assert response.status_code == 200
 	response_terminal = Terminal(**response.json())
@@ -56,13 +53,8 @@ def test_edit(api_client):
 
 
 def test_pairing_happy(api_client):
-	# get a pairing code
-	pairing_code = get_pairing_code(api_client)
-
-	# pair a terminal using the code
 	t_name = 'T1'
-	response = add_terminal(api_client, pairing_code['code'], t_name)
-	assert response.status_code == 201
+	pair_new_terminal(api_client, t_name)
 
 	# was the terminal created with the correct data?
 	response = api_client.get('protected/terminals/name/T1')
@@ -87,17 +79,9 @@ def test_pairing_happy(api_client):
 
 def test_pairing_two(api_client):
 	t1_name = 'T1'
-	t1_description = 'my first terminal'
 	t2_name = 'T2'
-	t2_description = 'my second terminal'
-
-	pairing_code = get_pairing_code(api_client)
-	response = add_terminal(api_client, pairing_code['code'], t1_name)
-	assert response.status_code == 201
-
-	pairing_code = get_pairing_code(api_client)
-	response = add_terminal(api_client, pairing_code['code'], t2_name)
-	assert response.status_code == 201
+	pair_new_terminal(api_client, t1_name)
+	pair_new_terminal(api_client, t2_name)
 
 	response = api_client.get('protected/terminals')
 	assert len(response.json()) == 2
@@ -135,14 +119,8 @@ def test_pairing_expired_code(api_client):
 
 def test_pairing_conflict(api_client):
 	t_name = 'T1'
-	t_description = 'my first terminal'
-
-	pairing_code = get_pairing_code(api_client)
-	response = add_terminal(api_client, pairing_code['code'], t_name)
-	assert response.status_code == 201
-
-	pairing_code = get_pairing_code(api_client)
-	response = add_terminal(api_client, pairing_code['code'], t_name)
+	pair_new_terminal(api_client, t_name)
+	response = pair_new_terminal(api_client, t_name, assert_success=False)
 	assert response.status_code == 409
 
 	response = api_client.get('protected/terminals')
@@ -160,9 +138,7 @@ def test_authorization_wrong_header_prefix(api_client):
 
 
 def test_authorization_invalid_token(api_client):
-	pairing_code = get_pairing_code(api_client)
-	response = add_terminal(api_client, pairing_code['code'], 'T1')
-	assert response.status_code == 201
+	response = pair_new_terminal(api_client)
 	token = response.cookies['authorization']
 	invalid_token = token[:-1]
 	response = api_client.get('internal/authenticate_terminal', cookies={'authorization': invalid_token})
@@ -171,9 +147,7 @@ def test_authorization_invalid_token(api_client):
 
 def test_authorization_deleted_terminal(api_client):
 	t_name = 'T1'
-	pairing_code = get_pairing_code(api_client)
-	response = add_terminal(api_client, pairing_code['code'], t_name)
-	assert response.status_code == 201
+	pair_new_terminal(api_client, t_name)
 
 	response = api_client.get('internal/authenticate_terminal')
 	assert response.status_code == status.HTTP_200_OK
@@ -189,9 +163,7 @@ def test_authorization_deleted_terminal(api_client):
 
 def test_last_connection(api_client):
 	t_name = 'T1'
-	pairing_code = get_pairing_code(api_client)
-	response = add_terminal(api_client, pairing_code['code'], t_name)
-	assert response.status_code == 201
+	pair_new_terminal(api_client, t_name)
 	last_connection_0 = Terminal(**api_client.get(f'protected/terminals/name/{t_name}').json()).last_connection
 
 	with apps_table() as apps:  # type: Table

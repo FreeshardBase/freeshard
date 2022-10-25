@@ -28,15 +28,19 @@ setup(
 		'cachetools',
 		'blinker',
 		'requests',
+		'aiohttp',
 		'requests-http-signature',
 		'aiozipstream',
+		'email-validator',
 		'common_py @ git+https://app_controller:MzJwN_VwwEyVmtj22LXx@gitlab.com/ptl/common_py.git',
 	],
 	extras_require={
 		'dev': [
 			'pytest',
 			'pytest-docker',
+			'pytest-mock',
 			'responses',
+			'aioresponses',
 			'datamodel-code-generator[http]'
 		]
 	},

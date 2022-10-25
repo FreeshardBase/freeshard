@@ -3,7 +3,6 @@ def test_get_whoareyou(api_client):
 	response = api_client.get('public/meta/whoareyou')
 	response.raise_for_status()
 	whoareyou = response.json()
-	assert whoareyou['status'] == 'OK'
 	assert whoareyou['domain'][:6].lower() == default_identity['id'][:6].lower()
 	assert whoareyou['id'] == default_identity['id']
 

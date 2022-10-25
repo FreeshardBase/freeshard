@@ -18,6 +18,7 @@ class InstallationReason(str, Enum):
 class Access(str, Enum):
 	PUBLIC = 'public'
 	PRIVATE = 'private'
+	PEER = 'peer'
 
 
 class Status(str, Enum):
