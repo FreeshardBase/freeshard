@@ -20,6 +20,7 @@ async def call_peer(portal_id: str, rest: str, request: Request):
 	source_host = request.client.host
 	app_name = _get_app_for_ip_address(source_host)
 	url = f'https://{app_name}.{portal_id}.p.getportal.org/{rest}'
+	log.debug(f'call peer: {url}')
 
 	body = await request.body()
 	response = signed_request(request.method, url, data=body)
@@ -32,7 +33,7 @@ def _get_app_for_ip_address(ip_address: str):
 	docker_client.networks.get('portal')
 	containers: List[Container] = docker_client.containers.list()
 	for c in containers:
-		if c.attrs['NetworkSettings']['IPAddress'] == ip_address:
+		if c.attrs['NetworkSettings']['Networks']['portal']['IPAddress'] == ip_address:
 			return c.name
 	raise RuntimeError(f'no running container found for address {ip_address}')
 
