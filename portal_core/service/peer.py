@@ -49,9 +49,14 @@ def output_identity_to_peer(identity: OutputIdentity) -> Peer:
 
 
 async def verify_peer_auth(request: Request) -> Peer:
+	method = request.headers['X-Forwarded-Method']
+	proto = request.headers['X-Forwarded-proto']
+	host = request.headers['X-Forwarded-host']
+	uri = request.headers['X-Forwarded-uri']
+
 	prepared_request = requests.Request(
-		method=request.method,
-		url=request.url,
+		method=method,
+		url=f'{proto}://{host}{uri}',
 		headers=request.headers,
 		data=await request.body(),
 		params=request.query_params,

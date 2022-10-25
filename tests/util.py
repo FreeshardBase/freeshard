@@ -2,12 +2,13 @@ import contextlib
 import subprocess
 from contextlib import contextmanager
 from pathlib import Path
+from urllib.parse import urlparse
 
 import gconf
 from common_py.crypto import PublicKey
 from fastapi import Response
 from http_message_signatures import HTTPSignatureKeyResolver, algorithms, VerifyResult
-from requests import PreparedRequest
+from requests import PreparedRequest, Request
 from requests_http_signature import HTTPSignatureAuth
 from tinydb import where
 
@@ -124,3 +125,21 @@ def install_test_app():
 	with apps_table() as apps:
 		apps.remove(where('name') == 'myapp')
 	app_infra.refresh_app_infra()
+
+
+def modify_request_like_traefik_forward_auth(request: PreparedRequest) -> PreparedRequest:
+	url = urlparse(request.url)
+	netloc_without_subdomain = url.netloc.split('.', maxsplit=1)[1]
+	return Request(
+		method='GET',
+		url=f'https://{netloc_without_subdomain}/internal/auth',
+		headers={
+			'X-Forwarded-Proto': url.scheme,
+			'X-Forwarded-Host': url.netloc,
+			'X-Forwarded-Uri': url.path,
+			'X-Forwarded-Method': request.method,
+			'signature-input': request.headers['signature-input'],
+			'signature': request.headers['signature'],
+			'date': request.headers['date'],
+		}
+	).prepare()
