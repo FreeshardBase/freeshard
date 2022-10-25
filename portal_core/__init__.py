@@ -116,8 +116,6 @@ async def _log_request_and_response(request: Request, response: Response):
 		f'{request.method} {request.url}',
 		'-' * 10,
 		*[f'{k}: {v}' for k, v in request.headers.items()],
-		'-' * 10,
-		str(await request.body()),
 		'=' * 10,
 		str(response.status_code),
 		*[f'{k}: {v}' for k, v in response.headers.items()],

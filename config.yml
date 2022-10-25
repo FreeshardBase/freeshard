@@ -32,3 +32,4 @@ log:
     portal_core: info
     gunicorn: warning
     'portal_core.web.internal.call_peer': debug
+    'portal_core.web.internal.auth': debug

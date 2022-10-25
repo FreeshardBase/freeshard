@@ -15,7 +15,7 @@ class AuthState:
 		if self.type == self.ClientType.ANONYMOUS:
 			return self.type.value
 		else:
-			return f'{self.type.value}: {self.id} ({self.name})'
+			return f'AuthState {self.type.value}: {self.id} ({self.name})'
 
 	@unique
 	class ClientType(Enum):
