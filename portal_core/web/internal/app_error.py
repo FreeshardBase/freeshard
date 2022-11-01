@@ -2,10 +2,11 @@ import base64
 import logging
 from functools import lru_cache
 from pathlib import Path
-from docker import errors as docker_errors
+
 import docker
 import gconf
 import jinja2
+from docker import errors as docker_errors
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
@@ -17,7 +18,7 @@ router = APIRouter()
 @router.get('/app_error/{status}')
 def app_error(status: int, request: Request):
 	app_name = get_app_name(request)
-	template = get_template()
+	template = get_template_access_denied() if status == 401 else get_template_splash()
 	container_status = get_container_status(app_name)
 	return HTMLResponse(content=template.render(
 		status=status,
@@ -25,8 +26,6 @@ def app_error(status: int, request: Request):
 		container_status=container_status,
 		icon_data=data_url(app_name),
 	), status_code=status)
-
-	return f'Error {status} for app {app_name}'
 
 
 def get_container_status(app_name):
@@ -50,8 +49,15 @@ def get_docker_client():
 
 
 @lru_cache()
-def get_template():
+def get_template_splash():
 	with open(Path.cwd() / 'data' / 'splash.html', 'r') as f:
+		template = jinja2.Template(f.read())
+	return template
+
+
+@lru_cache()
+def get_template_access_denied():
+	with open(Path.cwd() / 'data' / 'access_denied.html', 'r') as f:
 		template = jinja2.Template(f.read())
 	return template
 

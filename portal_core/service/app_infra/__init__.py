@@ -28,7 +28,7 @@ def refresh_app_infra():
 
 	with identities_table() as identities:
 		default_identity = Identity(**identities.get(Query().is_default == True))
-	portal = SafeIdentity.from_identity(default_identity)
+	portal = SafeIdentity(**default_identity.dict())
 
 	docker_compose_filename = Path(gconf.get('path_root')) / 'core' / 'docker-compose-apps.yml'
 	write_to_yaml(compose_spec(apps, portal), docker_compose_filename)

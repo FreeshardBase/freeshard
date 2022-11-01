@@ -9,8 +9,11 @@ import jinja2
 from fastapi import FastAPI, Request, Response
 
 from portal_core.database import database, migration
+from .database.database import identities_table
 from .model.identity import Identity
 from .service import app_store, init_apps, app_infra, identity, app_lifecycle
+from .service.peer import update_all_peer_pubkeys
+from .service.signed_call import signed_request
 from .util.background_task import BackgroundTaskHandler
 from .web import internal, public, protected
 
@@ -38,7 +41,10 @@ def create_app():
 	app_infra.refresh_app_infra()
 	log.debug('written app infra files (docker-compose and traefik)')
 
-	bg_tasks = BackgroundTaskHandler([(app_lifecycle.stop_apps, gconf.get('apps.lifecycle.refresh_interval'))])
+	bg_tasks = BackgroundTaskHandler([
+		(app_lifecycle.stop_apps, gconf.get('apps.lifecycle.refresh_interval')),
+		(update_all_peer_pubkeys, 60),
+	])
 	bg_tasks.start()
 
 	app_meta = metadata('portal_core')
@@ -110,8 +116,6 @@ async def _log_request_and_response(request: Request, response: Response):
 		f'{request.method} {request.url}',
 		'-' * 10,
 		*[f'{k}: {v}' for k, v in request.headers.items()],
-		'-' * 10,
-		str(await request.body()),
 		'=' * 10,
 		str(response.status_code),
 		*[f'{k}: {v}' for k, v in response.headers.items()],

@@ -13,9 +13,8 @@ variables:
 
 unittest:
   stage: unittest
-  image: python:latest
+  image: registry.gitlab.com/ptl/portal-ci-image:main
   script:
-    - pip install virtualenv
     - virtualenv venv
     - source venv/bin/activate
     - pip install ".[dev]"

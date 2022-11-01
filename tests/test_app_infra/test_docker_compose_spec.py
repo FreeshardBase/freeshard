@@ -10,7 +10,7 @@ from portal_core.service import identity, app_infra
 
 
 def test_template_is_written():
-	identity.init_default_identity()
+	i = identity.init_default_identity()
 	with apps_table() as apps:
 		apps.insert({
 			'name': 'baz-app',
@@ -19,7 +19,8 @@ def test_template_is_written():
 			'port': 2,
 			'env_vars': {
 				'baz-env': 'foo',
-				'url': 'https://{{ portal.domain }}/baz'
+				'url': 'https://{{ portal.domain }}/baz',
+				'short_id': '{{ portal.short_id }}'
 			},
 			'reason': InstallationReason.CUSTOM,
 		})
@@ -30,4 +31,5 @@ def test_template_is_written():
 		output = yaml.safe_load(f)
 		baz_app = output['services']['baz-app']
 		assert 'baz-env=foo' in baz_app['environment']
+		assert f'short_id={i.short_id}' in baz_app['environment']
 		assert any(re.search('url=https://.*\.p\.getportal\.org/baz', e) for e in baz_app['environment'])

@@ -1,15 +1,21 @@
-import logging
+import re
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from time import sleep
 
 import gconf
 import psycopg
 import pytest
+import responses
 from fastapi.testclient import TestClient
 from psycopg.conninfo import make_conninfo
+from responses import RequestsMock
 
 import portal_core
-
-log = logging.getLogger(__name__)
+from portal_core import Identity
+from portal_core.model.identity import OutputIdentity
+from portal_core.model.profile import Profile
+from portal_core.web.internal.call_peer import _get_app_for_ip_address
 
 
 @pytest.fixture(autouse=True)
@@ -28,18 +34,7 @@ def config_override(tmp_path, request):
 
 
 @pytest.fixture
-def additional_config_override(request):
-	"""
-	Detects the variable named *config_override* of a test module
-	and adds its content as a gconf override.
-	"""
-	config = getattr(request.module, 'config_override', {})
-	with gconf.override_conf(config):
-		yield
-
-
-@pytest.fixture
-def init_db(additional_config_override):
+def init_db(config_override):
 	portal_core.database.init_database()
 
 
@@ -47,7 +42,7 @@ def init_db(additional_config_override):
 def api_client(init_db) -> TestClient:
 	app = portal_core.create_app()
 
-	# Cookies are scoped for the domain, so we have configure the TestClient with it.
+	# Cookies are scoped for the domain, so we have to configure the TestClient with it.
 	# This way, the TestClient remembers cookies
 	whoareyou = TestClient(app).get('public/meta/whoareyou').json()
 	yield TestClient(app, base_url=f'https://{whoareyou["domain"]}')
@@ -79,3 +74,52 @@ def postgres(request):
 		raise TimeoutError('Postgres did not start in time')
 
 	return postgres_conn_string
+
+
+@pytest.fixture
+def management_api_mock():
+	management_api = 'https://management-mock'
+	config_override = {'management': {'api_url': management_api}}
+	mock_profile = Profile(
+		vm_id='portal_foobar',
+		owner='test owner',
+		time_created=datetime.now() - timedelta(days=2),
+		time_assigned=datetime.now() - timedelta(days=1),
+	)
+	with responses.RequestsMock() as rsps, gconf.override_conf(config_override):
+		rsps.get(
+			f'{management_api}/profile',
+			body=mock_profile.json(),
+		)
+		rsps.add_passthru('')
+		yield rsps
+
+
+@pytest.fixture
+def peer_mock_requests(mocker):
+	mocker.patch('portal_core.web.internal.call_peer._get_app_for_ip_address', lambda x: 'myapp')
+	_get_app_for_ip_address.cache_clear()
+	peer_identity = Identity.create('mock peer')
+	print(f'mocking peer {peer_identity.short_id}')
+	base_url = f'https://{peer_identity.domain}/core'
+	app_url = f'https://myapp.{peer_identity.domain}'
+
+	with (responses.RequestsMock(assert_all_requests_are_fired=False) as rsps):
+		rsps.get(base_url + '/public/meta/whoareyou', json=OutputIdentity(**peer_identity.dict()).dict())
+		rsps.get(re.compile(app_url + '/.*'))
+		rsps.post(re.compile(app_url + '/.*'))
+
+		rsps.add_passthru('')
+
+		yield PeerMockRequests(
+			peer_identity,
+			rsps,
+		)
+
+	_get_app_for_ip_address.cache_clear()
+
+
+@dataclass
+class PeerMockRequests:
+	identity: Identity
+	mock: RequestsMock

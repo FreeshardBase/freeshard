@@ -32,7 +32,7 @@ def test_uninstall_app(api_client: TestClient):
 
 
 def test_install_from_store(api_client):
-	app_store.refresh_app_store(ref='develop')
+	app_store.refresh_app_store()
 
 	app_template_pathon_details = next(a for a in (app_store.get_store_apps()) if a.name == 'app-template-python')
 	assert not app_template_pathon_details.is_installed
