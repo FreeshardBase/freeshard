@@ -7,11 +7,15 @@
 <div class="center">
 <img src="{{ icon_data }}">
 <h1>{{ app_name }}</h1>
+<h3>{{ display_status }}</h3>
 </div>
-<p>{{ status }} - {{ container_status }}</p>
+<p>{{ status_code }} - {{ container_status }}</p>
 <script>
     function timeRefresh(time) {
-        setTimeout("location.reload();", time)
+        const doReload = '{{ do_reload }}' === 'True';
+        if (doReload) {
+            setTimeout("location.reload();", time);
+        }
     }
 </script>
 </body>
@@ -25,7 +29,7 @@
         height: 7em;
     }
 
-    h1 {
+    h1, h2, h3 {
         font-family: Avenir,Helvetica,Arial,sans-serif;
     }
 
