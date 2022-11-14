@@ -38,24 +38,23 @@ def get_splash_behaviour(request: Request):
 	app_name = get_app_name(request)
 	container_status = get_container_status(app_name)
 
-	do_reload = True
-	display_status = 'Unknown Status...'
-	if status_code == 502:
-		display_status = 'Access Denied'
-		do_reload = False
-	if container_status == 'running':
-		display_status = 'Starting...'
-	if container_status == 'unknown':
-		display_status = 'Initializing...'
-
-	return SplashBehaviour(
+	behaviour = SplashBehaviour(
 		status_code=status_code,
 		app_name=app_name,
 		container_status=container_status,
 		icon_data=data_url(app_name),
-		display_status=display_status,
-		do_reload=do_reload,
+		display_status='Unknown Status...',
+		do_reload=True,
 	)
+	if status_code == 401:
+		behaviour.display_status = 'Access Denied'
+		behaviour.do_reload = False
+	elif container_status == 'running':
+		behaviour.display_status = 'Starting...'
+	elif container_status == 'unknown':
+		behaviour.display_status = 'Initializing...'
+
+	return behaviour
 
 
 def get_container_status(app_name):
