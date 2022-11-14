@@ -13,7 +13,7 @@ def test_call_peer_from_app_basic(peer_mock_requests, api_client):
 	pubkey = PublicKey(portal_identity.public_key_pem)
 
 	path = '/foo/bar'
-	response = api_client.get(f'internal/call_peer/{peer_mock_requests.identity.short_id}/{path}')
+	response = api_client.get(f'internal/call_peer/{peer_mock_requests.identity.short_id}{path}')
 	assert response.status_code == 200
 
 	received_request = peer_mock_requests.mock.calls[0].request
@@ -28,7 +28,7 @@ def test_call_peer_from_app_post(peer_mock_requests, api_client):
 
 	path = '/foo/bar'
 	response = api_client.post(
-		f'internal/call_peer/{peer_mock_requests.identity.short_id}/{path}',
+		f'internal/call_peer/{peer_mock_requests.identity.short_id}{path}',
 		data=b'foo data bar')
 	assert response.status_code == 200
 

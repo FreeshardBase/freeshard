@@ -8,8 +8,10 @@ import gconf
 from common_py.crypto import PublicKey
 from fastapi import Response
 from http_message_signatures import HTTPSignatureKeyResolver, algorithms, VerifyResult
-from requests import PreparedRequest, Request
+from httpx import URL, Request
+from requests import PreparedRequest
 from requests_http_signature import HTTPSignatureAuth
+from starlette.testclient import TestClient
 from tinydb import where
 
 from portal_core.database.database import apps_table
@@ -27,9 +29,10 @@ def pair_new_terminal(api_client, name='my_terminal', assert_success=True) -> Re
 	return response
 
 
-def get_pairing_code(api_client, deadline=None):
-	response = api_client.get('protected/terminals/pairing-code', params={'deadline': deadline})
-	assert response.status_code == 201
+def get_pairing_code(api_client: TestClient, deadline=None):
+	params = {'deadline': deadline} if deadline else {}
+	response = api_client.get('protected/terminals/pairing-code', params=params)
+	response.raise_for_status()
 	return response.json()
 
 
@@ -127,12 +130,12 @@ def install_test_app():
 	app_infra.refresh_app_infra()
 
 
-def modify_request_like_traefik_forward_auth(request: PreparedRequest) -> PreparedRequest:
+def modify_request_like_traefik_forward_auth(request: PreparedRequest) -> Request:
 	url = urlparse(request.url)
 	netloc_without_subdomain = url.netloc.split('.', maxsplit=1)[1]
 	return Request(
-		method='GET',
-		url=f'https://{netloc_without_subdomain}/internal/auth',
+		method=request.method,
+		url=URL(f'https://{netloc_without_subdomain}/internal/auth'),
 		headers={
 			'X-Forwarded-Proto': url.scheme,
 			'X-Forwarded-Host': url.netloc,
@@ -142,4 +145,4 @@ def modify_request_like_traefik_forward_auth(request: PreparedRequest) -> Prepar
 			'signature': request.headers['signature'],
 			'date': request.headers['date'],
 		}
-	).prepare()
+	)

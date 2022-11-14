@@ -141,7 +141,8 @@ def test_authorization_invalid_token(api_client):
 	response = pair_new_terminal(api_client)
 	token = response.cookies['authorization']
 	invalid_token = token[:-1]
-	response = api_client.get('internal/authenticate_terminal', cookies={'authorization': invalid_token})
+	api_client.cookies = {'authorization': invalid_token}
+	response = api_client.get('internal/authenticate_terminal')
 	assert response.status_code == 401
 
 
