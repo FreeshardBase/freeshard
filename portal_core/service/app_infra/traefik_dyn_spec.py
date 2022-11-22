@@ -1,11 +1,12 @@
-from typing import List
+from typing import List, Dict
 
 from portal_core.model import traefik_dyn_config as t
-from portal_core.model.app import InstalledApp
+from portal_core.model.app import InstalledApp, EntrypointPort
 from portal_core.model.identity import SafeIdentity
 
 
 def traefik_dyn_spec(apps: List[InstalledApp], portal: SafeIdentity) -> t.Model:
+	app_routers = {k: v for a in apps for k, v in make_app_routers(a, portal).items()}
 	return t.Model(
 		http=t.Http(
 			routers={
@@ -37,7 +38,7 @@ def traefik_dyn_spec(apps: List[InstalledApp], portal: SafeIdentity) -> t.Model:
 					middlewares=['auth-private'],
 					tls=make_cert_resolver(portal),
 				),
-				**{a.name: make_app_router(a, portal) for a in apps}
+				**app_routers
 			},
 			middlewares={
 				'strip': t.HttpMiddleware(
@@ -91,7 +92,8 @@ def traefik_dyn_spec(apps: List[InstalledApp], portal: SafeIdentity) -> t.Model:
 			services={
 				'portal_core': make_service(url='http://portal_core:80/'),
 				'web-terminal': make_service(url='http://web-terminal:80/'),
-				**{a.name: make_service(f'http://{a.name}:{a.port}') for a in apps}
+				**{f'{a.name}_{ep.entrypoint.value}': make_service(f'http://{a.name}:{ep.container_port}')
+				   for a in apps for ep in a.entrypoints}
 			}
 		)
 	)
@@ -109,14 +111,14 @@ def make_service(url: str):
 	)
 
 
-def make_app_router(app: InstalledApp, portal: SafeIdentity) -> t.HttpRouter:
-	return t.HttpRouter(
+def make_app_routers(app: InstalledApp, portal: SafeIdentity) -> Dict[str, t.HttpRouter]:
+	return {f'{app.name}_{ep.entrypoint.value}': t.HttpRouter(
 		rule=f'Host(`{app.name}.{portal.domain}`)',
-		entryPoints=['https'],
-		service=app.name,
-		middlewares=['app-error', 'auth'],
+		entryPoints=[ep.entrypoint],
+		service=f'{app.name}_{ep.entrypoint.value}',
+		middlewares=['app-error', 'auth'] if ep.entrypoint == EntrypointPort.HTTPS_443 else [],
 		tls=make_cert_resolver(portal),
-	)
+	) for ep in app.entrypoints}
 
 
 def make_cert_resolver(portal: SafeIdentity):

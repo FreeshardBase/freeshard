@@ -5,7 +5,7 @@ from pydantic import BaseModel, root_validator, conint, validator
 
 from portal_core.model import app_migration
 
-CURRENT_VERSION = '3.2'
+CURRENT_VERSION = '4.0'
 
 
 class InstallationReason(str, Enum):
@@ -37,6 +37,12 @@ class SharedDir(str, Enum):
 	MUSIC = 'music'
 
 
+class EntrypointPort(str, Enum):
+	HTTPS_443 = 'https'
+	MQTT_1883 = 'mqtt'
+
+
+
 class StoreInfo(BaseModel):
 	description_short: Optional[str]
 	description_long: Optional[Union[str, List[str]]]
@@ -66,6 +72,11 @@ class Path(BaseModel):
 	headers: Optional[Dict[str, str]]
 
 
+class Entrypoint(BaseModel):
+	container_port: int
+	entrypoint: EntrypointPort
+
+
 class Lifecycle(BaseModel):
 	always_on: bool = False
 	idle_time_for_shutdown: Optional[int]
@@ -89,7 +100,7 @@ class App(BaseModel):
 	v: str
 	name: str
 	image: str
-	port: int
+	entrypoints: List[Entrypoint]
 	data_dirs: Optional[List[Union[str, DataDir]]]
 	env_vars: Optional[Dict[str, str]]
 	services: Optional[List[Service]]
