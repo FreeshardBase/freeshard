@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Optional, List, Dict, Union
 
-from pydantic import BaseModel, root_validator, conint, validator
+from pydantic import BaseModel, root_validator, validator
 
 from portal_core.model import app_migration
 
@@ -40,7 +40,7 @@ class SharedDir(str, Enum):
 class EntrypointPort(str, Enum):
 	HTTPS_443 = 'https'
 	MQTT_1883 = 'mqtt'
-
+	MQTT_WS_9001 = 'mqtt_ws'
 
 
 class StoreInfo(BaseModel):
