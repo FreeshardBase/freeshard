@@ -32,7 +32,7 @@ def create_app():
 	migration.migrate_all()
 
 	default_identity = identity.init_default_identity()
-	_ensure_traefik_config(default_identity)
+	_render_traefik_config(default_identity)
 
 	app_store.refresh_app_store()
 	init_apps.refresh_init_apps()
@@ -81,20 +81,16 @@ def configure_logging():
 		logger.setLevel(getattr(logging, level.upper()))
 
 
-def _ensure_traefik_config(id_: Identity):
-	source = Path('/core/traefik.template.yml')
-	target = Path('/core/traefik.yml')
-	if target.exists():
-		if target.is_dir():
-			log.info('traefik.yml is a directory, deleting it')
-			target.rmdir()
-		else:
-			log.info('traefik.yml already exists, not touching it')
-			return
+def _render_traefik_config(id_: Identity):
+	root = Path(gconf.get('path_root'))
+	source = root / 'core/traefik.template.yml'
+	target = root / 'core/traefik.yml'
+	if target.exists() and target.is_dir():
+		log.info('traefik.yml is a directory, deleting it')
+		target.rmdir()
 
 	if not source.exists():
-		log.error(f'{source} not found')
-		return
+		raise FileNotFoundError(source.absolute())
 
 	prefix_length = gconf.get('dns.prefix length')
 

@@ -1,6 +1,7 @@
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 from time import sleep
 
 import gconf
@@ -40,6 +41,10 @@ def init_db(config_override):
 
 @pytest.fixture
 def api_client(init_db) -> TestClient:
+	root = Path(gconf.get('path_root'))
+	traefik_template_yml = root / 'core/traefik.template.yml'
+	traefik_template_yml.touch()
+
 	app = portal_core.create_app()
 
 	# Cookies are scoped for the domain, so we have to configure the TestClient with it.
