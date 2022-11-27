@@ -18,7 +18,7 @@ def test_template_is_written():
 			'version': '1.2.3',
 			'paths': {'': {'access': 'public'}},
 			'entrypoints': [
-				{'container_port': 2, 'entrypoint': 'https'},
+				{'container_port': 2, 'entrypoint': 'http'},
 				{'container_port': 3, 'entrypoint': 'mqtt'},
 			],
 			'env_vars': {
@@ -37,11 +37,19 @@ def test_template_is_written():
 		assert set(out_middlewares.keys()) == {'app-error', 'auth', 'strip', 'auth-public', 'auth-private'}
 		assert 'authResponseHeadersRegex' in out_middlewares['auth']['forwardAuth']
 
-		out_services: dict = output['http']['services']
-		assert set(out_services.keys()) == {'portal_core', 'web-terminal', 'baz-app_https', 'baz-app_mqtt'}
-		assert out_services['baz-app_https']['loadBalancer']['servers'] == [{'url': 'http://baz-app:2'}]
+		out_services_http: dict = output['http']['services']
+		assert set(out_services_http.keys()) == {'portal_core', 'web-terminal', 'baz-app_http'}
+		assert out_services_http['baz-app_http']['loadBalancer']['servers'] == [{'url': 'http://baz-app:2'}]
 
-		out_routers: dict = output['http']['routers']
-		assert set(out_routers.keys()) == {
-			'portal_core_private', 'portal_core_public', 'web-terminal', 'traefik', 'baz-app_https', 'baz-app_mqtt'}
-		assert out_routers['baz-app_https']['service'] == 'baz-app_https'
+		out_services_tcp: dict = output['tcp']['services']
+		assert set(out_services_tcp.keys()) == {'baz-app_mqtt'}
+		assert out_services_tcp['baz-app_mqtt']['loadBalancer']['servers'] == [{'address': 'mqtt://baz-app:3'}]
+
+		out_routers_http: dict = output['http']['routers']
+		assert set(out_routers_http.keys()) == {
+			'portal_core_private', 'portal_core_public', 'web-terminal', 'traefik', 'baz-app_http'}
+		assert out_routers_http['baz-app_http']['service'] == 'baz-app_http'
+
+		out_routers_tcp: dict = output['tcp']['routers']
+		assert set(out_routers_tcp.keys()) == {'baz-app_mqtt'}
+		assert out_routers_tcp['baz-app_mqtt']['service'] == 'baz-app_mqtt'
