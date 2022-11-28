@@ -81,7 +81,7 @@ current_app_json = {
 		'DATABASE_URL': '{{ postgres.connection_string }}'
 	},
 	'image': 'portalapps.azurecr.io/ptl-apps/filebrowser:master',
-	'entrypoints': [{'container_port': 80, 'entrypoint': 'http'}],
+	'entrypoints': [{'container_port': 80, 'entrypoint_port': 'http'}],
 	'paths': {
 		'': {
 			'access': 'private',

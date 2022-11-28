@@ -74,7 +74,7 @@ class Path(BaseModel):
 
 class Entrypoint(BaseModel):
 	container_port: int
-	entrypoint: EntrypointPort
+	entrypoint_port: EntrypointPort
 
 
 class Lifecycle(BaseModel):

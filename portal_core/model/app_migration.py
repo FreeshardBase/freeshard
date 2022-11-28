@@ -98,7 +98,7 @@ def migrate_3_1_to_3_2(app_json: dict) -> dict:
 def migrate_3_2_to_4_0(app_json: dict) -> dict:
 	https_port = app_json['port']
 	del app_json['port']
-	app_json['entrypoints'] = [{'container_port': https_port, 'entrypoint': 'http'}]
+	app_json['entrypoints'] = [{'container_port': https_port, 'entrypoint_port': 'http'}]
 	app_json['v'] = '4.0'
 	return app_json
 

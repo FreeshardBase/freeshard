@@ -18,8 +18,8 @@ def test_template_is_written():
 			'version': '1.2.3',
 			'paths': {'': {'access': 'public'}},
 			'entrypoints': [
-				{'container_port': 2, 'entrypoint': 'http'},
-				{'container_port': 3, 'entrypoint': 'mqtt'},
+				{'container_port': 2, 'entrypoint_port': 'http'},
+				{'container_port': 3, 'entrypoint_port': 'mqtt'},
 			],
 			'env_vars': {
 				'baz-env': 'foo',
