@@ -150,7 +150,7 @@ def _add_router(model: t.Model, entrypoint: Entrypoint, app: InstalledApp, porta
 			rule=f'Host(`{app.name}.{portal.domain}`)',
 			entryPoints=['https'],
 			service=f'{app.name}_{ep_value}',
-			middlewares=['app-error', 'auth'] if entrypoint == EntrypointPort.HTTPS_443 else [],
+			middlewares=['app-error', 'auth'],
 			tls=make_cert_resolver(portal),
 		)
 	elif entrypoint.entrypoint_port == EntrypointPort.WSS_9001:
