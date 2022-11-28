@@ -16,6 +16,15 @@ def traefik_dyn_spec(apps: List[InstalledApp], portal: SafeIdentity) -> t.Model:
 		for ep in a.entrypoints:
 			_add_router(model, ep, a, portal)
 			_add_service(model, ep, a)
+
+	# this is needed because traefik cannot handle empty yaml objects here
+	if not model.tcp.routers:
+		del model.tcp.routers
+	if not model.tcp.services:
+		del model.tcp.services
+	if not model.tcp.dict():
+		del model.tcp
+
 	return model
 
 

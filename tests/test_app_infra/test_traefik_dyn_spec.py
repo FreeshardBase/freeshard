@@ -53,3 +53,26 @@ def test_template_is_written():
 		out_routers_tcp: dict = output['tcp']['routers']
 		assert set(out_routers_tcp.keys()) == {'baz-app_mqtt'}
 		assert out_routers_tcp['baz-app_mqtt']['service'] == 'baz-app_mqtt'
+
+
+def test_template_without_tcp_has_no_tcp_section():
+	identity.init_default_identity()
+	with apps_table() as apps:
+		apps.insert({
+			'v': '4.0',
+			'name': 'baz-app',
+			'image': 'baz-app:latest',
+			'version': '1.2.3',
+			'paths': {'': {'access': 'public'}},
+			'entrypoints': [
+				{'container_port': 2, 'entrypoint_port': 'http'}
+			],
+			'reason': InstallationReason.CUSTOM,
+		})
+
+	app_infra.refresh_app_infra()
+
+	with open(Path(gconf.get('path_root')) / 'core' / 'traefik_dyn' / 'traefik_dyn.yml', 'r') as f:
+		output = yaml.safe_load(f)
+
+		assert 'tcp' not in output
