@@ -4,9 +4,6 @@ from portal_core.model import traefik_dyn_config as t
 from portal_core.model.app import InstalledApp, EntrypointPort, Entrypoint
 from portal_core.model.identity import SafeIdentity
 
-HTTP_ENTRYPOINTS = {EntrypointPort.HTTPS_443, EntrypointPort.WSS_9001}
-TCP_ENTRYPOINTS = {EntrypointPort.MQTTS_1883}
-
 
 def traefik_dyn_spec(apps: List[InstalledApp], portal: SafeIdentity) -> t.Model:
 	model = t.Model()
@@ -153,17 +150,10 @@ def _add_router(model: t.Model, entrypoint: Entrypoint, app: InstalledApp, porta
 			middlewares=['app-error', 'auth'],
 			tls=make_cert_resolver(portal),
 		)
-	elif entrypoint.entrypoint_port == EntrypointPort.WSS_9001:
-		model.http.routers[f'{app.name}_{ep_value}'] = t.HttpRouter(
-			rule=f'Host(`{app.name}.{portal.domain}`)',
-			entryPoints=['mqtt'],
-			service=f'{app.name}_{ep_value}',
-			tls=make_cert_resolver(portal),
-		)
 	elif entrypoint.entrypoint_port == EntrypointPort.MQTTS_1883:
 		model.tcp.routers[f'{app.name}_{ep_value}'] = t.TcpRouter(
-			rule=f'Host(`{app.name}.{portal.domain}`)',
-			entryPoints=['mqtt_ws'],
+			rule=f'HostSNI(`{app.name}.{portal.domain}`)',
+			entryPoints=['mqtt'],
 			service=f'{app.name}_{ep_value}',
 			tls=make_cert_resolver(portal),
 		)
@@ -183,22 +173,12 @@ def _add_service(model: t.Model, entrypoint: Entrypoint, app: InstalledApp):
 				)
 			)
 		)
-	elif entrypoint.entrypoint_port == EntrypointPort.WSS_9001:
-		model.http.services[f'{app.name}_{ep_value}'] = t.HttpService(
-			__root__=t.HttpServiceItem(
-				loadBalancer=t.HttpLoadBalancerService(
-					servers=[
-						t.Server(url=f'ws://{app.name}:{entrypoint.container_port}')
-					]
-				)
-			)
-		)
 	elif entrypoint.entrypoint_port == EntrypointPort.MQTTS_1883:
 		model.tcp.services[f'{app.name}_{ep_value}'] = t.TcpService(
 			__root__=t.TcpServiceItem(
 				loadBalancer=t.TcpLoadBalancerService(
 					servers=[
-						t.Server1(address=f'mqtt://{app.name}:{entrypoint.container_port}')
+						t.Server1(address=f'{app.name}:{entrypoint.container_port}')
 					]
 				)
 			)

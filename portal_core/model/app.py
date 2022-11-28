@@ -40,7 +40,6 @@ class SharedDir(str, Enum):
 class EntrypointPort(str, Enum):
 	HTTPS_443 = 'http'
 	MQTTS_1883 = 'mqtt'
-	WSS_9001 = 'ws'
 
 
 class StoreInfo(BaseModel):

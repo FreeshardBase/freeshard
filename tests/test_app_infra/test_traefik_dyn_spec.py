@@ -43,7 +43,7 @@ def test_template_is_written():
 
 		out_services_tcp: dict = output['tcp']['services']
 		assert set(out_services_tcp.keys()) == {'baz-app_mqtt'}
-		assert out_services_tcp['baz-app_mqtt']['loadBalancer']['servers'] == [{'address': 'mqtt://baz-app:3'}]
+		assert out_services_tcp['baz-app_mqtt']['loadBalancer']['servers'] == [{'address': 'baz-app:3'}]
 
 		out_routers_http: dict = output['http']['routers']
 		assert set(out_routers_http.keys()) == {
