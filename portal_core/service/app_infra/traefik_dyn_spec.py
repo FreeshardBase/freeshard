@@ -148,7 +148,7 @@ def _add_router(model: t.Model, entrypoint: Entrypoint, app: InstalledApp, porta
 	if entrypoint.entrypoint_port == EntrypointPort.HTTPS_443:
 		model.http.routers[f'{app.name}_{ep_value}'] = t.HttpRouter(
 			rule=f'Host(`{app.name}.{portal.domain}`)',
-			entryPoints=[ep_value],
+			entryPoints=['https'],
 			service=f'{app.name}_{ep_value}',
 			middlewares=['app-error', 'auth'] if entrypoint == EntrypointPort.HTTPS_443 else [],
 			tls=make_cert_resolver(portal),
@@ -156,14 +156,14 @@ def _add_router(model: t.Model, entrypoint: Entrypoint, app: InstalledApp, porta
 	elif entrypoint.entrypoint_port == EntrypointPort.WSS_9001:
 		model.http.routers[f'{app.name}_{ep_value}'] = t.HttpRouter(
 			rule=f'Host(`{app.name}.{portal.domain}`)',
-			entryPoints=[ep_value],
+			entryPoints=['mqtt'],
 			service=f'{app.name}_{ep_value}',
 			tls=make_cert_resolver(portal),
 		)
 	elif entrypoint.entrypoint_port == EntrypointPort.MQTTS_1883:
 		model.tcp.routers[f'{app.name}_{ep_value}'] = t.TcpRouter(
 			rule=f'Host(`{app.name}.{portal.domain}`)',
-			entryPoints=[ep_value],
+			entryPoints=['mqtt_ws'],
 			service=f'{app.name}_{ep_value}',
 			tls=make_cert_resolver(portal),
 		)
