@@ -50,3 +50,29 @@ def test_app_starts_and_stops(api_client):
 
 		retry(assert_app_running, timeout=10, retry_errors=[AssertionError])
 		retry(assert_app_exited, timeout=10, retry_errors=[AssertionError])
+
+
+def test_always_on_app_starts(api_client):
+	docker_client = docker.from_env()
+	app = AppToInstall(**{
+		'v': '3.1',
+		'name': 'foo-app',
+		'image': WAITING_DOCKER_IMAGE,
+		'version': '1.2.3',
+		'port': 1,
+		'paths': {
+			'': {'access': 'public'},
+		},
+		'lifecycle': {'always_on': True},
+		'reason': InstallationReason.CUSTOM,
+	})
+	with apps_table() as apps:  # type: Table
+		apps.truncate()
+		apps.insert(app.dict())
+
+	app_infra.refresh_app_infra()
+	with create_apps_from_docker_compose():
+		def assert_app_running():
+			assert docker_client.containers.get('foo-app').status == 'running'
+
+		retry(assert_app_running, timeout=10, retry_errors=[AssertionError])
