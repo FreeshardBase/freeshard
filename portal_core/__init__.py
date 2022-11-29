@@ -24,9 +24,9 @@ def create_app():
 	shipped_config = gconf.load('config.yml')
 	additional_config = gconf.load(os.environ['CONFIG']) if 'CONFIG' in os.environ else None
 	configure_logging()
-	log.debug(f'loaded shipped config {shipped_config}')
+	log.info(f'loaded shipped config {str(shipped_config)}')
 	if additional_config:
-		log.debug(f'loaded additional config {additional_config}')
+		log.info(f'loaded additional config {str(additional_config)}')
 
 	database.init_database()
 	migration.migrate_all()
@@ -42,7 +42,7 @@ def create_app():
 	log.debug('written app infra files (docker-compose and traefik)')
 
 	bg_tasks = BackgroundTaskHandler([
-		(app_lifecycle.stop_apps, gconf.get('apps.lifecycle.refresh_interval')),
+		(app_lifecycle.control_apps, gconf.get('apps.lifecycle.refresh_interval')),
 		(update_all_peer_pubkeys, 60),
 	])
 	bg_tasks.start()

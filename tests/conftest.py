@@ -1,3 +1,4 @@
+import os
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -44,6 +45,8 @@ def api_client(init_db) -> TestClient:
 	root = Path(gconf.get('path_root'))
 	traefik_template_yml = root / 'core/traefik.template.yml'
 	traefik_template_yml.touch()
+
+	os.environ['CONFIG'] = str(Path(__file__).parent / 'config.yml')
 
 	app = portal_core.create_app()
 
