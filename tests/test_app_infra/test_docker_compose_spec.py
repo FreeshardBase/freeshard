@@ -39,5 +39,5 @@ def test_template_is_written():
 		assert 'baz-env=foo' in baz_app['environment']
 		assert f'short_id={i.short_id}' in baz_app['environment']
 		assert any(re.search('url=https://.*\.p\.getportal\.org/baz', e) for e in baz_app['environment'])
-		assert '2:2' in baz_app['ports']
-		assert '3:3' in baz_app['ports']
+		assert '2' in baz_app['expose']
+		assert '3' in baz_app['expose']
