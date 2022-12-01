@@ -11,3 +11,7 @@ services:
 apps:
   lifecycle:
     refresh_interval: 2
+
+log:
+  levels:
+    'portal_core.service.app_lifecycle': debug

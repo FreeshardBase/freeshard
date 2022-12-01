@@ -24,15 +24,15 @@ def create_app():
 	shipped_config = gconf.load('config.yml')
 	additional_config = gconf.load(os.environ['CONFIG']) if 'CONFIG' in os.environ else None
 	configure_logging()
-	log.debug(f'loaded shipped config {shipped_config}')
+	log.info(f'loaded shipped config {str(shipped_config)}')
 	if additional_config:
-		log.debug(f'loaded additional config {additional_config}')
+		log.info(f'loaded additional config {str(additional_config)}')
 
 	database.init_database()
 	migration.migrate_all()
 
 	default_identity = identity.init_default_identity()
-	_ensure_traefik_config(default_identity)
+	_render_traefik_config(default_identity)
 
 	app_store.refresh_app_store()
 	init_apps.refresh_init_apps()
@@ -42,7 +42,7 @@ def create_app():
 	log.debug('written app infra files (docker-compose and traefik)')
 
 	bg_tasks = BackgroundTaskHandler([
-		(app_lifecycle.stop_apps, gconf.get('apps.lifecycle.refresh_interval')),
+		(app_lifecycle.control_apps, gconf.get('apps.lifecycle.refresh_interval')),
 		(update_all_peer_pubkeys, 60),
 	])
 	bg_tasks.start()
@@ -81,20 +81,16 @@ def configure_logging():
 		logger.setLevel(getattr(logging, level.upper()))
 
 
-def _ensure_traefik_config(id_: Identity):
-	source = Path('/core/traefik.template.yml')
-	target = Path('/core/traefik.yml')
-	if target.exists():
-		if target.is_dir():
-			log.info('traefik.yml is a directory, deleting it')
-			target.rmdir()
-		else:
-			log.info('traefik.yml already exists, not touching it')
-			return
+def _render_traefik_config(id_: Identity):
+	root = Path(gconf.get('path_root'))
+	source = root / 'core/traefik.template.yml'
+	target = root / 'core/traefik.yml'
+	if target.exists() and target.is_dir():
+		log.info('traefik.yml is a directory, deleting it')
+		target.rmdir()
 
 	if not source.exists():
-		log.error(f'{source} not found')
-		return
+		raise FileNotFoundError(source.absolute())
 
 	prefix_length = gconf.get('dns.prefix length')
 

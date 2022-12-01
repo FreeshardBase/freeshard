@@ -95,10 +95,19 @@ def migrate_3_1_to_3_2(app_json: dict) -> dict:
 	return app_json
 
 
+def migrate_3_2_to_4_0(app_json: dict) -> dict:
+	https_port = app_json['port']
+	del app_json['port']
+	app_json['entrypoints'] = [{'container_port': https_port, 'entrypoint_port': 'http'}]
+	app_json['v'] = '4.0'
+	return app_json
+
+
 migrations = {
 	'0.0': migrate_0_0_to_1_0,
 	'1.0': migrate_1_0_to_2_0,
 	'2.0': migrate_2_0_to_3_0,
 	'3.0': migrate_3_0_to_3_1,
 	'3.1': migrate_3_1_to_3_2,
+	'3.2': migrate_3_2_to_4_0,
 }

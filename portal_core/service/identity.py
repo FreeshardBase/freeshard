@@ -23,7 +23,7 @@ def init_default_identity():
 			)
 			log.info(f'created initial default identity {default_identity.id}')
 		else:
-			default_identity = identities.get(Query().is_default == True)
+			default_identity = Identity(**identities.get(Query().is_default == True))
 		return default_identity
 
 

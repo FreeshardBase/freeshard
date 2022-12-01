@@ -23,6 +23,7 @@ def service_spec(app: InstalledApp, portal: SafeIdentity):
 		container_name=app.name,
 		restart='always',
 		networks=dc.ListOfStrings.parse_obj(['portal']),
+		expose=[str(ep.container_port) for ep in app.entrypoints],
 		volumes=volumes(app),
 		environment=dc.ListOrDict.parse_obj(environment(app, portal)),
 	)
