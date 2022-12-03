@@ -10,10 +10,10 @@ def test_backup(api_client, tmp_path, postgres):
 
 	zip_path = tmp_path / 'backup.zip'
 
-	with api_client.get('protected/backup/export', stream=True) as r:
+	with api_client.stream('GET', 'protected/backup/export') as r:
 		r.raise_for_status()
 		with open(zip_path, 'wb') as f:
-			for chunk in r.iter_content(chunk_size=8192):
+			for chunk in r.iter_bytes(chunk_size=8192):
 				f.write(chunk)
 
 	zip_file = ZipFile(zip_path)

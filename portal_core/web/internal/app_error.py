@@ -9,6 +9,7 @@ import jinja2
 from docker import errors as docker_errors
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
 
 log = logging.getLogger(__name__)
 
@@ -17,15 +18,43 @@ router = APIRouter()
 
 @router.get('/app_error/{status}')
 def app_error(status: int, request: Request):
+	behaviour = get_splash_behaviour(request)
+	with open(Path.cwd() / 'data' / 'splash.html', 'r') as f:
+		template = jinja2.Template(f.read())
+	return HTMLResponse(content=template.render(**behaviour.dict()), status_code=status)
+
+
+class SplashBehaviour(BaseModel):
+	app_name: str
+	status_code: int
+	container_status: str
+	icon_data: str
+	display_status: str
+	do_reload: bool
+
+
+def get_splash_behaviour(request: Request):
+	status_code = int(request.path_params['status'])
 	app_name = get_app_name(request)
-	template = get_template_access_denied() if status == 401 else get_template_splash()
 	container_status = get_container_status(app_name)
-	return HTMLResponse(content=template.render(
-		status=status,
+
+	behaviour = SplashBehaviour(
+		status_code=status_code,
 		app_name=app_name,
 		container_status=container_status,
 		icon_data=data_url(app_name),
-	), status_code=status)
+		display_status='Unknown Status...',
+		do_reload=True,
+	)
+	if status_code == 401:
+		behaviour.display_status = 'Access Denied'
+		behaviour.do_reload = False
+	elif container_status == 'running':
+		behaviour.display_status = 'Starting...'
+	elif container_status == 'unknown':
+		behaviour.display_status = 'Initializing...'
+
+	return behaviour
 
 
 def get_container_status(app_name):
@@ -51,13 +80,6 @@ def get_docker_client():
 @lru_cache()
 def get_template_splash():
 	with open(Path.cwd() / 'data' / 'splash.html', 'r') as f:
-		template = jinja2.Template(f.read())
-	return template
-
-
-@lru_cache()
-def get_template_access_denied():
-	with open(Path.cwd() / 'data' / 'access_denied.html', 'r') as f:
 		template = jinja2.Template(f.read())
 	return template
 

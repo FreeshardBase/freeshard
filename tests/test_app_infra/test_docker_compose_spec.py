@@ -13,10 +13,16 @@ def test_template_is_written():
 	i = identity.init_default_identity()
 	with apps_table() as apps:
 		apps.insert({
+			'v': '4.0',
 			'name': 'baz-app',
 			'image': 'baz-app:latest',
-			'version': '1.2.3',
-			'port': 2,
+			'entrypoints': [
+				{'container_port': 2, 'entrypoint_port': 'http'},
+				{'container_port': 3, 'entrypoint_port': 'mqtt'},
+			],
+			'paths': {
+				'': {'access': 'private'},
+			},
 			'env_vars': {
 				'baz-env': 'foo',
 				'url': 'https://{{ portal.domain }}/baz',
@@ -33,3 +39,5 @@ def test_template_is_written():
 		assert 'baz-env=foo' in baz_app['environment']
 		assert f'short_id={i.short_id}' in baz_app['environment']
 		assert any(re.search('url=https://.*\.p\.getportal\.org/baz', e) for e in baz_app['environment'])
+		assert '2' in baz_app['expose']
+		assert '3' in baz_app['expose']

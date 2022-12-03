@@ -35,6 +35,7 @@ def refresh_app_infra():
 
 	traefik_dyn_filename = Path(gconf.get('path_root')) / 'core' / 'traefik_dyn' / 'traefik_dyn.yml'
 	write_to_yaml(traefik_dyn_spec(apps, portal), traefik_dyn_filename)
+	# todo: start apps that should be always on
 
 
 def create_data_dirs(app):
