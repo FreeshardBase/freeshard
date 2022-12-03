@@ -32,7 +32,10 @@ def create_app():
 	migration.migrate_all()
 
 	default_identity = identity.init_default_identity()
-	_render_traefik_config(default_identity)
+	try:
+		_render_traefik_config(default_identity)
+	except FileNotFoundError:
+		log.error('Traefik template not found, Traefik config cannot be created')
 
 	app_store.refresh_app_store()
 	init_apps.refresh_init_apps()
