@@ -1,20 +1,33 @@
+import contextlib
 import io
 import json
 import logging
 import shutil
 import tarfile
+import datetime
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, List
 
 import gconf
 from gitlab import Gitlab, GitlabListError
+from gitlab.v4.objects import ProjectBranch
+from pydantic import BaseModel
 from tinydb import where
 
 from portal_core.database.database import apps_table
 from portal_core.model.app import StoreApp, InstallationReason, AppToInstall
 from . import app_infra
+from ..database import database
 
 log = logging.getLogger(__name__)
+
+STORE_KEY_CURRENT_APP_STORE_BRANCH = 'current_app_store_branch'
+
+
+class AppStoreStatus(BaseModel):
+	current_branch: str
+	commit_id: str
+	last_update: datetime.datetime
 
 
 def get_store_apps() -> Iterable[StoreApp]:
@@ -46,16 +59,44 @@ def install_store_app(name: str):
 	app_infra.refresh_app_infra()
 
 
-def refresh_app_store(ref: str = None):
+def set_app_store_branch(branch_name: str):
+	with _get_gitlab_apps_project() as apps_project:
+		available_branches: List[ProjectBranch] = apps_project.branches.list()
+
+	try:
+		branch = next(b for b in available_branches if b.name == branch_name)
+	except StopIteration:
+		raise AppStoreRefreshError(f'Unknown branch: {branch_name}')
+
+	app_store_status = AppStoreStatus(
+		current_branch=branch.name,
+		commit_id=branch.commit['id'],
+		last_update=datetime.datetime.utcnow()
+	)
+
+	database.set_value(STORE_KEY_CURRENT_APP_STORE_BRANCH, app_store_status.dict())
+	refresh_app_store()
+
+
+def get_app_store_status() -> AppStoreStatus:
+	return AppStoreStatus.parse_obj(database.get_value(STORE_KEY_CURRENT_APP_STORE_BRANCH))
+
+
+def refresh_app_store():
+	try:
+		ref = get_app_store_status().commit_id
+	except KeyError:
+		ref = 'master'
+
 	log.debug(f'refreshing app store with ref {ref}')
 	fs_sync_dir = Path(gconf.get('path_root')) / 'core' / 'appstore'
 
-	apps_project = Gitlab('https://gitlab.com').projects.get(gconf.get('apps.app_store.project_id'))
-	try:
-		archive = tarfile.open(fileobj=io.BytesIO(apps_project.repository_archive(sha=ref or 'master')))
-	except GitlabListError as e:
-		log.error(f'Error during refreshing app store with ref {ref}: {e.error_message}')
-		raise AppStoreRefreshError from e
+	with _get_gitlab_apps_project() as apps_project:
+		try:
+			archive = tarfile.open(fileobj=io.BytesIO(apps_project.repository_archive(sha=ref)))
+		except GitlabListError as e:
+			log.error(f'Error during refreshing app store with ref {ref}: {e.error_message}')
+			raise AppStoreRefreshError from e
 
 	if fs_sync_dir.exists():
 		shutil.rmtree(fs_sync_dir)
@@ -71,6 +112,12 @@ def refresh_app_store(ref: str = None):
 				with open(fs_file, 'wb') as f:
 					if data := archive.extractfile(member):
 						f.write(data.read())
+
+
+@contextlib.contextmanager
+def _get_gitlab_apps_project():
+	apps_project = Gitlab('https://gitlab.com').projects.get(gconf.get('apps.app_store.project_id'))
+	yield apps_project
 
 
 class AppStoreRefreshError(Exception):

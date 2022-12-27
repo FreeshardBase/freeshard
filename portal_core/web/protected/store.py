@@ -1,3 +1,4 @@
+import datetime
 import logging
 from typing import List, Optional
 
@@ -6,7 +7,7 @@ from pydantic import BaseModel
 
 from portal_core.model.app import StoreApp
 from portal_core.service import app_store
-from portal_core.service.app_store import AppStoreRefreshError
+from portal_core.service.app_store import AppStoreRefreshError, AppStoreStatus
 
 log = logging.getLogger(__name__)
 
@@ -37,13 +38,24 @@ def install_app(name: str):
 	app_store.install_store_app(name)
 
 
-@router.post('/ref')
-def switch_store_ref(ref: Optional[str] = None):
+class StoreBranchIn(BaseModel):
+	branch: str
+
+
+@router.post('/branch')
+def set_store_branch(branch: Optional[StoreBranchIn] = None):
 	"""
-	Refresh the local app store at a certain ref of the underlying git repo.
-	If ref is missing, use `master`.
+	Set the local app store to certain branch of the underlying git repo.
+	If branch is missing, use `master`.
 	"""
 	try:
-		app_store.refresh_app_store(ref=ref)
-	except AppStoreRefreshError as e:
+		new_branch = branch.branch if branch else 'master'
+		app_store.set_app_store_branch(new_branch)
+		app_store.refresh_app_store()
+	except AppStoreRefreshError:
 		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+
+@router.get('/branch', response_model=AppStoreStatus)
+def get_store_branch():
+	return app_store.get_app_store_status()
