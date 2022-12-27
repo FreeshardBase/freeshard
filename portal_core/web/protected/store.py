@@ -1,11 +1,12 @@
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, status, HTTPException
 from pydantic import BaseModel
 
 from portal_core.model.app import StoreApp
 from portal_core.service import app_store
+from portal_core.service.app_store import AppStoreRefreshError
 
 log = logging.getLogger(__name__)
 
@@ -42,4 +43,7 @@ def switch_store_ref(ref: Optional[str] = None):
 	Refresh the local app store at a certain ref of the underlying git repo.
 	If ref is missing, use `master`.
 	"""
-	app_store.refresh_app_store(ref=ref)
+	try:
+		app_store.refresh_app_store(ref=ref)
+	except AppStoreRefreshError as e:
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)

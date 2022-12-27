@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Iterable
 
 import gconf
-from gitlab import Gitlab
+from gitlab import Gitlab, GitlabListError
 from tinydb import where
 
 from portal_core.database.database import apps_table
@@ -51,7 +51,11 @@ def refresh_app_store(ref: str = None):
 	fs_sync_dir = Path(gconf.get('path_root')) / 'core' / 'appstore'
 
 	apps_project = Gitlab('https://gitlab.com').projects.get(gconf.get('apps.app_store.project_id'))
-	archive = tarfile.open(fileobj=io.BytesIO(apps_project.repository_archive(sha=ref or 'master')))
+	try:
+		archive = tarfile.open(fileobj=io.BytesIO(apps_project.repository_archive(sha=ref or 'master')))
+	except GitlabListError as e:
+		log.error(f'Error during refreshing app store with ref {ref}: {e.error_message}')
+		raise AppStoreRefreshError from e
 
 	if fs_sync_dir.exists():
 		shutil.rmtree(fs_sync_dir)
@@ -67,3 +71,7 @@ def refresh_app_store(ref: str = None):
 				with open(fs_file, 'wb') as f:
 					if data := archive.extractfile(member):
 						f.write(data.read())
+
+
+class AppStoreRefreshError(Exception):
+	pass
