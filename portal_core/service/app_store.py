@@ -6,7 +6,7 @@ import shutil
 import tarfile
 import datetime
 from pathlib import Path
-from typing import Iterable, List
+from typing import Iterable, List, Optional
 
 import gconf
 from gitlab import Gitlab, GitlabListError
@@ -27,7 +27,7 @@ STORE_KEY_CURRENT_APP_STORE_BRANCH = 'current_app_store_branch'
 class AppStoreStatus(BaseModel):
 	current_branch: str
 	commit_id: str
-	last_update: datetime.datetime
+	last_update: Optional[datetime.datetime]
 
 
 def get_store_apps() -> Iterable[StoreApp]:
@@ -71,11 +71,9 @@ def set_app_store_branch(branch_name: str):
 	app_store_status = AppStoreStatus(
 		current_branch=branch.name,
 		commit_id=branch.commit['id'],
-		last_update=datetime.datetime.utcnow()
 	)
 
 	database.set_value(STORE_KEY_CURRENT_APP_STORE_BRANCH, app_store_status.dict())
-	refresh_app_store()
 
 
 def get_app_store_status() -> AppStoreStatus:
@@ -112,6 +110,15 @@ def refresh_app_store():
 				with open(fs_file, 'wb') as f:
 					if data := archive.extractfile(member):
 						f.write(data.read())
+
+	with database.global_db_lock:
+		current_status = get_app_store_status()
+		if current_status.commit_id != ref:
+			log.error(f'Race Condition: commit_id changed from {ref} to {current_status.commit_id}'
+					  f' during app store refresh')
+		else:
+			current_status.last_update = datetime.datetime.utcnow()
+			database.set_value(STORE_KEY_CURRENT_APP_STORE_BRANCH, current_status.dict())
 
 
 @contextlib.contextmanager

@@ -11,6 +11,8 @@ services:
 apps:
   lifecycle:
     refresh_interval: 2
+  app_store:
+    refresh_interval: 3
 
 log:
   levels:

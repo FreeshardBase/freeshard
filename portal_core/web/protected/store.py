@@ -2,6 +2,7 @@ import datetime
 import logging
 from typing import List, Optional
 
+import gconf
 from fastapi import APIRouter, status, HTTPException
 from pydantic import BaseModel
 
@@ -25,6 +26,11 @@ class AppOverview(BaseModel):
 
 @router.get('/apps', response_model=List[StoreApp])
 def get_apps():
+	refresh_interval = gconf.get('apps.app_store.refresh_interval', default=600)
+	refresh_threshold = datetime.datetime.utcnow() - datetime.timedelta(seconds=refresh_interval)
+	current_status = app_store.get_app_store_status()
+	if not current_status.last_update or current_status.last_update < refresh_threshold:
+		app_store.refresh_app_store()
 	return app_store.get_store_apps()
 
 

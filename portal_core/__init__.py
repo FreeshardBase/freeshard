@@ -37,6 +37,7 @@ def create_app():
 	except FileNotFoundError:
 		log.error('Traefik template not found, Traefik config cannot be created')
 
+	app_store.set_app_store_branch('master')
 	app_store.refresh_app_store()
 	init_apps.refresh_init_apps()
 	log.debug('refreshed initial apps')
