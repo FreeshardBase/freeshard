@@ -25,11 +25,11 @@ class AppOverview(BaseModel):
 
 
 @router.get('/apps', response_model=List[StoreApp])
-def get_apps():
+def get_apps(refresh: bool = False):
 	refresh_interval = gconf.get('apps.app_store.refresh_interval', default=600)
 	refresh_threshold = datetime.datetime.utcnow() - datetime.timedelta(seconds=refresh_interval)
 	current_status = app_store.get_app_store_status()
-	if not current_status.last_update or current_status.last_update < refresh_threshold:
+	if not current_status.last_update or current_status.last_update < refresh_threshold or refresh:
 		app_store.refresh_app_store()
 	return app_store.get_store_apps()
 
@@ -59,7 +59,7 @@ def set_store_branch(branch: Optional[StoreBranchIn] = None):
 		app_store.set_app_store_branch(new_branch)
 		app_store.refresh_app_store()
 	except AppStoreRefreshError:
-		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'No branch named {branch.branch}')
 
 
 @router.get('/branch', response_model=AppStoreStatus)
