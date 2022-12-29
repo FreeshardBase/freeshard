@@ -11,11 +11,11 @@ import gconf
 from docker import DockerClient, errors as docker_errors
 from fastapi import APIRouter, status, HTTPException
 from fastapi.responses import Response, StreamingResponse
-from tinydb import where
+from tinydb import where, Query
 
 from portal_core.database.database import apps_table
-from portal_core.model.app import InstallationReason, InstalledApp, App
-from portal_core.service import app_infra
+from portal_core.model.app import InstallationReason, InstalledApp, App, AppToInstall
+from portal_core.service import app_infra, app_store
 
 log = logging.getLogger(__name__)
 
@@ -66,13 +66,24 @@ def get_app_icon(name: str):
 	raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'No icon for app named {name}')
 
 
+@router.get('/{name}/app.json', response_model=App)
+def get_app_json(name: str):
+	with apps_table() as apps:
+		installed_app = apps.get(Query().name == name)
+	if installed_app:
+		return installed_app
+	return app_store.get_store_app(name)
+
+
+
 @router.post('', status_code=status.HTTP_201_CREATED)
 def install_app(input_app: App):
+	app_to_install = AppToInstall(
+		**input_app.dict(),
+		installation_reason=InstallationReason.CUSTOM,
+	)
 	with apps_table() as apps:
-		apps.insert({
-			**input_app.dict(),
-			'reason': InstallationReason.CUSTOM,
-		})
+		apps.insert(app_to_install.dict())
 		app_infra.refresh_app_infra()
 
 

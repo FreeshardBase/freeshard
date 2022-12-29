@@ -1,39 +1,50 @@
+import contextlib
 import io
 import json
 import logging
 import shutil
 import tarfile
+import datetime
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, List, Optional
 
 import gconf
-from gitlab import Gitlab
+from gitlab import Gitlab, GitlabListError
+from gitlab.v4.objects import ProjectBranch
+from pydantic import BaseModel
 from tinydb import where
 
 from portal_core.database.database import apps_table
-from portal_core.model.app import StoreApp, InstallationReason, AppToInstall
+from portal_core.model.app import App, InstallationReason, AppToInstall
 from . import app_infra
+from ..database import database
 
 log = logging.getLogger(__name__)
 
+STORE_KEY_CURRENT_APP_STORE_BRANCH = 'current_app_store_branch'
 
-def get_store_apps() -> Iterable[StoreApp]:
+
+class AppStoreStatus(BaseModel):
+	current_branch: str
+	commit_id: str
+	last_update: Optional[datetime.datetime]
+
+
+def get_store_apps() -> Iterable[App]:
 	sync_dir = Path(gconf.get('path_root')) / 'core' / 'appstore'
 	for app_dir in sync_dir.iterdir():
 		yield get_store_app(app_dir.name)
 
 
-def get_store_app(name) -> StoreApp:
+def get_store_app(name) -> App:
 	sync_dir = Path(gconf.get('path_root')) / 'core' / 'appstore'
 	app_dir = sync_dir / name
 	if not app_dir.exists():
 		raise KeyError(f'no app named {name}')
-	with apps_table() as apps:
-		is_installed = apps.contains(where('name') == name)
 	with open(app_dir / 'app.json') as f:
 		app = json.load(f)
 		assert (a := app['name']) == (d := app_dir.name), f'app with name {a} in directory with name {d}'
-		return StoreApp(is_installed=is_installed, **app)
+		return App.parse_obj(app)
 
 
 def install_store_app(name: str):
@@ -46,12 +57,42 @@ def install_store_app(name: str):
 	app_infra.refresh_app_infra()
 
 
-def refresh_app_store(ref: str = None):
+def set_app_store_branch(branch_name: str):
+	with _get_gitlab_apps_project() as apps_project:
+		available_branches: List[ProjectBranch] = apps_project.branches.list()
+
+	try:
+		branch = next(b for b in available_branches if b.name == branch_name)
+	except StopIteration:
+		raise AppStoreRefreshError(f'Unknown branch: {branch_name}')
+
+	app_store_status = AppStoreStatus(
+		current_branch=branch.name,
+		commit_id=branch.commit['id'],
+	)
+
+	database.set_value(STORE_KEY_CURRENT_APP_STORE_BRANCH, app_store_status.dict())
+
+
+def get_app_store_status() -> AppStoreStatus:
+	return AppStoreStatus.parse_obj(database.get_value(STORE_KEY_CURRENT_APP_STORE_BRANCH))
+
+
+def refresh_app_store():
+	try:
+		ref = get_app_store_status().commit_id
+	except KeyError:
+		ref = 'master'
+
 	log.debug(f'refreshing app store with ref {ref}')
 	fs_sync_dir = Path(gconf.get('path_root')) / 'core' / 'appstore'
 
-	apps_project = Gitlab('https://gitlab.com').projects.get(gconf.get('apps.app_store.project_id'))
-	archive = tarfile.open(fileobj=io.BytesIO(apps_project.repository_archive(sha=ref or 'master')))
+	with _get_gitlab_apps_project() as apps_project:
+		try:
+			archive = tarfile.open(fileobj=io.BytesIO(apps_project.repository_archive(sha=ref)))
+		except GitlabListError as e:
+			log.error(f'Error during refreshing app store with ref {ref}: {e.error_message}')
+			raise AppStoreRefreshError from e
 
 	if fs_sync_dir.exists():
 		shutil.rmtree(fs_sync_dir)
@@ -67,3 +108,22 @@ def refresh_app_store(ref: str = None):
 				with open(fs_file, 'wb') as f:
 					if data := archive.extractfile(member):
 						f.write(data.read())
+
+	with database.global_db_lock:
+		current_status = get_app_store_status()
+		if current_status.commit_id != ref:
+			log.error(f'Race Condition: commit_id changed from {ref} to {current_status.commit_id}'
+					  f' during app store refresh')
+		else:
+			current_status.last_update = datetime.datetime.utcnow()
+			database.set_value(STORE_KEY_CURRENT_APP_STORE_BRANCH, current_status.dict())
+
+
+@contextlib.contextmanager
+def _get_gitlab_apps_project():
+	apps_project = Gitlab('https://gitlab.com').projects.get(gconf.get('apps.app_store.project_id'))
+	yield apps_project
+
+
+class AppStoreRefreshError(Exception):
+	pass
