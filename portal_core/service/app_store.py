@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from tinydb import where
 
 from portal_core.database.database import apps_table
-from portal_core.model.app import StoreApp, InstallationReason, AppToInstall
+from portal_core.model.app import App, InstallationReason, AppToInstall
 from . import app_infra
 from ..database import database
 
@@ -30,23 +30,21 @@ class AppStoreStatus(BaseModel):
 	last_update: Optional[datetime.datetime]
 
 
-def get_store_apps() -> Iterable[StoreApp]:
+def get_store_apps() -> Iterable[App]:
 	sync_dir = Path(gconf.get('path_root')) / 'core' / 'appstore'
 	for app_dir in sync_dir.iterdir():
 		yield get_store_app(app_dir.name)
 
 
-def get_store_app(name) -> StoreApp:
+def get_store_app(name) -> App:
 	sync_dir = Path(gconf.get('path_root')) / 'core' / 'appstore'
 	app_dir = sync_dir / name
 	if not app_dir.exists():
 		raise KeyError(f'no app named {name}')
-	with apps_table() as apps:
-		is_installed = apps.contains(where('name') == name)
 	with open(app_dir / 'app.json') as f:
 		app = json.load(f)
 		assert (a := app['name']) == (d := app_dir.name), f'app with name {a} in directory with name {d}'
-		return StoreApp(is_installed=is_installed, **app)
+		return App.parse_obj(app)
 
 
 def install_store_app(name: str):

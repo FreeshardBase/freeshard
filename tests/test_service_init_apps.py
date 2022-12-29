@@ -2,15 +2,15 @@ import gconf
 
 from portal_core import database
 from portal_core.database.database import apps_table
-from portal_core.model.app import InstallationReason, StoreApp
+from portal_core.model.app import InstallationReason, App
 from portal_core.service import init_apps, app_store, app_infra
 
 init_app_conf = {'apps': {'initial_apps': ['app-foo', 'app-bar']}}
 
 
 def test_add_init_app(init_db, monkeypatch):
-	def mp_get_store_app(name) -> StoreApp:
-		return StoreApp(**{
+	def mp_get_store_app(name) -> App:
+		return App(**{
 			'name': name,
 			'description': f'this is {name}',
 			'image': f'image-{name}',
@@ -21,7 +21,6 @@ def test_add_init_app(init_db, monkeypatch):
 				'private_paths': None,
 				'public_paths': ['/pub']
 			},
-			'is_installed': False
 		})
 
 	monkeypatch.setattr(app_store, 'get_store_app', mp_get_store_app)

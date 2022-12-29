@@ -6,7 +6,7 @@ import gconf
 from fastapi import APIRouter, status, HTTPException
 from pydantic import BaseModel
 
-from portal_core.model.app import StoreApp
+from portal_core.model.app import App
 from portal_core.service import app_store
 from portal_core.service.app_store import AppStoreRefreshError, AppStoreStatus
 
@@ -24,7 +24,7 @@ class AppOverview(BaseModel):
 	is_installed: bool
 
 
-@router.get('/apps', response_model=List[StoreApp])
+@router.get('/apps', response_model=List[App])
 def get_apps(refresh: bool = False):
 	refresh_interval = gconf.get('apps.app_store.refresh_interval', default=600)
 	refresh_threshold = datetime.datetime.utcnow() - datetime.timedelta(seconds=refresh_interval)
@@ -32,11 +32,6 @@ def get_apps(refresh: bool = False):
 	if not current_status.last_update or current_status.last_update < refresh_threshold or refresh:
 		app_store.refresh_app_store()
 	return app_store.get_store_apps()
-
-
-@router.get('/apps/{name}', response_model=StoreApp)
-def get_app_details(name: str):
-	return app_store.get_store_app(name)
 
 
 @router.post('/apps/{name}', status_code=status.HTTP_201_CREATED)
