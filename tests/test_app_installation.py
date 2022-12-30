@@ -1,3 +1,4 @@
+import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
@@ -41,3 +42,11 @@ def test_install_from_store(api_client):
 
 	installed_apps = api_client.get('protected/apps').json()
 	assert any(a['name'] == 'app-template-python' for a in installed_apps)
+
+
+def test_install_twice(api_client):
+	app_store.refresh_app_store()
+	app_store.install_store_app('app-template-python')
+	with pytest.raises(app_store.AppAlreadyInstalled):
+		app_store.install_store_app('app-template-python')
+

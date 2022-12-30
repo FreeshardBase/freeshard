@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from portal_core.model.app import App
 from portal_core.service import app_store
-from portal_core.service.app_store import AppStoreRefreshError, AppStoreStatus
+from portal_core.service.app_store import AppStoreRefreshError, AppStoreStatus, AppAlreadyInstalled
 
 log = logging.getLogger(__name__)
 
@@ -36,7 +36,10 @@ def get_apps(refresh: bool = False):
 
 @router.post('/apps/{name}', status_code=status.HTTP_201_CREATED)
 def install_app(name: str):
-	app_store.install_store_app(name)
+	try:
+		app_store.install_store_app(name)
+	except AppAlreadyInstalled:
+		raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f'App {name} is already installed')
 
 
 class StoreBranchIn(BaseModel):
