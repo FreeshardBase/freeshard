@@ -52,7 +52,7 @@ def test_edit(api_client):
 	assert Terminal(**response.json()).icon == response_terminal.icon
 
 
-def test_pairing_happy(api_client):
+def test_pairing_happy(api_client, management_api_mock):
 	t_name = 'T1'
 	pair_new_terminal(api_client, t_name)
 
@@ -75,6 +75,13 @@ def test_pairing_happy(api_client):
 	assert response.json()['type'] == 'terminal'
 	assert response.json()['id'] == terminal_id
 	assert response.json()['name'] == t_name
+
+	# has the default identity been update from the profile?
+	assert len(management_api_mock.calls) == 1
+	response = api_client.get('protected/identities/default')
+	assert response.status_code == status.HTTP_200_OK
+	assert response.json()['name'] == 'test owner'
+	assert response.json()['email'] == 'testowner@foobar.com'
 
 
 def test_pairing_two(api_client):

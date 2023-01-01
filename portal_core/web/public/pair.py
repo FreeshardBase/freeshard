@@ -8,6 +8,7 @@ from portal_core.database.database import terminals_table, identities_table
 from portal_core.model.identity import Identity
 from portal_core.model.terminal import Terminal, InputTerminal
 from portal_core.service import pairing
+from portal_core.util.signals import on_first_terminal_add
 
 log = logging.getLogger(__name__)
 
@@ -31,6 +32,8 @@ def add_terminal(code: str, terminal: InputTerminal, response: Response):
 	new_terminal = Terminal.create(terminal.name)
 	with terminals_table() as terminals:  # type: Table
 		terminals.insert(new_terminal.dict())
+		if terminals.count(Query().noop()) == 1:
+			on_first_terminal_add.send(new_terminal)
 
 	with identities_table() as identities:  # type: Table
 		default_identity = Identity(**identities.get(Query().is_default == True))

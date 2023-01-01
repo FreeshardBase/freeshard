@@ -87,6 +87,7 @@ def management_api_mock():
 	mock_profile = Profile(
 		vm_id='portal_foobar',
 		owner='test owner',
+		owner_email='testowner@foobar.com',
 		time_created=datetime.now() - timedelta(days=2),
 		time_assigned=datetime.now() - timedelta(days=1),
 	)

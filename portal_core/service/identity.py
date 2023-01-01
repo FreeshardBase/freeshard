@@ -9,6 +9,7 @@ from portal_core.database.database import identities_table
 from portal_core.model.identity import Identity
 from portal_core.model.profile import Profile
 from portal_core.service.signed_call import signed_request
+from portal_core.util.signals import on_first_terminal_add
 
 log = logging.getLogger(__name__)
 
@@ -45,14 +46,15 @@ def get_default_identity() -> Identity:
 		return Identity(**identities.get(Query().is_default == True))
 
 
-def enrich_identity_from_profile():
-	# todo: remove if no longer needed
+@on_first_terminal_add.connect
+def enrich_identity_from_profile(_):
 	api_url = gconf.get('management.api_url')
 	url = f'{api_url}/profile'
 	response = signed_request('GET', url)
 	try:
 		response.raise_for_status()
-	except HTTPError:
+	except HTTPError as e:
+		log.error(f'Could not enrich default identity from profile because profile could not be obtained: {e}')
 		return
 	profile = Profile(**response.json())
 
