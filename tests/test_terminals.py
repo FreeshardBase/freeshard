@@ -94,6 +94,15 @@ def test_pairing_two(api_client):
 	assert len(response.json()) == 2
 
 
+def test_pairing_two_with_same_name(api_client):
+	t1_name = 'T1'
+	pair_new_terminal(api_client, t1_name)
+	pair_new_terminal(api_client, t1_name)
+
+	response = api_client.get('protected/terminals')
+	assert len(response.json()) == 2
+
+
 def test_pairing_no_code(api_client):
 	response = add_terminal(api_client, 'somecode', 'T1')
 	assert response.status_code == 401
@@ -122,16 +131,6 @@ def test_pairing_expired_code(api_client):
 
 	response = api_client.get('protected/terminals')
 	assert len(response.json()) == 0
-
-
-def test_pairing_conflict(api_client):
-	t_name = 'T1'
-	pair_new_terminal(api_client, t_name)
-	response = pair_new_terminal(api_client, t_name, assert_success=False)
-	assert response.status_code == 409
-
-	response = api_client.get('protected/terminals')
-	assert len(response.json()) == 1
 
 
 def test_authorization_missing_header(api_client):

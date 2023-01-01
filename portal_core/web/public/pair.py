@@ -19,10 +19,6 @@ router = APIRouter(
 
 @router.post('/terminal', status_code=status.HTTP_201_CREATED)
 def add_terminal(code: str, terminal: InputTerminal, response: Response):
-	with terminals_table() as terminals:  # type: Table
-		if terminals.get(Query().name == terminal.name):
-			raise HTTPException(status.HTTP_409_CONFLICT)
-
 	try:
 		pairing.redeem_pairing_code(code)
 	except (KeyError, pairing.InvalidPairingCode, pairing.PairingCodeExpired) as e:
