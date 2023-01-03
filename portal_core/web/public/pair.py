@@ -28,8 +28,9 @@ def add_terminal(code: str, terminal: InputTerminal, response: Response):
 	new_terminal = Terminal.create(terminal.name)
 	with terminals_table() as terminals:  # type: Table
 		terminals.insert(new_terminal.dict())
-		if terminals.count(Query().noop()) == 1:
-			on_first_terminal_add.send(new_terminal)
+		is_first_terminal = terminals.count(Query().noop()) == 1
+	if is_first_terminal:
+		on_first_terminal_add.send(new_terminal)
 
 	with identities_table() as identities:  # type: Table
 		default_identity = Identity(**identities.get(Query().is_default == True))
