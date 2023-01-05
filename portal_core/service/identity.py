@@ -17,7 +17,9 @@ log = logging.getLogger(__name__)
 def init_default_identity():
 	with identities_table() as identities:
 		if len(identities) == 0:
-			default_identity = Identity.create('default_identity', 'created at first startup')
+			default_identity = Identity.create(
+				'Portal Owner',
+				'\"Noone wants to manage their own server\"\n\nOld outdated saying')
 			default_identity.is_default = True
 			identities.insert(
 				default_identity.dict()
