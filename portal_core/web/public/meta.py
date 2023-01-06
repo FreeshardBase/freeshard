@@ -1,14 +1,11 @@
 import logging
 
-import gconf
 from fastapi import APIRouter, Cookie
 from pydantic import BaseModel
 
-from portal_core.model.identity import OutputIdentity
-from portal_core.model.profile import Profile
-from portal_core.service import pairing, identity
-from portal_core.service.signed_call import signed_request
 from portal_core.model.auth import AuthState
+from portal_core.model.identity import OutputIdentity
+from portal_core.service import pairing, identity
 
 log = logging.getLogger(__name__)
 
@@ -48,14 +45,3 @@ def who_am_i(authorization: str = Cookie(None)):
 			id=terminal.id,
 			name=terminal.name,
 		)
-
-
-@router.get('/profile', response_model=Profile)
-def profile():
-	api_url = gconf.get('management.api_url')
-	url = f'{api_url}/profile'
-	log.debug(f'Getting profile from {url}')
-	response = signed_request('GET', url)
-	log.debug(f'profile response status: {response.status_code}')
-	response.raise_for_status()
-	return Profile(**response.json())

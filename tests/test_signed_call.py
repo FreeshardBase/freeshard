@@ -11,7 +11,7 @@ from tests.util import verify_signature_auth
 def test_call_management_api_verified(management_api_mock, api_client):
 	portal_identity = OutputIdentity(**api_client.get('public/meta/whoareyou').json())
 	pubkey = PublicKey(portal_identity.public_key_pem)
-	profile_response = api_client.get('public/meta/profile')
+	profile_response = api_client.get('protected/management/profile')
 	profile_response.raise_for_status()
 	assert Profile.parse_obj(profile_response.json()) == conftest.mock_profile
 
@@ -20,7 +20,7 @@ def test_call_management_api_verified(management_api_mock, api_client):
 
 
 def test_call_management_api_fail_verify(management_api_mock, api_client):
-	profile_response = api_client.get('public/meta/profile')
+	profile_response = api_client.get('protected/management/profile')
 	profile_response.raise_for_status()
 	assert Profile.parse_obj(profile_response.json()) == conftest.mock_profile
 
