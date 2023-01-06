@@ -3,3 +3,6 @@ path_root: "run/"
 log:
   levels:
     portal_core: debug
+
+management:
+  api_url: http://localhost:8090
