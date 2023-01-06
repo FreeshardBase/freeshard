@@ -1,5 +1,6 @@
 import os
 import re
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -90,17 +91,23 @@ mock_profile = Profile(
 )
 
 
-@pytest.fixture
-def management_api_mock():
+@contextmanager
+def management_api_mock_context(profile: Profile = None):
 	management_api = 'https://management-mock'
 	config_override = {'management': {'api_url': management_api}}
 	with responses.RequestsMock() as rsps, gconf.override_conf(config_override):
 		rsps.get(
 			f'{management_api}/profile',
-			body=mock_profile.json(),
+			body=(profile or mock_profile).json(),
 		)
 		rsps.add_passthru('')
 		yield rsps
+
+
+@pytest.fixture
+def management_api_mock():
+	with management_api_mock_context() as c:
+		yield c
 
 
 @pytest.fixture

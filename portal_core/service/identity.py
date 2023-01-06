@@ -61,7 +61,12 @@ def enrich_identity_from_profile(_):
 	profile = Profile(**response.json())
 
 	with identities_table() as identities:  # type: Table
-		identities.update({
-			'name': profile.owner,
-			'email': profile.owner_email,
-		}, Query().is_default == True)
+		if profile.owner:
+			identities.update({
+				'name': profile.owner,
+			}, Query().is_default == True)
+		if profile.owner_email:
+			identities.update({
+				'email': profile.owner_email,
+			}, Query().is_default == True)
+
