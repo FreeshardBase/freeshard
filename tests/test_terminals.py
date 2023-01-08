@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from time import sleep
 
 from starlette import status
@@ -6,8 +7,10 @@ from tinydb.table import Table
 
 from portal_core.database.database import apps_table, terminals_table
 from portal_core.model.app import AppToInstall, InstallationReason
+from portal_core.model.profile import Profile
 from portal_core.model.terminal import Terminal, Icon
 from portal_core.service import app_infra
+from tests.conftest import management_api_mock_context
 from tests.util import get_pairing_code, add_terminal, WAITING_DOCKER_IMAGE, create_apps_from_docker_compose, \
 	pair_new_terminal
 
@@ -52,7 +55,7 @@ def test_edit(api_client):
 	assert Terminal(**response.json()).icon == response_terminal.icon
 
 
-def test_pairing_happy(api_client):
+def test_pairing_happy(api_client, management_api_mock):
 	t_name = 'T1'
 	pair_new_terminal(api_client, t_name)
 
@@ -76,12 +79,28 @@ def test_pairing_happy(api_client):
 	assert response.json()['id'] == terminal_id
 	assert response.json()['name'] == t_name
 
+	# has the default identity been update from the profile?
+	assert len(management_api_mock.calls) == 1
+	response = api_client.get('protected/identities/default')
+	assert response.status_code == status.HTTP_200_OK
+	assert response.json()['name'] == 'test owner'
+	assert response.json()['email'] == 'testowner@foobar.com'
+
 
 def test_pairing_two(api_client):
 	t1_name = 'T1'
 	t2_name = 'T2'
 	pair_new_terminal(api_client, t1_name)
 	pair_new_terminal(api_client, t2_name)
+
+	response = api_client.get('protected/terminals')
+	assert len(response.json()) == 2
+
+
+def test_pairing_two_with_same_name(api_client):
+	t1_name = 'T1'
+	pair_new_terminal(api_client, t1_name)
+	pair_new_terminal(api_client, t1_name)
 
 	response = api_client.get('protected/terminals')
 	assert len(response.json()) == 2
@@ -115,16 +134,6 @@ def test_pairing_expired_code(api_client):
 
 	response = api_client.get('protected/terminals')
 	assert len(response.json()) == 0
-
-
-def test_pairing_conflict(api_client):
-	t_name = 'T1'
-	pair_new_terminal(api_client, t_name)
-	response = pair_new_terminal(api_client, t_name, assert_success=False)
-	assert response.status_code == 409
-
-	response = api_client.get('protected/terminals')
-	assert len(response.json()) == 1
 
 
 def test_authorization_missing_header(api_client):
@@ -205,3 +214,39 @@ def test_last_connection(api_client):
 	print(last_connection_2)
 	print(last_connection_3)
 	assert last_connection_0 < last_connection_1 == last_connection_2 < last_connection_3
+
+
+def test_pairing_with_profile_missing_owner(api_client):
+	mock_profile = Profile(
+		vm_id='portal_foobar',
+		owner_email='testowner@foobar.com',
+		portal_size='xs',
+		time_created=datetime.now() - timedelta(days=2),
+		time_assigned=datetime.now() - timedelta(days=1),
+	)
+	with management_api_mock_context(mock_profile):
+		t_name = 'T1'
+		pair_new_terminal(api_client, t_name)
+
+		response = api_client.get('protected/identities/default')
+		assert response.status_code == status.HTTP_200_OK
+		assert response.json()['name'] == 'Portal Owner'
+		assert response.json()['email'] == 'testowner@foobar.com'
+
+
+def test_pairing_with_profile_missing_email(api_client):
+	mock_profile = Profile(
+		vm_id='portal_foobar',
+		owner='test owner',
+		portal_size='xs',
+		time_created=datetime.now() - timedelta(days=2),
+		time_assigned=datetime.now() - timedelta(days=1),
+	)
+	with management_api_mock_context(mock_profile):
+		t_name = 'T1'
+		pair_new_terminal(api_client, t_name)
+
+		response = api_client.get('protected/identities/default')
+		assert response.status_code == status.HTTP_200_OK
+		assert response.json()['name'] == 'test owner'
+		assert response.json()['email'] is None

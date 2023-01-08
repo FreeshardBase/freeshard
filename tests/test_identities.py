@@ -52,7 +52,7 @@ def test_update(api_client):
 	response = api_client.get('protected/identities')
 	assert len(response.json()) == 1
 	assert response.json()[0]['email'] == 'hello@getportal.org'
-	assert response.json()[0]['name'] == 'default_identity'
+	assert response.json()[0]['name'] == 'Portal Owner'
 
 
 def test_make_default(api_client):

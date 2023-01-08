@@ -1,5 +1,6 @@
 import os
 import re
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -80,23 +81,33 @@ def postgres(request):
 	return postgres_conn_string
 
 
-@pytest.fixture
-def management_api_mock():
+mock_profile = Profile(
+	vm_id='portal_foobar',
+	owner='test owner',
+	owner_email='testowner@foobar.com',
+	time_created=datetime.now() - timedelta(days=2),
+	time_assigned=datetime.now() - timedelta(days=1),
+	portal_size='xs',
+)
+
+
+@contextmanager
+def management_api_mock_context(profile: Profile = None):
 	management_api = 'https://management-mock'
 	config_override = {'management': {'api_url': management_api}}
-	mock_profile = Profile(
-		vm_id='portal_foobar',
-		owner='test owner',
-		time_created=datetime.now() - timedelta(days=2),
-		time_assigned=datetime.now() - timedelta(days=1),
-	)
 	with responses.RequestsMock() as rsps, gconf.override_conf(config_override):
 		rsps.get(
 			f'{management_api}/profile',
-			body=mock_profile.json(),
+			body=(profile or mock_profile).json(),
 		)
 		rsps.add_passthru('')
 		yield rsps
+
+
+@pytest.fixture
+def management_api_mock():
+	with management_api_mock_context() as c:
+		yield c
 
 
 @pytest.fixture
