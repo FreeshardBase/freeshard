@@ -12,7 +12,8 @@ import gconf
 from gitlab import Gitlab, GitlabListError
 from gitlab.v4.objects import ProjectBranch
 from pydantic import BaseModel
-from tinydb import where
+from tinydb import Query
+from tinydb.table import Table
 
 from portal_core.database.database import apps_table
 from portal_core.model.app import App, InstallationReason, AppToInstall
@@ -49,12 +50,18 @@ def get_store_app(name) -> App:
 
 def install_store_app(name: str):
 	app = get_store_app(name)
-	with apps_table() as apps:
+	with apps_table() as apps:  # type: Table
+		if apps.contains(Query().name == name):
+			raise AppAlreadyInstalled(name)
 		apps.insert(AppToInstall(
 			**app.dict(),
 			installation_reason=InstallationReason.STORE,
 		).dict())
 	app_infra.refresh_app_infra()
+
+
+class AppAlreadyInstalled(Exception):
+	pass
 
 
 def set_app_store_branch(branch_name: str):
