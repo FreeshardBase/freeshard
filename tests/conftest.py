@@ -1,3 +1,4 @@
+import json
 import os
 import re
 from contextlib import contextmanager
@@ -12,6 +13,7 @@ import pytest
 import responses
 from fastapi.testclient import TestClient
 from psycopg.conninfo import make_conninfo
+from requests import PreparedRequest
 from responses import RequestsMock
 
 import portal_core
@@ -19,6 +21,7 @@ from portal_core import Identity
 from portal_core.model.identity import OutputIdentity
 from portal_core.model.profile import Profile
 from portal_core.web.internal.call_peer import _get_app_for_ip_address
+from portal_core.web.protected.management import PortalConfig
 
 
 @pytest.fixture(autouse=True)
@@ -95,13 +98,26 @@ mock_profile = Profile(
 def management_api_mock_context(profile: Profile = None):
 	management_api = 'https://management-mock'
 	config_override = {'management': {'api_url': management_api}}
-	with responses.RequestsMock() as rsps, gconf.override_conf(config_override):
+	with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps, gconf.override_conf(config_override):
 		rsps.get(
 			f'{management_api}/profile',
 			body=(profile or mock_profile).json(),
 		)
+		rsps.add_callback(
+			responses.PUT,
+			f'{management_api}/config',
+			callback=management_api_mock_config,
+		)
 		rsps.add_passthru('')
 		yield rsps
+
+
+def management_api_mock_config(request: PreparedRequest):
+	config = PortalConfig.parse_obj(json.loads(request.body))
+	if config.size and config.size in ['l', 'xl']:
+		return 409, {}, ''
+	else:
+		return 204, {}, ''
 
 
 @pytest.fixture
