@@ -25,4 +25,5 @@ def get_profile():
 		time_assigned=datetime.now() - timedelta(minutes=5),
 		delete_after=datetime.now() + timedelta(days=4),
 		portal_size='xs',
+		max_portal_size='m',
 	)

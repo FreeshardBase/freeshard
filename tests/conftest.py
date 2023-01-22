@@ -91,6 +91,7 @@ mock_profile = Profile(
 	time_created=datetime.now() - timedelta(days=2),
 	time_assigned=datetime.now() - timedelta(days=1),
 	portal_size='xs',
+	max_portal_size='m',
 )
 
 
