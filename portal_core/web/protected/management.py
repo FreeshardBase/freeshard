@@ -1,12 +1,10 @@
 import logging
-from typing import Optional
 
 import gconf
-from fastapi import APIRouter, Response
-from pydantic import BaseModel
+from fastapi import APIRouter, Response, Request
 
 from portal_core import signed_request
-from portal_core.model.profile import Profile
+from portal_core.web.util import ALL_HTTP_METHODS
 
 log = logging.getLogger(__name__)
 
@@ -15,25 +13,12 @@ router = APIRouter(
 )
 
 
-@router.get('/profile', response_model=Profile)
-def profile():
+@router.api_route('/{rest:path}', methods=ALL_HTTP_METHODS)
+async def call_management(rest: str, request: Request):
 	api_url = gconf.get('management.api_url')
-	url = f'{api_url}/profile'
-	log.debug(f'Getting profile from {url}')
-	response = signed_request('GET', url)
-	log.debug(f'profile response status: {response.status_code}')
-	response.raise_for_status()
-	return Profile(**response.json())
+	url = f'{api_url}/{rest}'
+	log.debug(f'call to {request.method} {url}')
 
-
-class PortalConfig(BaseModel):
-	size: Optional[str]
-
-
-@router.put('/config')
-def put_config(config: PortalConfig):
-	api_url = gconf.get('management.api_url')
-	url = f'{api_url}/config'
-	log.debug(f'Setting config to {config.json(indent=2)}')
-	response = signed_request('PUT', url, json=config.dict())
-	return Response(status_code=response.status_code)
+	body = await request.body()
+	response = signed_request(request.method, url, data=body)
+	return Response(status_code=response.status_code, content=response.content)

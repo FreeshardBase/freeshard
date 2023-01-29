@@ -27,3 +27,8 @@ def get_profile():
 		portal_size='xs',
 		max_portal_size='m',
 	)
+
+
+@app.post('/resize')
+def resize():
+	return 204

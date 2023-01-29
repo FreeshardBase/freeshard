@@ -21,7 +21,6 @@ from portal_core import Identity
 from portal_core.model.identity import OutputIdentity
 from portal_core.model.profile import Profile
 from portal_core.web.internal.call_peer import _get_app_for_ip_address
-from portal_core.web.protected.management import PortalConfig
 
 
 @pytest.fixture(autouse=True)
@@ -106,16 +105,16 @@ def management_api_mock_context(profile: Profile = None):
 		)
 		rsps.add_callback(
 			responses.PUT,
-			f'{management_api}/config',
-			callback=management_api_mock_config,
+			f'{management_api}/resize',
+			callback=management_api_mock_resize,
 		)
 		rsps.add_passthru('')
 		yield rsps
 
 
-def management_api_mock_config(request: PreparedRequest):
-	config = PortalConfig.parse_obj(json.loads(request.body))
-	if config.size and config.size in ['l', 'xl']:
+def management_api_mock_resize(request: PreparedRequest):
+	data = json.loads(request.body)
+	if data['size'] in ['l', 'xl']:
 		return 409, {}, ''
 	else:
 		return 204, {}, ''
