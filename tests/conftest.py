@@ -1,3 +1,4 @@
+import json
 import os
 import re
 from contextlib import contextmanager
@@ -12,6 +13,7 @@ import pytest
 import responses
 from fastapi.testclient import TestClient
 from psycopg.conninfo import make_conninfo
+from requests import PreparedRequest
 from responses import RequestsMock
 
 import portal_core
@@ -88,6 +90,7 @@ mock_profile = Profile(
 	time_created=datetime.now() - timedelta(days=2),
 	time_assigned=datetime.now() - timedelta(days=1),
 	portal_size='xs',
+	max_portal_size='m',
 )
 
 
@@ -95,13 +98,26 @@ mock_profile = Profile(
 def management_api_mock_context(profile: Profile = None):
 	management_api = 'https://management-mock'
 	config_override = {'management': {'api_url': management_api}}
-	with responses.RequestsMock() as rsps, gconf.override_conf(config_override):
+	with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps, gconf.override_conf(config_override):
 		rsps.get(
 			f'{management_api}/profile',
 			body=(profile or mock_profile).json(),
 		)
+		rsps.add_callback(
+			responses.PUT,
+			f'{management_api}/resize',
+			callback=management_api_mock_resize,
+		)
 		rsps.add_passthru('')
 		yield rsps
+
+
+def management_api_mock_resize(request: PreparedRequest):
+	data = json.loads(request.body)
+	if data['size'] in ['l', 'xl']:
+		return 409, {}, ''
+	else:
+		return 204, {}, ''
 
 
 @pytest.fixture
