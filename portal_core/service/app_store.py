@@ -87,10 +87,13 @@ def get_app_store_status() -> AppStoreStatus:
 
 def refresh_app_store():
 	try:
-		ref = get_app_store_status().commit_id
+		app_store_status = get_app_store_status()
 	except KeyError:
-		ref = 'master'
+		set_app_store_branch('master')
+	else:
+		set_app_store_branch(app_store_status.current_branch)
 
+	ref = get_app_store_status().commit_id
 	log.debug(f'refreshing app store with ref {ref}')
 	fs_sync_dir = Path(gconf.get('path_root')) / 'core' / 'appstore'
 
