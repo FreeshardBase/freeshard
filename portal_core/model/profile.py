@@ -12,3 +12,4 @@ class Profile(BaseModel):
 	time_assigned: datetime
 	delete_after: Optional[datetime]
 	portal_size: str
+	max_portal_size: Optional[str]

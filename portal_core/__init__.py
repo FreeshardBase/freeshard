@@ -83,6 +83,7 @@ def configure_logging():
 	for module, level in gconf.get('log.levels').items():  # type: str, str
 		logger = logging.getLogger() if module == 'root' else logging.getLogger(module)
 		logger.setLevel(getattr(logging, level.upper()))
+		log.info(f'set logger for {module} to {level.upper()}')
 
 
 def _render_traefik_config(id_: Identity):
