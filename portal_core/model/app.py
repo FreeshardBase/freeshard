@@ -35,6 +35,8 @@ class SharedDir(str, Enum):
 	DOCUMENTS = 'documents'
 	MEDIA = 'media'
 	MUSIC = 'music'
+	APP_DATA = 'app_data'
+	SERVICE_DATA = 'service_data'
 
 
 class EntrypointPort(str, Enum):
