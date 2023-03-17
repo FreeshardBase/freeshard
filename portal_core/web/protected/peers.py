@@ -3,7 +3,6 @@ from typing import List
 
 from fastapi import APIRouter, HTTPException, status
 from tinydb import Query
-from tinydb.table import Table
 
 import portal_core.service.peer as peer_service
 from portal_core.database.database import peers_table

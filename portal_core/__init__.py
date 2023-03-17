@@ -9,11 +9,9 @@ import jinja2
 from fastapi import FastAPI, Request, Response
 
 from portal_core.database import database, migration
-from .database.database import identities_table
 from .model.identity import Identity
 from .service import app_store, init_apps, app_infra, identity, app_lifecycle
 from .service.peer import update_all_peer_pubkeys
-from .service.signed_call import signed_request
 from .util.background_task import BackgroundTaskHandler
 from .web import internal, public, protected
 

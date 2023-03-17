@@ -3,7 +3,6 @@ import logging
 import gconf
 from requests import HTTPError
 from tinydb import Query
-from tinydb.table import Table
 
 from portal_core.database.database import identities_table
 from portal_core.model.identity import Identity
@@ -26,13 +25,13 @@ def init_default_identity():
 			)
 			log.info(f'created initial default identity {default_identity.id}')
 		else:
-			default_identity = Identity(**identities.get(Query().is_default == True))
+			default_identity = Identity(**identities.get(Query().is_default == True))  # noqa: E712
 		return default_identity
 
 
 def make_default(id):
 	with identities_table() as identities:  # type: Table
-		last_default = Identity(**identities.get(Query().is_default == True))
+		last_default = Identity(**identities.get(Query().is_default == True))  # noqa: E712
 		if new_default := Identity(**identities.get(Query().id == id)):
 			last_default.is_default = False
 			new_default.is_default = True
@@ -45,7 +44,7 @@ def make_default(id):
 
 def get_default_identity() -> Identity:
 	with identities_table() as identities:
-		return Identity(**identities.get(Query().is_default == True))
+		return Identity(**identities.get(Query().is_default == True))  # noqa: E712
 
 
 @on_first_terminal_add.connect
@@ -64,9 +63,9 @@ def enrich_identity_from_profile(_):
 		if profile.owner:
 			identities.update({
 				'name': profile.owner,
-			}, Query().is_default == True)
+			}, Query().is_default == True)  # noqa: E712
 		if profile.owner_email:
 			identities.update({
 				'email': profile.owner_email,
-			}, Query().is_default == True)
+			}, Query().is_default == True)  # noqa: E712
 

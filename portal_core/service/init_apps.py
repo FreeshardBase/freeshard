@@ -1,5 +1,4 @@
 import gconf
-from tinydb.table import Table
 
 from portal_core.database.database import apps_table
 from portal_core.model.app import InstallationReason, InstalledApp, AppToInstall

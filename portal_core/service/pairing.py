@@ -8,7 +8,6 @@ import gconf
 import jwt
 from pydantic import BaseModel
 from tinydb import Query
-from tinydb.table import Table
 
 from portal_core import database
 from portal_core.database.database import terminals_table

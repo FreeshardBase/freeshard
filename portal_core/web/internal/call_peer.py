@@ -7,7 +7,7 @@ from docker.models.containers import Container
 from fastapi import APIRouter, Request
 from starlette.responses import StreamingResponse
 
-from portal_core import signed_request
+from portal_core.service.signed_call import signed_request
 from portal_core.web.util import ALL_HTTP_METHODS
 
 log = logging.getLogger(__name__)

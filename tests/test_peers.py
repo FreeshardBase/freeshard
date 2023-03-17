@@ -1,4 +1,3 @@
-from common_py.util import retry
 from starlette import status
 
 from portal_core.model.peer import Peer

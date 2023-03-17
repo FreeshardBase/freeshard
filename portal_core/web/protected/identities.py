@@ -4,7 +4,6 @@ from typing import List
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import Response
 from tinydb import Query
-from tinydb.table import Table
 
 from portal_core.database.database import identities_table
 from portal_core.model.identity import Identity, OutputIdentity, InputIdentity
@@ -29,7 +28,7 @@ def list_all_identities(name: str = None):
 @router.get('/default', response_model=OutputIdentity)
 def get_default_identity():
 	with identities_table() as identities:
-		return identities.get(Query().is_default == True)
+		return identities.get(Query().is_default == True)  # noqa: E712
 
 
 @router.get('/{id}', response_model=OutputIdentity)

@@ -1,5 +1,4 @@
 from tinydb import Query
-from tinydb.table import Table
 
 from portal_core.database import migration, database
 

@@ -4,7 +4,7 @@ import gconf
 from fastapi import APIRouter, status, Response
 from pydantic import BaseModel
 
-from portal_core import signed_request
+from portal_core.service.signed_call import signed_request
 
 log = logging.getLogger(__name__)
 

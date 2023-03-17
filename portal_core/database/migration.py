@@ -1,6 +1,5 @@
 import logging
 
-from tinydb.table import Table
 
 from . import database
 from ..model.app import InstalledApp, CURRENT_VERSION
