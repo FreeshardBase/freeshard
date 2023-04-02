@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+from contextlib import asynccontextmanager
 from importlib.metadata import metadata
 from pathlib import Path
 
@@ -12,7 +13,7 @@ from portal_core.database import database, migration
 from .model.identity import Identity
 from .service import app_store, init_apps, app_infra, identity, app_lifecycle
 from .service.peer import update_all_peer_pubkeys
-from .util.background_task import BackgroundTaskHandler
+from .util.async_util import Periodic
 from .web import internal, public, protected
 
 log = logging.getLogger(__name__)
@@ -43,11 +44,20 @@ def create_app():
 	app_infra.refresh_app_infra()
 	log.debug('written app infra files (docker-compose and traefik)')
 
-	bg_tasks = BackgroundTaskHandler([
-		(app_lifecycle.control_apps, gconf.get('apps.lifecycle.refresh_interval')),
-		(update_all_peer_pubkeys, 60),
-	])
-	bg_tasks.start()
+	@asynccontextmanager
+	async def lifespan(app: FastAPI):
+		log.debug('lifespan')
+		background_tasks = [
+			Periodic(app_lifecycle.control_apps, delay=gconf.get('apps.lifecycle.refresh_interval')),
+			Periodic(update_all_peer_pubkeys, delay=60),
+		]
+		for t in background_tasks:
+			t.start()
+		yield
+		for t in background_tasks:
+			t.stop()
+		for t in background_tasks:
+			await t.wait()
 
 	app_meta = metadata('portal_core')
 	app = FastAPI(
@@ -55,6 +65,7 @@ def create_app():
 		description=app_meta['summary'],
 		version=app_meta['version'],
 		redoc_url='/redoc',
+		lifespan=lifespan,
 	)
 	app.include_router(internal.router)
 	app.include_router(public.router)
@@ -66,10 +77,6 @@ def create_app():
 			response: Response = await call_next(request)
 			await _log_request_and_response(request, response)
 			return response
-
-	@app.on_event('shutdown')
-	def shutdown_event():
-		bg_tasks.stop().wait()
 
 	return app
 

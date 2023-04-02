@@ -52,7 +52,8 @@ def api_client(init_db) -> TestClient:
 	# Cookies are scoped for the domain, so we have to configure the TestClient with it.
 	# This way, the TestClient remembers cookies
 	whoareyou = TestClient(app).get('public/meta/whoareyou').json()
-	yield TestClient(app, base_url=f'https://{whoareyou["domain"]}')
+	with TestClient(app, base_url=f'https://{whoareyou["domain"]}') as client:
+		yield client
 
 
 @pytest.fixture(scope='session')
