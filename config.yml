@@ -26,6 +26,9 @@ apps:
     - filebrowser
   last_access:
     max_update_frequency: 60
+  usage_reporting:
+    tracking_schedule: '0 2 * * *'
+    reporting_schedule: '0 3 1 * *'
 
 management:
   api_url: https://ptlfunctionapp.azurewebsites.net/api/management
