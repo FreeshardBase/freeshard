@@ -24,6 +24,8 @@ apps:
     refresh_interval: 10
   initial_apps:
     - filebrowser
+  last_access:
+    max_update_frequency: 60
 
 management:
   api_url: https://ptlfunctionapp.azurewebsites.net/api/management

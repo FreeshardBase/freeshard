@@ -11,7 +11,7 @@ from fastapi import FastAPI, Request, Response
 
 from portal_core.database import database, migration
 from .model.identity import Identity
-from .service import app_store, init_apps, app_infra, identity, app_lifecycle
+from .service import app_store, init_apps, app_infra, identity, app_lifecycle, peer
 from .service.peer import update_all_peer_pubkeys
 from .util.async_util import Periodic
 from .web import internal, public, protected
@@ -44,21 +44,6 @@ def create_app():
 	app_infra.refresh_app_infra()
 	log.debug('written app infra files (docker-compose and traefik)')
 
-	@asynccontextmanager
-	async def lifespan(app: FastAPI):
-		log.debug('lifespan')
-		background_tasks = [
-			Periodic(app_lifecycle.control_apps, delay=gconf.get('apps.lifecycle.refresh_interval')),
-			Periodic(update_all_peer_pubkeys, delay=60),
-		]
-		for t in background_tasks:
-			t.start()
-		yield
-		for t in background_tasks:
-			t.stop()
-		for t in background_tasks:
-			await t.wait()
-
 	app_meta = metadata('portal_core')
 	app = FastAPI(
 		title='Portal Core',
@@ -89,6 +74,21 @@ def configure_logging():
 		logger = logging.getLogger() if module == 'root' else logging.getLogger(module)
 		logger.setLevel(getattr(logging, level.upper()))
 		log.info(f'set logger for {module} to {level.upper()}')
+
+
+@asynccontextmanager
+async def lifespan(_):
+	background_tasks = [
+		Periodic(app_lifecycle.control_apps, delay=gconf.get('apps.lifecycle.refresh_interval')),
+		Periodic(peer.update_all_peer_pubkeys, delay=60),
+	]
+	for t in background_tasks:
+		t.start()
+	yield
+	for t in background_tasks:
+		t.stop()
+	for t in background_tasks:
+		await t.wait()
 
 
 def _render_traefik_config(id_: Identity):

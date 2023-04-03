@@ -13,6 +13,8 @@ apps:
     refresh_interval: 2
   app_store:
     refresh_interval: 3
+  last_access:
+    max_update_frequency: 1
 
 log:
   levels:
