@@ -16,8 +16,8 @@ apps:
   last_access:
     max_update_frequency: 1
   usage_reporting:
-    tracking_schedule: '* * * * *'
-    reporting_schedule: '*/3 * * * *'
+    tracking_schedule: '* * * * * *'
+    reporting_schedule: '* * * * * */3'
 
 log:
   levels:

@@ -109,6 +109,9 @@ def management_api_mock_context(profile: Profile = None):
 			f'{management_api}/resize',
 			callback=management_api_mock_resize,
 		)
+		rsps.post(
+			f'{management_api}/app_usage',
+		)
 		rsps.add_passthru('')
 		yield rsps
 

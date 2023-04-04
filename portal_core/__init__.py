@@ -87,6 +87,9 @@ async def lifespan(_):
 		Periodic(
 			app_usage_reporting.track_currently_installed_apps,
 			cron=gconf.get('apps.usage_reporting.tracking_schedule')),
+		Periodic(
+			app_usage_reporting.report_app_usage,
+			cron=gconf.get('apps.usage_reporting.reporting_schedule')),
 	]
 	for t in background_tasks:
 		t.start()
