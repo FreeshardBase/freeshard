@@ -6,7 +6,6 @@ from fastapi import APIRouter, status, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
 from tinydb import Query
-from tinydb.table import Table
 
 from portal_core.database.database import tours_table
 

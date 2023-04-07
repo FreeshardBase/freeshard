@@ -15,7 +15,7 @@ from starlette.testclient import TestClient
 from tinydb import where
 
 from portal_core.database.database import apps_table
-from portal_core.model.app import AppToInstall
+from portal_core.model.app import AppToInstall, InstallationReason
 from portal_core.service import app_infra
 
 WAITING_DOCKER_IMAGE = 'nginx:alpine'
@@ -146,3 +146,21 @@ def modify_request_like_traefik_forward_auth(request: PreparedRequest) -> Reques
 			'date': request.headers['date'],
 		}
 	)
+
+
+def insert_foo_app():
+	app = AppToInstall(**{
+		'v': '3.1',
+		'name': 'foo-app',
+		'image': 'foo',
+		'version': '1.2.3',
+		'port': 1,
+		'paths': {
+			'': {'access': 'public'},
+		},
+		'lifecycle': {'idle_time_for_shutdown': 5},
+		'reason': InstallationReason.CUSTOM,
+	})
+	with apps_table() as apps:  # type: Table
+		apps.truncate()
+		apps.insert(app.dict())

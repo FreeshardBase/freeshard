@@ -4,7 +4,6 @@ from fastapi.requests import Request
 from http_message_signatures import HTTPSignatureKeyResolver, algorithms
 from requests_http_signature import HTTPSignatureAuth
 from tinydb import Query
-from tinydb.table import Table
 
 from portal_core.database.database import peers_table
 from portal_core.model.identity import OutputIdentity

@@ -3,6 +3,12 @@ path_root: "run/"
 log:
   levels:
     portal_core: debug
+    'portal_core.service.app_usage_reporting': debug
+
+apps:
+  usage_reporting:
+    tracking_schedule: '* * * * * */2'
+    reporting_schedule: '* * * * * */10'
 
 management:
   api_url: http://localhost:8090

@@ -2,7 +2,6 @@ import logging
 
 from fastapi import APIRouter, HTTPException, status, Response
 from tinydb import Query
-from tinydb.table import Table
 
 from portal_core.database.database import terminals_table, identities_table
 from portal_core.model.identity import Identity
@@ -33,7 +32,7 @@ def add_terminal(code: str, terminal: InputTerminal, response: Response):
 		on_first_terminal_add.send(new_terminal)
 
 	with identities_table() as identities:  # type: Table
-		default_identity = Identity(**identities.get(Query().is_default == True))
+		default_identity = Identity(**identities.get(Query().is_default == True))  # noqa: E712
 
 	jwt = pairing.create_terminal_jwt(new_terminal.id)
 	response.set_cookie('authorization', jwt,

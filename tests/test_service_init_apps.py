@@ -29,8 +29,8 @@ def test_add_init_app(init_db, monkeypatch):
 	with database.apps_table() as apps:
 		apps.insert({
 			'name': 'app-bar',
-			'description': f'this is app-bar',
-			'image': f'image-app-bar',
+			'description': 'this is app-bar',
+			'image': 'image-app-bar',
 			'port': 1,
 			'installation_reason': InstallationReason.CONFIG,
 		})

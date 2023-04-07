@@ -5,7 +5,6 @@ from typing import Dict
 import docker
 from docker import errors as docker_errors
 from docker.models.containers import Container
-from tinydb.table import Table
 
 import portal_core.util.signals
 from portal_core.database.database import apps_table

@@ -1,6 +1,5 @@
 import docker
 from common_py.util import retry
-from tinydb.table import Table
 
 from portal_core.database.database import apps_table
 from portal_core.model.app import AppToInstall, InstallationReason

@@ -13,7 +13,6 @@ from gitlab import Gitlab, GitlabListError
 from gitlab.v4.objects import ProjectBranch
 from pydantic import BaseModel
 from tinydb import Query
-from tinydb.table import Table
 
 from portal_core.database.database import apps_table
 from portal_core.model.app import App, InstallationReason, AppToInstall
@@ -122,8 +121,9 @@ def refresh_app_store():
 	with database.global_db_lock:
 		current_status = get_app_store_status()
 		if current_status.commit_id != ref:
-			log.error(f'Race Condition: commit_id changed from {ref} to {current_status.commit_id}'
-					  f' during app store refresh')
+			log.error(
+				f'Race Condition: commit_id changed from {ref} to {current_status.commit_id}'
+				f' during app store refresh')
 		else:
 			current_status.last_update = datetime.datetime.utcnow()
 			database.set_value(STORE_KEY_CURRENT_APP_STORE_BRANCH, current_status.dict())

@@ -6,7 +6,6 @@ from fastapi import HTTPException, APIRouter, Cookie, Response, status, Header, 
 from http_message_signatures import InvalidSignature
 from jinja2 import Template
 from tinydb import Query
-from tinydb.table import Table
 
 from portal_core.database.database import apps_table, identities_table
 from portal_core.model.app import InstalledApp, Access, Path
@@ -81,7 +80,7 @@ def _match_app(x_forwarded_host):
 @cached(cache=TTLCache(maxsize=8, ttl=gconf.get('tests.cache_ttl', default=3)))
 def _get_portal_identity():
 	with identities_table() as identities:
-		default_identity = Identity(**identities.get(Query().is_default == True))
+		default_identity = Identity(**identities.get(Query().is_default == True))  # noqa: E712
 	return SafeIdentity(**default_identity.dict())
 
 

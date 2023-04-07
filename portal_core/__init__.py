@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+from contextlib import asynccontextmanager
 from importlib.metadata import metadata
 from pathlib import Path
 
@@ -9,12 +10,9 @@ import jinja2
 from fastapi import FastAPI, Request, Response
 
 from portal_core.database import database, migration
-from .database.database import identities_table
 from .model.identity import Identity
-from .service import app_store, init_apps, app_infra, identity, app_lifecycle
-from .service.peer import update_all_peer_pubkeys
-from .service.signed_call import signed_request
-from .util.background_task import BackgroundTaskHandler
+from .service import app_store, init_apps, app_infra, identity, app_lifecycle, peer, app_usage_reporting
+from .util.async_util import Periodic
 from .web import internal, public, protected
 
 log = logging.getLogger(__name__)
@@ -45,18 +43,13 @@ def create_app():
 	app_infra.refresh_app_infra()
 	log.debug('written app infra files (docker-compose and traefik)')
 
-	bg_tasks = BackgroundTaskHandler([
-		(app_lifecycle.control_apps, gconf.get('apps.lifecycle.refresh_interval')),
-		(update_all_peer_pubkeys, 60),
-	])
-	bg_tasks.start()
-
 	app_meta = metadata('portal_core')
 	app = FastAPI(
 		title='Portal Core',
 		description=app_meta['summary'],
 		version=app_meta['version'],
 		redoc_url='/redoc',
+		lifespan=lifespan,
 	)
 	app.include_router(internal.router)
 	app.include_router(public.router)
@@ -69,10 +62,6 @@ def create_app():
 			await _log_request_and_response(request, response)
 			return response
 
-	@app.on_event('shutdown')
-	def shutdown_event():
-		bg_tasks.stop().wait()
-
 	return app
 
 
@@ -84,6 +73,30 @@ def configure_logging():
 		logger = logging.getLogger() if module == 'root' else logging.getLogger(module)
 		logger.setLevel(getattr(logging, level.upper()))
 		log.info(f'set logger for {module} to {level.upper()}')
+
+
+@asynccontextmanager
+async def lifespan(_):
+	background_tasks = [
+		Periodic(
+			app_lifecycle.control_apps,
+			delay=gconf.get('apps.lifecycle.refresh_interval')),
+		Periodic(
+			peer.update_all_peer_pubkeys, delay=60),
+		Periodic(
+			app_usage_reporting.track_currently_installed_apps,
+			cron=gconf.get('apps.usage_reporting.tracking_schedule')),
+		Periodic(
+			app_usage_reporting.report_app_usage,
+			cron=gconf.get('apps.usage_reporting.reporting_schedule')),
+	]
+	for t in background_tasks:
+		t.start()
+	yield
+	for t in background_tasks:
+		t.stop()
+	for t in background_tasks:
+		await t.wait()
 
 
 def _render_traefik_config(id_: Identity):

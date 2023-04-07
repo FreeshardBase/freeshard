@@ -3,7 +3,7 @@ from typing import List
 from jinja2 import Template
 
 from portal_core.model import docker_compose as dc
-from portal_core.model.app import InstalledApp, Service
+from portal_core.model.app import InstalledApp, Service, SharedDir
 from portal_core.model.identity import SafeIdentity
 
 
@@ -33,10 +33,14 @@ def volumes(app: InstalledApp) -> List[str]:
 	result = []
 	for data_dir in app.data_dirs or []:
 		if isinstance(data_dir, str):
-			result.append(f'/home/portal/user_data/app_data/{app.name}/{data_dir}:{data_dir}')
+			stripped = data_dir.strip('/')
+			result.append(f'/home/portal/user_data/app_data/{app.name}/{stripped}:{data_dir}')
 		else:
 			if data_dir.shared_dir:
-				result.append(f'/home/portal/user_data/shared/{data_dir.shared_dir}:{data_dir.path}')
+				if data_dir.shared_dir in (SharedDir.APP_DATA, SharedDir.SERVICE_DATA):
+					result.append(f'/home/portal/user_data/{data_dir.shared_dir}:{data_dir.path}')
+				else:
+					result.append(f'/home/portal/user_data/shared/{data_dir.shared_dir}:{data_dir.path}')
 			else:
 				result.append(f'/home/portal/user_data/app_data/{app.name}/{data_dir.path}:{data_dir.path}')
 	if app.services and Service.DOCKER_SOCK_RO in app.services:

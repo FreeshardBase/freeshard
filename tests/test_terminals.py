@@ -3,7 +3,6 @@ from time import sleep
 
 from starlette import status
 from tinydb.operations import delete
-from tinydb.table import Table
 
 from portal_core.database.database import apps_table, terminals_table
 from portal_core.model.app import AppToInstall, InstallationReason
@@ -142,7 +141,10 @@ def test_authorization_missing_header(api_client):
 
 
 def test_authorization_wrong_header_prefix(api_client):
-	response = api_client.get('internal/authenticate_terminal', headers={'Authorization': 'Beerer foobar'})
+	response = api_client.get(
+		'internal/authenticate_terminal',
+		headers={'Authorization': 'Beerer foobar'}
+	)
 	assert response.status_code == 401
 
 
@@ -174,7 +176,9 @@ def test_authorization_deleted_terminal(api_client):
 def test_last_connection(api_client):
 	t_name = 'T1'
 	pair_new_terminal(api_client, t_name)
-	last_connection_0 = Terminal(**api_client.get(f'protected/terminals/name/{t_name}').json()).last_connection
+	last_connection_0 = Terminal(
+		**api_client.get(f'protected/terminals/name/{t_name}').json()
+	).last_connection
 
 	with apps_table() as apps:  # type: Table
 		apps.truncate()
@@ -189,7 +193,9 @@ def test_last_connection(api_client):
 	with create_apps_from_docker_compose():
 		with terminals_table() as terminals:  # type: Table
 			terminals.update(delete('last_connection'))
-		last_connection_missing = Terminal(**api_client.get(f'protected/terminals/name/{t_name}').json())
+		last_connection_missing = Terminal(
+			**api_client.get(f'protected/terminals/name/{t_name}').json()
+		)
 		assert not last_connection_missing.last_connection
 
 		sleep(0.1)
@@ -197,17 +203,23 @@ def test_last_connection(api_client):
 			'X-Forwarded-Host': 'foo-app.myportal.org',
 			'X-Forwarded-Uri': '/foo'
 		}).status_code == status.HTTP_200_OK
-		last_connection_1 = Terminal(**api_client.get(f'protected/terminals/name/{t_name}').json()).last_connection
+		last_connection_1 = Terminal(
+			**api_client.get(f'protected/terminals/name/{t_name}').json()
+		).last_connection
 
 		sleep(0.1)
-		last_connection_2 = Terminal(**api_client.get(f'protected/terminals/name/{t_name}').json()).last_connection
+		last_connection_2 = Terminal(
+			**api_client.get(f'protected/terminals/name/{t_name}').json()
+		).last_connection
 
 		sleep(0.1)
 		assert api_client.get('internal/auth', headers={
 			'X-Forwarded-Host': 'foo-app.myportal.org',
 			'X-Forwarded-Uri': '/foo'
 		}).status_code == status.HTTP_200_OK
-		last_connection_3 = Terminal(**api_client.get(f'protected/terminals/name/{t_name}').json()).last_connection
+		last_connection_3 = Terminal(
+			**api_client.get(f'protected/terminals/name/{t_name}').json()
+		).last_connection
 
 	print(last_connection_0)
 	print(last_connection_1)

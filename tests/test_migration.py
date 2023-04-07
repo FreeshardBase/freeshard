@@ -1,5 +1,4 @@
 from tinydb import Query
-from tinydb.table import Table
 
 from portal_core.database import migration, database
 
@@ -72,8 +71,6 @@ v1_0_app_json = {
 	'installation_reason': 'config',
 }
 
-
-
 current_app_json = {
 	'v': '4.0',
 	'name': 'filebrowser',
@@ -126,6 +123,7 @@ current_app_json = {
 		'is_featured': None},
 	'services': None,
 	'installation_reason': 'config',
+	'last_access': None,
 }
 
 

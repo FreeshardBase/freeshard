@@ -8,7 +8,8 @@ class PropertyBaseModel(BaseModel):
 	Workaround for serializing properties with pydantic until
 	https://github.com/samuelcolvin/pydantic/issues/935
 	is solved
-	See also: https://stackoverflow.com/questions/63264888/pydantic-using-property-getter-decorator-for-a-field-with-an-alias
+	See also:
+		https://stackoverflow.com/questions/63264888/pydantic-using-property-getter-decorator-for-a-field-with-an-alias
 	"""
 
 	@classmethod

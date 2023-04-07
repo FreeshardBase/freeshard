@@ -23,6 +23,17 @@ def test_template_is_written():
 			'paths': {
 				'': {'access': 'private'},
 			},
+			'data_dirs': [
+				'/simple_dir',
+				{
+					'path': '/media_data',
+					'shared_dir': 'media'
+				},
+				{
+					'path': '/app_data_dir',
+					'shared_dir': 'app_data'
+				}
+			],
 			'env_vars': {
 				'baz-env': 'foo',
 				'url': 'https://{{ portal.domain }}/baz',
@@ -41,3 +52,6 @@ def test_template_is_written():
 		assert any(re.search('url=https://.*\.p\.getportal\.org/baz', e) for e in baz_app['environment'])
 		assert '2' in baz_app['expose']
 		assert '3' in baz_app['expose']
+		assert '/home/portal/user_data/app_data/baz-app/simple_dir:/simple_dir' in baz_app['volumes']
+		assert '/home/portal/user_data/shared/media:/media_data' in baz_app['volumes']
+		assert '/home/portal/user_data/app_data:/app_data_dir' in baz_app['volumes']
