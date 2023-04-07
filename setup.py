@@ -32,6 +32,7 @@ setup(
 		'requests-http-signature',
 		'aiozipstream',
 		'email-validator',
+		'croniter',
 		'common_py @ git+https://app_controller:MzJwN_VwwEyVmtj22LXx@gitlab.com/ptl/common_py.git',
 	],
 	extras_require={
@@ -40,6 +41,7 @@ setup(
 			'pytest',
 			'pytest-docker',
 			'pytest-mock',
+			'pytest-asyncio',
 			'responses',
 			'aioresponses',
 			'datamodel-code-generator[http]'

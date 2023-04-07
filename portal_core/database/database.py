@@ -72,6 +72,12 @@ def tours_table() -> Table:
 		yield db.table('tours')
 
 
+@contextmanager
+def app_usage_track_table() -> Table:
+	with get_db() as db:
+		yield db.table('app_usage_track')
+
+
 def get_value(key: str):
 	with get_db() as db:
 		if result := db.get(Query().key == key):

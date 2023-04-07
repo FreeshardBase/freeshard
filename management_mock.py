@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 
 from fastapi import FastAPI, Request
+from starlette import status
 
 from portal_core.model.profile import Profile
 
@@ -31,4 +32,9 @@ def get_profile():
 
 @app.post('/resize')
 def resize():
-	return 204
+	return status.HTTP_204_NO_CONTENT
+
+
+@app.post('/app_usage')
+def app_usage():
+	return status.HTTP_201_CREATED

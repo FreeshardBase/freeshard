@@ -1,9 +1,14 @@
+import datetime
 from enum import Enum
 from typing import Optional, List, Dict, Union
 
+import gconf
 from pydantic import BaseModel, root_validator, validator
+from tinydb import Query
 
+from portal_core.database.database import apps_table
 from portal_core.model import app_migration
+from portal_core.util import signals
 
 CURRENT_VERSION = '4.0'
 
@@ -125,4 +130,15 @@ class AppToInstall(App):
 
 class InstalledApp(AppToInstall):
 	status: str = Status.UNKNOWN
+	last_access: Optional[datetime.datetime] = None
 	postgres: Union[Postgres, None]
+
+
+@signals.on_request_to_app.connect
+def update_last_access(app: InstalledApp):
+	now = datetime.datetime.utcnow()
+	max_update_frequency = datetime.timedelta(seconds=gconf.get('apps.last_access.max_update_frequency'))
+	if app.last_access and now - app.last_access < max_update_frequency:
+		return
+	with apps_table() as apps:  # type: Table
+		apps.update({'last_access': now}, Query().name == app.name)
