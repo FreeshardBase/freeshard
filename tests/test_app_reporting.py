@@ -1,5 +1,4 @@
 import asyncio
-import json
 from datetime import date, timedelta, datetime, time
 
 import pytest
@@ -41,9 +40,9 @@ async def test_app_reporting(api_client, management_api_mock: responses.Requests
 		tracks.insert(excluded_track_early.dict())
 		tracks.insert(excluded_track_late.dict())
 
-	await asyncio.sleep(3.1)  # to trigger reporting
+	await asyncio.sleep(3.5)  # to trigger reporting
 	assert len(management_api_mock.calls) >= 1
-	report = AppUsageReport.parse_raw(json.loads(management_api_mock.calls[0].request.body))
+	report = AppUsageReport.parse_raw(management_api_mock.calls[0].request.body)
 
 	assert report.year == track_timestamp.year
 	assert report.month == track_timestamp.month
