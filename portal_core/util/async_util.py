@@ -2,7 +2,6 @@ import asyncio
 import logging
 import time
 from contextlib import suppress
-from datetime import datetime, timedelta
 from typing import Callable, Awaitable
 from croniter import croniter, CroniterBadCronError
 

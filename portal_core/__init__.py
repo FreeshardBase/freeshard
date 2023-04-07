@@ -12,7 +12,6 @@ from fastapi import FastAPI, Request, Response
 from portal_core.database import database, migration
 from .model.identity import Identity
 from .service import app_store, init_apps, app_infra, identity, app_lifecycle, peer, app_usage_reporting
-from .service.peer import update_all_peer_pubkeys
 from .util.async_util import Periodic
 from .web import internal, public, protected
 
