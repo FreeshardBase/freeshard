@@ -37,6 +37,7 @@ setup(
 	],
 	extras_require={
 		'dev': [
+			'setuptools',
 			'ruff',
 			'pytest',
 			'pytest-docker',

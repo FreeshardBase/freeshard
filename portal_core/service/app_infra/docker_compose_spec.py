@@ -38,9 +38,9 @@ def volumes(app: InstalledApp) -> List[str]:
 		else:
 			if data_dir.shared_dir:
 				if data_dir.shared_dir in (SharedDir.APP_DATA, SharedDir.SERVICE_DATA):
-					result.append(f'/home/portal/user_data/{data_dir.shared_dir}:{data_dir.path}')
+					result.append(f'/home/portal/user_data/{data_dir.shared_dir.value}:{data_dir.path}')
 				else:
-					result.append(f'/home/portal/user_data/shared/{data_dir.shared_dir}:{data_dir.path}')
+					result.append(f'/home/portal/user_data/shared/{data_dir.shared_dir.value}:{data_dir.path}')
 			else:
 				result.append(f'/home/portal/user_data/app_data/{app.name}/{data_dir.path}:{data_dir.path}')
 	if app.services and Service.DOCKER_SOCK_RO in app.services:

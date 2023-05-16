@@ -35,8 +35,8 @@ def make_default(id):
 		if new_default := Identity(**identities.get(Query().id == id)):
 			last_default.is_default = False
 			new_default.is_default = True
-			identities.update(last_default.dict(), Query().name == last_default.name)
-			identities.update(new_default.dict(), Query().name == new_default.name)
+			identities.update(last_default.dict(), Query().id == last_default.id)
+			identities.update(new_default.dict(), Query().id == new_default.id)
 			log.info(f'set as default {new_default.id}')
 		else:
 			KeyError(id)
