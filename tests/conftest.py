@@ -99,6 +99,7 @@ mock_profile = Profile(
 def management_api_mock_context(profile: Profile = None):
 	management_api = 'https://management-mock'
 	config_override = {'management': {'api_url': management_api}}
+	management_shared_secret = 'constantSharedSecret'
 	with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps, gconf.override_conf(config_override):
 		rsps.get(
 			f'{management_api}/profile',
@@ -111,6 +112,10 @@ def management_api_mock_context(profile: Profile = None):
 		)
 		rsps.post(
 			f'{management_api}/app_usage',
+		)
+		rsps.get(
+			f'{management_api}/sharedSecret',
+			body=json.dumps({'shared_secret': management_shared_secret}),
 		)
 		rsps.add_passthru('')
 		yield rsps

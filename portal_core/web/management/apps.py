@@ -9,7 +9,6 @@ log = logging.getLogger(__name__)
 
 router = APIRouter(
 	prefix='/apps',
-	tags=['/management/apps'],
 )
 
 
