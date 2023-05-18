@@ -38,3 +38,8 @@ def resize():
 @app.post('/app_usage')
 def app_usage():
 	return status.HTTP_201_CREATED
+
+
+@app.get('/sharedSecret')
+def get_shared_secret():
+	return 'staticSharedSecret'

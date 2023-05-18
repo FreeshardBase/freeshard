@@ -34,7 +34,7 @@ def test_template_is_written():
 		output = yaml.safe_load(f)
 		out_middlewares: dict = output['http']['middlewares']
 
-		assert set(out_middlewares.keys()) == {'app-error', 'auth', 'strip', 'auth-public', 'auth-private'}
+		assert set(out_middlewares.keys()) == {'app-error', 'auth', 'strip', 'auth-public', 'auth-private', 'auth-management'}
 		assert 'authResponseHeadersRegex' in out_middlewares['auth']['forwardAuth']
 
 		out_services_http: dict = output['http']['services']
@@ -47,7 +47,7 @@ def test_template_is_written():
 
 		out_routers_http: dict = output['http']['routers']
 		assert set(out_routers_http.keys()) == {
-			'portal_core_private', 'portal_core_public', 'web-terminal', 'traefik', 'baz-app_http'}
+			'portal_core_private', 'portal_core_public', 'portal_core_management', 'web-terminal', 'traefik', 'baz-app_http'}
 		assert out_routers_http['baz-app_http']['service'] == 'baz-app_http'
 
 		out_routers_tcp: dict = output['tcp']['routers']
