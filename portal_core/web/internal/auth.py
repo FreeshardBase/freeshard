@@ -9,16 +9,15 @@ from tinydb import Query
 
 from portal_core.database.database import apps_table, identities_table
 from portal_core.model.app import InstalledApp, Access, Path
+from portal_core.model.auth import AuthState
 from portal_core.model.identity import Identity, SafeIdentity
 from portal_core.service import pairing, peer as peer_service
+from portal_core.service.management import validate_shared_secret, SharedSecretInvalid
 from portal_core.util.signals import on_terminal_auth, on_request_to_app, on_peer_auth
-from portal_core.model.auth import AuthState
-
 
 log = logging.getLogger(__name__)
 
 router = APIRouter()
-
 
 
 @router.get('/authenticate_terminal', status_code=status.HTTP_200_OK)
@@ -35,6 +34,17 @@ def authenticate_terminal(response: Response, authorization: str = Cookie(None))
 		response.headers['X-Ptl-Client-Id'] = terminal.id
 		response.headers['X-Ptl-Client-Name'] = terminal.name
 		on_terminal_auth.send(terminal)
+
+
+@router.get('/authenticate_management', status_code=status.HTTP_200_OK)
+def authenticate_management(authorization: str = Header(None)):
+	if not authorization:
+		raise HTTPException(status.HTTP_401_UNAUTHORIZED)
+
+	try:
+		validate_shared_secret(authorization)
+	except SharedSecretInvalid:
+		raise HTTPException(status.HTTP_401_UNAUTHORIZED)
 
 
 @router.get('/auth', status_code=status.HTTP_200_OK)

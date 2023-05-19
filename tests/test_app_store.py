@@ -1,7 +1,29 @@
 from time import sleep
 
+import pytest
+
+from portal_core.service import app_store
 from portal_core.service.app_store import AppStoreStatus
 from portal_core.web.protected.store import StoreBranchIn
+
+
+def test_install_from_store(api_client):
+	app_store.refresh_app_store()
+
+	installed_apps = api_client.get('protected/apps').json()
+	assert not any(a['name'] == 'app-template-python' for a in installed_apps)
+
+	app_store.install_store_app('app-template-python')
+
+	installed_apps = api_client.get('protected/apps').json()
+	assert any(a['name'] == 'app-template-python' for a in installed_apps)
+
+
+def test_install_twice(api_client):
+	app_store.refresh_app_store()
+	app_store.install_store_app('app-template-python')
+	with pytest.raises(app_store.AppAlreadyInstalled):
+		app_store.install_store_app('app-template-python')
 
 
 def test_set_app_store_branch(api_client):

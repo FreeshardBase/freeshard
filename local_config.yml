@@ -7,8 +7,8 @@ log:
 
 apps:
   usage_reporting:
-    tracking_schedule: '* * * * * */2'
-    reporting_schedule: '* * * * * */10'
+    tracking_schedule: '* * * * * */30'
+    reporting_schedule: '* * * * * 0'
 
 management:
   api_url: http://localhost:8090

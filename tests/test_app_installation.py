@@ -1,8 +1,5 @@
-import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
-
-from portal_core.service import app_store
 
 
 def test_get_initial_apps(api_client: TestClient):
@@ -30,23 +27,3 @@ def test_uninstall_app(api_client: TestClient):
 	assert response.status_code == status.HTTP_204_NO_CONTENT
 	response = api_client.get('protected/apps').json()
 	assert len(response) == 0
-
-
-def test_install_from_store(api_client):
-	app_store.refresh_app_store()
-
-	installed_apps = api_client.get('protected/apps').json()
-	assert not any(a['name'] == 'app-template-python' for a in installed_apps)
-
-	app_store.install_store_app('app-template-python')
-
-	installed_apps = api_client.get('protected/apps').json()
-	assert any(a['name'] == 'app-template-python' for a in installed_apps)
-
-
-def test_install_twice(api_client):
-	app_store.refresh_app_store()
-	app_store.install_store_app('app-template-python')
-	with pytest.raises(app_store.AppAlreadyInstalled):
-		app_store.install_store_app('app-template-python')
-
