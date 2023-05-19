@@ -13,7 +13,7 @@ from portal_core.database import database, migration
 from .model.identity import Identity
 from .service import app_store, init_apps, app_infra, identity, app_lifecycle, peer, app_usage_reporting
 from .util.async_util import Periodic
-from .web import internal, public, protected
+from .web import internal, public, protected, management
 
 log = logging.getLogger(__name__)
 
@@ -54,6 +54,7 @@ def create_app():
 	app.include_router(internal.router)
 	app.include_router(public.router)
 	app.include_router(protected.router)
+	app.include_router(management.router)
 
 	if gconf.get('log.requests', default=False):
 		@app.middleware('http')

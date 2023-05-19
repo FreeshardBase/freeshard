@@ -41,6 +41,13 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
 			middlewares=['strip', 'auth-private'],
 			tls=make_cert_resolver(portal),
 		),
+		'portal_core_management': t.HttpRouter(
+			rule='PathPrefix(`/core/management`)',
+			entryPoints=['https'],
+			service='portal_core',
+			middlewares=['strip', 'auth-management'],
+			tls=make_cert_resolver(portal),
+		),
 		'web-terminal': t.HttpRouter(
 			rule='PathPrefix(`/`)',
 			priority=1,
@@ -74,6 +81,13 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
 						'X-Ptl-Client-Id',
 						'X-Ptl-Client-Name',
 					],
+				)
+			)
+		),
+		'auth-management': t.HttpMiddleware(
+			__root__=t.HttpMiddlewareItem9(
+				forwardAuth=t.ForwardAuthMiddleware(
+					address='http://portal_core/internal/authenticate_management'
 				)
 			)
 		),
