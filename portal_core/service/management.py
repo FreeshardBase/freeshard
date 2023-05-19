@@ -26,7 +26,7 @@ def refresh_shared_secret():
 
 def validate_shared_secret(secret: str):
 	if not isinstance(secret, str) or len(secret) < 8:
-		raise ValueError
+		raise SharedSecretInvalid
 
 	try:
 		expected_shared_secret = database.get_value(STORE_KEY_MANAGEMENT_SHARED_KEY)
