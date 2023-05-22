@@ -8,7 +8,7 @@ from docker.models.containers import Container
 
 import portal_core.util.signals
 from portal_core.database.database import apps_table
-from portal_core.model.app import InstalledApp, Lifecycle
+from portal_core.model.app_meta import InstalledApp, Lifecycle
 
 log = logging.getLogger(__name__)
 

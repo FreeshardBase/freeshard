@@ -1,7 +1,7 @@
 from starlette import status
 
 from portal_core.database.database import apps_table
-from portal_core.model.app import InstallationReason, AppToInstall
+from portal_core.model.app_meta import InstallationReason, AppToInstall
 from portal_core.service import app_infra
 from tests.util import create_apps_from_docker_compose, WAITING_DOCKER_IMAGE, \
 	pair_new_terminal, install_test_app

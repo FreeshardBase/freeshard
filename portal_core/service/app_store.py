@@ -6,16 +6,19 @@ import shutil
 import tarfile
 import datetime
 from pathlib import Path
-from typing import Iterable, List, Optional
+
+from azure.storage.blob.aio import ContainerClient
+from typing import Iterable, List, Optional, Set
 
 import gconf
 from gitlab import Gitlab, GitlabListError
 from gitlab.v4.objects import ProjectBranch
 from pydantic import BaseModel
 from tinydb import Query
+from tinydb.table import Table
 
 from portal_core.database.database import apps_table
-from portal_core.model.app import App, InstallationReason, AppToInstall
+from portal_core.model.app_meta import AppMeta, InstalledApp, InstallationReason, Status
 from . import app_infra
 from ..database import database
 
@@ -30,13 +33,13 @@ class AppStoreStatus(BaseModel):
 	last_update: Optional[datetime.datetime]
 
 
-def get_store_apps() -> Iterable[App]:
+def get_store_apps() -> Iterable[AppMeta]:
 	sync_dir = Path(gconf.get('path_root')) / 'core' / 'appstore'
 	for app_dir in sync_dir.iterdir():
 		yield get_store_app(app_dir.name)
 
 
-def get_store_app(name) -> App:
+def get_store_app(name) -> AppMeta:
 	sync_dir = Path(gconf.get('path_root')) / 'core' / 'appstore'
 	app_dir = sync_dir / name
 	if not app_dir.exists():
@@ -44,23 +47,52 @@ def get_store_app(name) -> App:
 	with open(app_dir / 'app.json') as f:
 		app = json.load(f)
 		assert (a := app['name']) == (d := app_dir.name), f'app with name {a} in directory with name {d}'
-		return App.parse_obj(app)
+		return AppMeta.parse_obj(app)
 
 
-def install_store_app(name: str):
-	app = get_store_app(name)
+async def install_store_app(
+		name: str,
+		installation_reason: InstallationReason = InstallationReason.STORE,
+		store_branch: Optional[str] = 'master',
+):
 	with apps_table() as apps:  # type: Table
 		if apps.contains(Query().name == name):
 			raise AppAlreadyInstalled(name)
-		apps.insert(AppToInstall(
-			**app.dict(),
-			installation_reason=InstallationReason.STORE,
+		apps.insert(InstalledApp(
+			name=name,
+			installation_reason=installation_reason,
+			status=Status.INSTALLING,
+			from_branch=store_branch,
 		).dict())
-	app_infra.refresh_app_infra()
+
+	installed_apps_path = Path(gconf.get('path_root')) / 'core' / 'installed_apps'
+	await download_azure_blob_directory(
+		f'{store_branch}/all_apps/{name}',
+		installed_apps_path / name,
+	)
+
+
 
 
 class AppAlreadyInstalled(Exception):
 	pass
+
+
+async def download_azure_blob_directory(directory_name: str, target_dir: Path):
+	async with ContainerClient(
+		account_url=gconf.get('apps.app_store.base_url'),
+		container_name=gconf.get('apps.app_store.container_name'),
+	) as container_client:
+
+		directory_name = directory_name.rstrip('/')
+		async for blob in container_client.list_blobs(name_starts_with=directory_name):
+			if blob.name.endswith('/'):
+				continue
+			target_file = target_dir / blob.name[len(directory_name) + 1:]
+			target_file.parent.mkdir(exist_ok=True, parents=True)
+			with open(target_file, 'wb') as f:
+				download_blob = await container_client.download_blob(blob)
+				f.write(await download_blob.readall())
 
 
 def set_app_store_branch(branch_name: str):
@@ -137,3 +169,17 @@ def _get_gitlab_apps_project():
 
 class AppStoreRefreshError(Exception):
 	pass
+
+
+def refresh_init_apps():
+	configured_init_apps = set(gconf.get('apps.initial_apps'))
+	installed_apps = get_installed_apps()
+
+	for app_name in configured_init_apps - installed_apps:
+		install_store_app(app_name, InstallationReason.CONFIG)
+
+
+def get_installed_apps() -> Set[str]:
+	installed_apps_path = Path(gconf.get('path_root')) / 'core' / 'installed_apps'
+	installed_apps = {p.name for p in installed_apps_path.iterdir()}
+	return installed_apps

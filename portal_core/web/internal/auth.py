@@ -8,7 +8,7 @@ from jinja2 import Template
 from tinydb import Query
 
 from portal_core.database.database import apps_table, identities_table
-from portal_core.model.app import InstalledApp, Access, Path
+from portal_core.model.app_meta import InstalledApp, Access, Path
 from portal_core.model.auth import AuthState
 from portal_core.model.identity import Identity, SafeIdentity
 from portal_core.service import pairing, peer as peer_service

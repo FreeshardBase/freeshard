@@ -2,7 +2,7 @@ import docker
 from common_py.util import retry
 
 from portal_core.database.database import apps_table
-from portal_core.model.app import AppToInstall, InstallationReason
+from portal_core.model.app_meta import AppToInstall, InstallationReason
 from portal_core.service import app_infra
 from tests.util import create_apps_from_docker_compose, WAITING_DOCKER_IMAGE
 

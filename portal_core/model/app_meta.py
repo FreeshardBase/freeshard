@@ -10,7 +10,7 @@ from portal_core.database.database import apps_table
 from portal_core.model import app_migration
 from portal_core.util import signals
 
-CURRENT_VERSION = '4.0'
+CURRENT_VERSION = '5.0'
 
 
 class InstallationReason(str, Enum):
@@ -28,20 +28,9 @@ class Access(str, Enum):
 
 class Status(str, Enum):
 	UNKNOWN = 'unknown'
+	INSTALLING = 'installing'
+	STOPPED = 'stopped'
 	RUNNING = 'running'
-
-
-class Service(str, Enum):
-	POSTGRES = 'postgres'
-	DOCKER_SOCK_RO = 'docker_sock_ro'
-
-
-class SharedDir(str, Enum):
-	DOCUMENTS = 'documents'
-	MEDIA = 'media'
-	MUSIC = 'music'
-	APP_DATA = 'app_data'
-	SERVICE_DATA = 'service_data'
 
 
 class EntrypointPort(str, Enum):
@@ -56,29 +45,14 @@ class StoreInfo(BaseModel):
 	is_featured: Optional[bool]
 
 
-class Postgres(BaseModel):
-	connection_string: str
-	userspec: str
-	user: str
-	password: str
-	hostspec: str
-	host: str
-	port: int
-
-
-class DataDir(BaseModel):
-	path: str
-	uid: Optional[int]
-	gid: Optional[int]
-	shared_dir: Optional[SharedDir]
-
-
 class Path(BaseModel):
+	container_name: str
 	access: Access
 	headers: Optional[Dict[str, str]]
 
 
 class Entrypoint(BaseModel):
+	container_name: str
 	container_port: int
 	entrypoint_port: EntrypointPort
 
@@ -102,14 +76,12 @@ class Lifecycle(BaseModel):
 		return values
 
 
-class App(BaseModel):
+class AppMeta(BaseModel):
 	v: str
+	app_version: str
 	name: str
-	image: str
+	icon: str
 	entrypoints: List[Entrypoint]
-	data_dirs: Optional[List[Union[str, DataDir]]]
-	env_vars: Optional[Dict[str, str]]
-	services: Optional[List[Service]]
 	paths: Dict[str, Path]
 	lifecycle: Lifecycle = Lifecycle(idle_time_for_shutdown=60)
 	store_info: Optional[StoreInfo]
@@ -124,14 +96,12 @@ class App(BaseModel):
 		return values
 
 
-class AppToInstall(App):
+class InstalledApp(BaseModel):
+	name: str
 	installation_reason: InstallationReason = InstallationReason.UNKNOWN
-
-
-class InstalledApp(AppToInstall):
 	status: str = Status.UNKNOWN
 	last_access: Optional[datetime.datetime] = None
-	postgres: Union[Postgres, None]
+	from_branch: str
 
 
 @signals.on_request_to_app.connect

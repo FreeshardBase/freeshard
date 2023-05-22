@@ -2,7 +2,7 @@ import logging
 
 
 from . import database
-from ..model.app import InstalledApp, CURRENT_VERSION
+from ..model.app_meta import InstalledApp, CURRENT_VERSION
 
 log = logging.getLogger(__name__)
 

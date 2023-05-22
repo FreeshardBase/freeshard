@@ -1,7 +1,7 @@
 from typing import List
 
 from portal_core.model import traefik_dyn_config as t
-from portal_core.model.app import InstalledApp, EntrypointPort, Entrypoint
+from portal_core.model.app_meta import InstalledApp, EntrypointPort, Entrypoint
 from portal_core.model.identity import SafeIdentity
 
 

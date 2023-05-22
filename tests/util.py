@@ -15,7 +15,7 @@ from starlette.testclient import TestClient
 from tinydb import where
 
 from portal_core.database.database import apps_table
-from portal_core.model.app import AppToInstall, InstallationReason
+from portal_core.model.app_meta import AppToInstall, InstallationReason
 from portal_core.service import app_infra
 
 WAITING_DOCKER_IMAGE = 'nginx:alpine'

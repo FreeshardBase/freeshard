@@ -6,7 +6,7 @@ import yaml
 from psycopg.conninfo import make_conninfo
 
 from portal_core.database.database import apps_table
-from portal_core.model.app import InstallationReason
+from portal_core.model.app_meta import InstallationReason
 from portal_core.service import app_infra, identity
 
 

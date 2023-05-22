@@ -5,7 +5,7 @@ from starlette import status
 from tinydb.operations import delete
 
 from portal_core.database.database import apps_table, terminals_table
-from portal_core.model.app import AppToInstall, InstallationReason
+from portal_core.model.app_meta import AppToInstall, InstallationReason
 from portal_core.model.profile import Profile
 from portal_core.model.terminal import Terminal, Icon
 from portal_core.service import app_infra

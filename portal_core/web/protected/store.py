@@ -6,7 +6,7 @@ import gconf
 from fastapi import APIRouter, status, HTTPException
 from pydantic import BaseModel
 
-from portal_core.model.app import App
+from portal_core.model.app_meta import AppMeta
 from portal_core.service import app_store
 from portal_core.service.app_store import AppStoreRefreshError, AppStoreStatus, AppAlreadyInstalled
 
@@ -24,7 +24,7 @@ class AppOverview(BaseModel):
 	is_installed: bool
 
 
-@router.get('/apps', response_model=List[App])
+@router.get('/apps', response_model=List[AppMeta])
 def get_apps(refresh: bool = False):
 	refresh_interval = gconf.get('apps.app_store.refresh_interval', default=600)
 	refresh_threshold = datetime.datetime.utcnow() - datetime.timedelta(seconds=refresh_interval)

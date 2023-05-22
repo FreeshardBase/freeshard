@@ -1,16 +1,17 @@
 import gconf
 
+import portal_core.service.app_store
 from portal_core import database
 from portal_core.database.database import apps_table
-from portal_core.model.app import InstallationReason, App
-from portal_core.service import init_apps, app_store, app_infra
+from portal_core.model.app_meta import InstallationReason, AppMeta
+from portal_core.service import app_store, app_infra
 
 init_app_conf = {'apps': {'initial_apps': ['app-foo', 'app-bar']}}
 
 
 def test_add_init_app(init_db, monkeypatch):
-	def mp_get_store_app(name) -> App:
-		return App(**{
+	def mp_get_store_app(name) -> AppMeta:
+		return AppMeta(**{
 			'name': name,
 			'description': f'this is {name}',
 			'image': f'image-{name}',
@@ -43,7 +44,7 @@ def test_add_init_app(init_db, monkeypatch):
 		})
 
 	with gconf.override_conf(init_app_conf):
-		init_apps.refresh_init_apps()
+		portal_core.service.app_store.refresh_init_apps()
 
 	with apps_table() as apps:
 		app_names = {a['name'] for a in apps.all()}

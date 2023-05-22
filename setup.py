@@ -33,6 +33,7 @@ setup(
 		'aiozipstream',
 		'email-validator',
 		'croniter',
+		'azure-storage-blob',
 		'common_py @ git+https://app_controller:MzJwN_VwwEyVmtj22LXx@gitlab.com/ptl/common_py.git',
 	],
 	extras_require={

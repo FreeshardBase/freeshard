@@ -18,6 +18,8 @@ services:
 
 apps:
   app_store:
+    base_url: "https://storageaccountportab0da.blob.core.windows.net"
+    container_name: "app-store"
     project_id: 25524454
     refresh_interval: 600
   lifecycle:

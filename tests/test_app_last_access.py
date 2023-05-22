@@ -5,7 +5,7 @@ from typing import Optional
 from tinydb import Query
 
 from portal_core.database.database import apps_table
-from portal_core.model.app import InstalledApp
+from portal_core.model.app_meta import InstalledApp
 from tests.util import insert_foo_app
 
 

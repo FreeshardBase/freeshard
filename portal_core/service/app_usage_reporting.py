@@ -8,7 +8,7 @@ from starlette import status
 from tinydb import Query
 
 from portal_core.database.database import apps_table, app_usage_track_table
-from portal_core.model.app import InstalledApp
+from portal_core.model.app_meta import InstalledApp
 from portal_core.model.app_usage import AppUsageTrack, AppUsageReport
 from portal_core.service.signed_call import signed_request
 
