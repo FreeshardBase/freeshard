@@ -28,7 +28,7 @@ def test_template_is_written():
 			'reason': InstallationReason.CUSTOM,
 		})
 
-	app_infra.refresh_app_infra()
+	app_infra.write_traefik_dyn_config()
 
 	with open(Path(gconf.get('path_root')) / 'core' / 'traefik_dyn' / 'traefik_dyn.yml', 'r') as f:
 		output = yaml.safe_load(f)
@@ -70,7 +70,7 @@ def test_template_without_tcp_has_no_tcp_section():
 			'reason': InstallationReason.CUSTOM,
 		})
 
-	app_infra.refresh_app_infra()
+	app_infra.write_traefik_dyn_config()
 
 	with open(Path(gconf.get('path_root')) / 'core' / 'traefik_dyn' / 'traefik_dyn.yml', 'r') as f:
 		output = yaml.safe_load(f)

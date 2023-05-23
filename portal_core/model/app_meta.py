@@ -46,7 +46,6 @@ class StoreInfo(BaseModel):
 
 
 class Path(BaseModel):
-	container_name: str
 	access: Access
 	headers: Optional[Dict[str, str]]
 

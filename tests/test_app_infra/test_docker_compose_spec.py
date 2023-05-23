@@ -42,7 +42,7 @@ def test_template_is_written():
 			'reason': InstallationReason.CUSTOM,
 		})
 
-	app_infra.refresh_app_infra()
+	app_infra.write_traefik_dyn_config()
 
 	with open(Path(gconf.get('path_root')) / 'core' / 'docker-compose-apps.yml', 'r') as f:
 		output = yaml.safe_load(f)

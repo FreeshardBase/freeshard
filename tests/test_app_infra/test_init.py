@@ -30,7 +30,7 @@ def test_data_dirs_are_created():
 			'reason': InstallationReason.CUSTOM,
 		})
 
-	app_infra.refresh_app_infra()
+	app_infra.write_traefik_dyn_config()
 
 	assert (Path(gconf.get('path_root')) / 'user_data' / 'app_data' / 'foo-app' / 'user_data' / 'foo').is_dir()
 	assert (Path(gconf.get('path_root')) / 'user_data' / 'app_data' / 'foo-app' / 'user_data' / 'bar').is_dir()
@@ -58,7 +58,7 @@ def test_shared_dirs_are_mounted():
 			'reason': InstallationReason.CUSTOM,
 		})
 
-	app_infra.refresh_app_infra()
+	app_infra.write_traefik_dyn_config()
 
 	with open(Path(gconf.get('path_root')) / 'core' / 'docker-compose-apps.yml', 'r') as f:
 		output = yaml.safe_load(f)
@@ -82,7 +82,7 @@ def test_postgres_is_setup(postgres):
 			'reason': InstallationReason.CUSTOM,
 		})
 
-	app_infra.refresh_app_infra()
+	app_infra.write_traefik_dyn_config()
 
 	# app database exists
 	with psycopg.connect(postgres) as conn:
@@ -119,7 +119,7 @@ def test_docker_socket_is_mounted():
 			'services': ['docker_sock_ro']
 		})
 
-	app_infra.refresh_app_infra()
+	app_infra.write_traefik_dyn_config()
 
 	with open(Path(gconf.get('path_root')) / 'core' / 'docker-compose-apps.yml', 'r') as f:
 		output = yaml.safe_load(f)

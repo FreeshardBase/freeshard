@@ -21,7 +21,7 @@ def test_default_public(api_client):
 			'reason': InstallationReason.CUSTOM,
 		}).dict())
 
-	app_infra.refresh_app_infra()
+	app_infra.write_traefik_dyn_config()
 	with create_apps_from_docker_compose():
 		assert api_client.get('internal/auth', headers={
 			'X-Forwarded-Host': 'foo-app.myportal.org',
@@ -61,7 +61,7 @@ def test_empty_path_headers(api_client):
 			'v': '1.0'
 		}).dict())
 
-	app_infra.refresh_app_infra()
+	app_infra.write_traefik_dyn_config()
 	with create_apps_from_docker_compose():
 		pair_new_terminal(api_client)
 		assert api_client.get('internal/auth', headers={
@@ -90,7 +90,7 @@ def test_no_path_headers(api_client):
 			'v': '1.0'
 		}).dict())
 
-	app_infra.refresh_app_infra()
+	app_infra.write_traefik_dyn_config()
 	with create_apps_from_docker_compose():
 		pair_new_terminal(api_client)
 		assert api_client.get('internal/auth', headers={

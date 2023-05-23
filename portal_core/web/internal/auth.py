@@ -14,7 +14,7 @@ from portal_core.model.identity import Identity, SafeIdentity
 from portal_core.service import pairing, peer as peer_service
 from portal_core.service.management import validate_shared_secret, SharedSecretInvalid
 from portal_core.util.signals import on_terminal_auth, on_request_to_app, on_peer_auth
-
+from tinydb.table import Table
 log = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -78,7 +78,7 @@ async def authenticate_and_authorize(
 	on_request_to_app.send(app)
 
 
-def _match_app(x_forwarded_host):
+def _match_app(x_forwarded_host) -> InstalledApp:
 	app_name = x_forwarded_host.split('.')[0]
 	app = _find_app(app_name)
 	if not app:
@@ -95,7 +95,7 @@ def _get_portal_identity():
 
 
 @cached(cache=TTLCache(maxsize=32, ttl=gconf.get('tests.cache_ttl', default=3)))
-def _find_app(app_name):
+def _find_app(app_name) -> InstalledApp:
 	with apps_table() as apps:  # type: Table
 		app = InstalledApp(**apps.get(Query().name == app_name))
 	return app

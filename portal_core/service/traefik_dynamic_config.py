@@ -1,18 +1,24 @@
+from dataclasses import dataclass
 from typing import List
 
 from portal_core.model import traefik_dyn_config as t
-from portal_core.model.app_meta import InstalledApp, EntrypointPort, Entrypoint
+from portal_core.model.app_meta import InstalledApp, EntrypointPort, Entrypoint, AppMeta
 from portal_core.model.identity import SafeIdentity
 
 
-def traefik_dyn_spec(apps: List[InstalledApp], portal: SafeIdentity) -> t.Model:
+@dataclass
+class AppInfo:
+	app_meta: AppMeta
+	installed_app: InstalledApp
+
+def compile_config(apps: List[AppInfo], portal: SafeIdentity) -> t.Model:
 	model = t.Model()
 	_add_http_section(model, portal)
 	_add_tcp_section(model, portal)
-	for a in apps:
-		for ep in a.entrypoints:
-			_add_router(model, ep, a, portal)
-			_add_service(model, ep, a)
+	for app_info in apps:
+		for ep in app_info.app_meta.entrypoints:
+			_add_router(model, ep, app_info.installed_app, portal)
+			_add_service(model, ep, app_info.installed_app)
 
 	# this is needed because traefik cannot handle empty yaml objects here
 	if not model.tcp.routers:
@@ -182,7 +188,7 @@ def _add_service(model: t.Model, entrypoint: Entrypoint, app: InstalledApp):
 			__root__=t.HttpServiceItem(
 				loadBalancer=t.HttpLoadBalancerService(
 					servers=[
-						t.Server(url=f'http://{app.name}:{entrypoint.container_port}')
+						t.Server(url=f'http://{entrypoint.container_name}:{entrypoint.container_port}')
 					]
 				)
 			)
@@ -192,7 +198,7 @@ def _add_service(model: t.Model, entrypoint: Entrypoint, app: InstalledApp):
 			__root__=t.TcpServiceItem(
 				loadBalancer=t.TcpLoadBalancerService(
 					servers=[
-						t.Server1(address=f'{app.name}:{entrypoint.container_port}')
+						t.Server1(address=f'{entrypoint.container_name}:{entrypoint.container_port}')
 					]
 				)
 			)

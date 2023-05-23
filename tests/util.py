@@ -120,14 +120,14 @@ def install_test_app():
 			'services': None,
 			'v': '1.0'
 		}).dict())
-	app_infra.refresh_app_infra()
+	app_infra.write_traefik_dyn_config()
 
 	with create_apps_from_docker_compose():
 		yield
 
 	with apps_table() as apps:
 		apps.remove(where('name') == 'myapp')
-	app_infra.refresh_app_infra()
+	app_infra.write_traefik_dyn_config()
 
 
 def modify_request_like_traefik_forward_auth(request: PreparedRequest) -> Request:

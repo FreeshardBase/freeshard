@@ -22,6 +22,7 @@ apps:
     container_name: "app-store"
     project_id: 25524454
     refresh_interval: 600
+    pull_timeout: 600
   lifecycle:
     refresh_interval: 10
   initial_apps:

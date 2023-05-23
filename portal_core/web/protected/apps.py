@@ -13,9 +13,10 @@ from fastapi import APIRouter, status, HTTPException
 from fastapi.responses import Response, StreamingResponse
 from tinydb import where, Query
 
+import portal_core.service.app_store
 from portal_core.database.database import apps_table
-from portal_core.model.app_meta import InstallationReason, InstalledApp, AppMeta
-from portal_core.service import app_infra, app_store
+from portal_core.model.app_meta import InstalledApp, AppMeta
+from portal_core.service import app_store
 
 log = logging.getLogger(__name__)
 
@@ -75,12 +76,11 @@ def get_app_json(name: str):
 	return app_store.get_store_app(name)
 
 
-
 @router.delete('/{name}', status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def uninstall_app(name: str):
 	with apps_table() as apps:
 		apps.remove(where('name') == name)
-	app_infra.refresh_app_infra()
+	portal_core.service.app_store.write_traefik_dyn_config()
 
 
 def _get_metadata_tar(name) -> tarfile.TarFile:

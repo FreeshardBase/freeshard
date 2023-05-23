@@ -189,7 +189,7 @@ def test_last_connection(api_client):
 			'reason': InstallationReason.CUSTOM,
 		}).dict())
 
-	app_infra.refresh_app_infra()
+	app_infra.write_traefik_dyn_config()
 	with create_apps_from_docker_compose():
 		with terminals_table() as terminals:  # type: Table
 			terminals.update(delete('last_connection'))

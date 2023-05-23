@@ -9,10 +9,9 @@ import gconf
 import jinja2
 from fastapi import FastAPI, Request, Response
 
-import portal_core.service.app_store
 from portal_core.database import database, migration
 from .model.identity import Identity
-from .service import app_store, app_infra, identity, app_lifecycle, peer, app_usage_reporting
+from .service import app_store, identity, app_lifecycle, peer, app_usage_reporting
 from .util.async_util import Periodic
 from .web import internal, public, protected, management
 
@@ -38,10 +37,10 @@ def create_app():
 
 	app_store.set_app_store_branch('master')
 	app_store.refresh_app_store()
-	portal_core.service.app_store.refresh_init_apps()
+	app_store.refresh_init_apps()
 	log.debug('refreshed initial apps')
 
-	app_infra.refresh_app_infra()
+	app_store.write_traefik_dyn_config()
 	log.debug('written app infra files (docker-compose and traefik)')
 
 	app_meta = metadata('portal_core')

@@ -25,7 +25,7 @@ def test_app_starts_and_stops(api_client):
 		apps.truncate()
 		apps.insert(app.dict())
 
-	app_infra.refresh_app_infra()
+	app_infra.write_traefik_dyn_config()
 	with create_apps_from_docker_compose():
 		assert docker_client.containers.get('foo-app').status == 'created'
 		api_client.get('internal/auth', headers={
@@ -69,7 +69,7 @@ def test_always_on_app_starts(api_client):
 		apps.truncate()
 		apps.insert(app.dict())
 
-	app_infra.refresh_app_infra()
+	app_infra.write_traefik_dyn_config()
 	with create_apps_from_docker_compose():
 		def assert_app_running():
 			assert docker_client.containers.get('foo-app').status == 'running'
