@@ -9,14 +9,7 @@ def test_get_initial_apps(api_client: TestClient):
 
 
 def test_install_app(api_client: TestClient):
-	new_app = {
-		'name': 'new-app',
-		'image': 'new-image',
-		'port': 80,
-		'data_dirs': ['foo', 'bar'],
-		'env_vars': {'foo': 'bar'}
-	}
-	response = api_client.post('protected/apps', json=new_app)
+	response = api_client.post('protected/apps/overleaf')
 	assert response.status_code == status.HTTP_201_CREATED
 	response = api_client.get('protected/apps').json()
 	assert len(response) == 2

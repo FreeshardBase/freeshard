@@ -15,8 +15,7 @@ from starlette.testclient import TestClient
 from tinydb import where
 
 from portal_core.database.database import apps_table
-from portal_core.model.app_meta import AppToInstall, InstallationReason
-from portal_core.service import app_infra
+from portal_core.model.app_meta import InstallationReason
 
 WAITING_DOCKER_IMAGE = 'nginx:alpine'
 
@@ -76,60 +75,6 @@ def verify_signature_auth(request: PreparedRequest, pubkey: PublicKey) -> Verify
 	)
 
 
-@contextmanager
-def install_test_app():
-	with apps_table() as apps:  # type: Table
-		apps.truncate()
-		apps.insert(AppToInstall(**{
-			'description': 'n/a',
-			'env_vars': None,
-			'image': WAITING_DOCKER_IMAGE,
-			'installation_reason': 'config',
-			'name': 'myapp',
-			'paths': {
-				'': {
-					'access': 'private',
-					'headers': {
-						'X-Ptl-Client-Id': '{{ auth.client_id }}',
-						'X-Ptl-Client-Name': '{{ auth.client_name }}',
-						'X-Ptl-Client-Type': '{{ auth.client_type }}',
-						'X-Ptl-ID': '{{ portal.id }}',
-						'X-Ptl-Foo': 'bar'
-					}
-				},
-				'/public': {
-					'access': 'public',
-					'headers': {
-						'X-Ptl-Client-Id': '{{ auth.client_id }}',
-						'X-Ptl-Client-Name': '{{ auth.client_name }}',
-						'X-Ptl-Client-Type': '{{ auth.client_type }}',
-						'X-Ptl-ID': '{{ portal.id }}',
-						'X-Ptl-Foo': 'baz'
-					}
-				},
-				'/peer': {
-					'access': 'peer',
-					'headers': {
-						'X-Ptl-Client-Id': '{{ auth.client_id }}',
-						'X-Ptl-Client-Name': '{{ auth.client_name }}',
-						'X-Ptl-Client-Type': '{{ auth.client_type }}',
-					}
-				}
-			},
-			'port': 80,
-			'services': None,
-			'v': '1.0'
-		}).dict())
-	app_infra.write_traefik_dyn_config()
-
-	with create_apps_from_docker_compose():
-		yield
-
-	with apps_table() as apps:
-		apps.remove(where('name') == 'myapp')
-	app_infra.write_traefik_dyn_config()
-
-
 def modify_request_like_traefik_forward_auth(request: PreparedRequest) -> Request:
 	url = urlparse(request.url)
 	netloc_without_subdomain = url.netloc.split('.', maxsplit=1)[1]
@@ -146,21 +91,3 @@ def modify_request_like_traefik_forward_auth(request: PreparedRequest) -> Reques
 			'date': request.headers['date'],
 		}
 	)
-
-
-def insert_foo_app():
-	app = AppToInstall(**{
-		'v': '3.1',
-		'name': 'foo-app',
-		'image': 'foo',
-		'version': '1.2.3',
-		'port': 1,
-		'paths': {
-			'': {'access': 'public'},
-		},
-		'lifecycle': {'idle_time_for_shutdown': 5},
-		'reason': InstallationReason.CUSTOM,
-	})
-	with apps_table() as apps:  # type: Table
-		apps.truncate()
-		apps.insert(app.dict())

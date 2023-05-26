@@ -54,7 +54,7 @@ def get_store_app(name) -> AppMeta:
 async def install_store_app(
 		name: str,
 		installation_reason: InstallationReason = InstallationReason.STORE,
-		store_branch: Optional[str] = 'master',
+		store_branch: Optional[str] = 'feature-docker-compose',  # todo: change back to master
 ):
 	with apps_table() as apps:  # type: Table
 		if apps.contains(Query().name == name):

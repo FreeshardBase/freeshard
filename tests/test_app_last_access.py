@@ -6,58 +6,54 @@ from tinydb import Query
 
 from portal_core.database.database import apps_table
 from portal_core.model.app_meta import InstalledApp
-from tests.util import insert_foo_app
 
 
 def test_app_last_access_is_set(api_client):
-	insert_foo_app()
+	assert _get_last_access_time_delta('filebrowser') is None
 
-	assert _get_last_access_time_delta('foo-app') is None
-
-	api_client.get('internal/auth', headers={
-		'X-Forwarded-Host': 'foo-app.myportal.org',
-		'X-Forwarded-Uri': '/pub'
+	response = api_client.get('internal/auth', headers={
+		'X-Forwarded-Host': 'filebrowser.myportal.org',
+		'X-Forwarded-Uri': '/share/foo'
 	})
+	response.raise_for_status()
 
-	assert _get_last_access_time_delta('foo-app') < 0.1
+	assert _get_last_access_time_delta('filebrowser') < 0.1
 	time.sleep(1)
-	assert _get_last_access_time_delta('foo-app') >= 1
+	assert _get_last_access_time_delta('filebrowser') >= 1
 
 	api_client.get('internal/auth', headers={
-		'X-Forwarded-Host': 'foo-app.myportal.org',
-		'X-Forwarded-Uri': '/pub'
+		'X-Forwarded-Host': 'filebrowser.myportal.org',
+		'X-Forwarded-Uri': '/share/foo'
 	})
 
-	assert _get_last_access_time_delta('foo-app') < 0.1
+	assert _get_last_access_time_delta('filebrowser') < 0.1
 
 
 def test_app_last_access_is_debounced(api_client):
-	insert_foo_app()
-
 	api_client.get('internal/auth', headers={
-		'X-Forwarded-Host': 'foo-app.myportal.org',
-		'X-Forwarded-Uri': '/pub'
+		'X-Forwarded-Host': 'filebrowser.myportal.org',
+		'X-Forwarded-Uri': '/share/foo'
 	})
 
-	assert _get_last_access_time_delta('foo-app') < 0.1
-	last_access = _get_last_access_time('foo-app')
+	assert _get_last_access_time_delta('filebrowser') < 0.1
+	last_access = _get_last_access_time('filebrowser')
 
 	time.sleep(0.3)
 	api_client.get('internal/auth', headers={
-		'X-Forwarded-Host': 'foo-app.myportal.org',
-		'X-Forwarded-Uri': '/pub'
+		'X-Forwarded-Host': 'filebrowser.myportal.org',
+		'X-Forwarded-Uri': '/share/foo'
 	})
 
-	assert _get_last_access_time('foo-app') == last_access
+	assert _get_last_access_time('filebrowser') == last_access
 
 	time.sleep(0.8)
 	api_client.get('internal/auth', headers={
-		'X-Forwarded-Host': 'foo-app.myportal.org',
-		'X-Forwarded-Uri': '/pub'
+		'X-Forwarded-Host': 'filebrowser.myportal.org',
+		'X-Forwarded-Uri': '/share/foo'
 	})
 
-	assert _get_last_access_time_delta('foo-app') < 0.1
-	assert _get_last_access_time('foo-app') != last_access
+	assert _get_last_access_time_delta('filebrowser') < 0.1
+	assert _get_last_access_time('filebrowser') != last_access
 
 
 def _get_last_access_time_delta(app_name: str) -> Optional[float]:

@@ -7,7 +7,7 @@ from pydantic import BaseModel, root_validator, validator
 from tinydb import Query
 
 from portal_core.database.database import apps_table
-from portal_core.model import app_migration
+from portal_core.model import app_meta_migration
 from portal_core.util import signals
 
 CURRENT_VERSION = '5.0'
@@ -89,8 +89,10 @@ class AppMeta(BaseModel):
 	def migrate(cls, values):
 		if 'v' not in values:
 			values['v'] = '0.0'
+		if int(values['v'][0]) < 5:
+			raise ValueError('App version is too old')
 		while values['v'] != CURRENT_VERSION:
-			migrate = app_migration.migrations[values['v']]
+			migrate = app_meta_migration.migrations[values['v']]
 			values = migrate(values)
 		return values
 

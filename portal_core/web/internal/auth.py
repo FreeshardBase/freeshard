@@ -12,6 +12,7 @@ from portal_core.model.app_meta import InstalledApp, Access, Path
 from portal_core.model.auth import AuthState
 from portal_core.model.identity import Identity, SafeIdentity
 from portal_core.service import pairing, peer as peer_service
+from portal_core.service.app_store import get_app_metadata
 from portal_core.service.management import validate_shared_secret, SharedSecretInvalid
 from portal_core.util.signals import on_terminal_auth, on_request_to_app, on_peer_auth
 from tinydb.table import Table
@@ -75,7 +76,7 @@ async def authenticate_and_authorize(
 				.render(auth=auth_state.header_values, portal=portal_header_values)
 	log.debug(f'granted auth for {x_forwarded_host}{x_forwarded_uri} with headers {response.headers.items()}')
 
-	on_request_to_app.send_async(app)
+	await on_request_to_app.send_async(app)
 
 
 def _match_app(x_forwarded_host) -> InstalledApp:
@@ -102,7 +103,8 @@ def _find_app(app_name) -> InstalledApp:
 
 
 def _match_path(uri, app: InstalledApp) -> Path:
-	for path, props in sorted(app.paths.items(), key=lambda x: len(x[0]), reverse=True):  # type: (str, Path)
+	app_meta = get_app_metadata(app.name)
+	for path, props in sorted(app_meta.paths.items(), key=lambda x: len(x[0]), reverse=True):  # type: (str, Path)
 		if uri.startswith(path):
 			return props
 

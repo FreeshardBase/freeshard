@@ -1,22 +1,20 @@
 import io
 import logging
-import mimetypes
-import re
 import tarfile
 from contextlib import suppress
-from pathlib import Path
 from typing import List
 
-import gconf
 from docker import DockerClient, errors as docker_errors
 from fastapi import APIRouter, status, HTTPException
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import Response
 from tinydb import where, Query
 
 import portal_core.service.app_store
 from portal_core.database.database import apps_table
 from portal_core.model.app_meta import InstalledApp, AppMeta
 from portal_core.service import app_store
+
+from portal_core.service.app_store import AppAlreadyInstalled
 
 log = logging.getLogger(__name__)
 
@@ -37,36 +35,6 @@ def list_all_apps():
 	return list(apps)
 
 
-@router.get('/{name}/icon')
-def get_app_icon(name: str):
-	matcher = re.compile(r'^icon\..+$')
-
-	app_repo = Path(gconf.get('path_root')) / 'core' / 'appstore' / name
-	if app_repo.exists() and app_repo.is_dir():
-		try:
-			icon_filename = [f for f in app_repo.iterdir() if matcher.match(f.name)][0]
-		except IndexError:
-			pass
-		else:
-			with open(icon_filename, 'rb') as icon_file:
-				buffer = io.BytesIO(icon_file.read())
-			return StreamingResponse(buffer, media_type=mimetypes.guess_type(icon_filename)[0])
-
-	else:
-		try:
-			tar = _get_metadata_tar(name)
-		except docker_errors.NotFound:
-			raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'No icon for app named {name}')
-		try:
-			icon_filename = [n for n in tar.getnames() if matcher.match(n)][0]
-		except IndexError:
-			pass
-		else:
-			return StreamingResponse(tar.extractfile(icon_filename), media_type=mimetypes.guess_type(icon_filename)[0])
-
-	raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'No icon for app named {name}')
-
-
 @router.get('/{name}/app.json', response_model=AppMeta)
 def get_app_json(name: str):
 	with apps_table() as apps:
@@ -81,6 +49,14 @@ def uninstall_app(name: str):
 	with apps_table() as apps:
 		apps.remove(where('name') == name)
 	portal_core.service.app_store.write_traefik_dyn_config()
+
+
+@router.post('/{name}', status_code=status.HTTP_201_CREATED)
+async def install_app(name: str):
+	try:
+		await app_store.install_store_app(name)
+	except AppAlreadyInstalled:
+		raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f'App {name} is already installed')
 
 
 def _get_metadata_tar(name) -> tarfile.TarFile:
