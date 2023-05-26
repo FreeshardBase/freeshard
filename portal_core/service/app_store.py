@@ -5,6 +5,7 @@ import json
 import logging
 import shutil
 import tarfile
+from tinydb.table import Table
 import datetime
 import threading
 from pathlib import Path
@@ -14,14 +15,12 @@ import pydantic
 import yaml
 
 from azure.storage.blob.aio import ContainerClient
-from typing import Iterable, List, Optional, Set
+from typing import Iterable, Optional, Set
 
 import gconf
 from gitlab import Gitlab, GitlabListError
-from gitlab.v4.objects import ProjectBranch
 from pydantic import BaseModel
 from tinydb import Query
-from tinydb.table import Table
 
 from portal_core.database.database import apps_table, identities_table
 from portal_core.model.app_meta import AppMeta, InstalledApp, InstallationReason, Status
@@ -32,8 +31,6 @@ from ..model.identity import SafeIdentity
 
 log = logging.getLogger(__name__)
 
-STORE_KEY_CURRENT_APP_STORE_BRANCH = 'current_app_store_branch'
-
 install_lock = threading.RLock()
 
 
@@ -41,12 +38,6 @@ class AppStoreStatus(BaseModel):
 	current_branch: str
 	commit_id: str
 	last_update: Optional[datetime.datetime]
-
-
-def get_store_apps() -> Iterable[AppMeta]:
-	sync_dir = Path(gconf.get('path_root')) / 'core' / 'appstore'
-	for app_dir in sync_dir.iterdir():
-		yield get_store_app(app_dir.name)
 
 
 def get_store_app(name) -> AppMeta:
@@ -65,7 +56,7 @@ async def install_store_app(
 		installation_reason: InstallationReason = InstallationReason.STORE,
 		store_branch: Optional[str] = 'master',
 ):
-	with apps_table() as apps:
+	with apps_table() as apps:  # type: Table
 		if apps.contains(Query().name == name):
 			raise AppAlreadyInstalled(name)
 		installed_app = InstalledApp(
@@ -94,7 +85,8 @@ async def install_store_app(
 		await asyncio.wait_for(pull_process.wait(), timeout=gconf.get('apps.app_store.pull_timeout'))
 
 		installed_app.status = Status.STOPPED
-		apps.insert(installed_app.dict(), doc_ids=[installed_app.name])
+		with apps_table() as apps:  # type: Table
+			apps.update(installed_app.dict(), Query().name == name)
 
 
 def get_installed_apps_path() -> Path:
@@ -141,92 +133,17 @@ async def render_docker_compose_template(app: InstalledApp):
 	))
 
 
-def set_app_store_branch(branch_name: str):
-	with _get_gitlab_apps_project() as apps_project:
-		available_branches: List[ProjectBranch] = apps_project.branches.list()
-
-	try:
-		branch = next(b for b in available_branches if b.name == branch_name)
-	except StopIteration:
-		raise AppStoreRefreshError(f'Unknown branch: {branch_name}')
-
-	app_store_status = AppStoreStatus(
-		current_branch=branch.name,
-		commit_id=branch.commit['id'],
-	)
-
-	database.set_value(STORE_KEY_CURRENT_APP_STORE_BRANCH, app_store_status.dict())
-
-
-def get_app_store_status() -> AppStoreStatus:
-	return AppStoreStatus.parse_obj(database.get_value(STORE_KEY_CURRENT_APP_STORE_BRANCH))
-
-
-def refresh_app_store():
-	try:
-		app_store_status = get_app_store_status()
-	except KeyError:
-		set_app_store_branch('master')
-	else:
-		set_app_store_branch(app_store_status.current_branch)
-
-	ref = get_app_store_status().commit_id
-	log.debug(f'refreshing app store with ref {ref}')
-	fs_sync_dir = Path(gconf.get('path_root')) / 'core' / 'appstore'
-
-	with _get_gitlab_apps_project() as apps_project:
-		try:
-			archive = tarfile.open(fileobj=io.BytesIO(apps_project.repository_archive(sha=ref)))
-		except GitlabListError as e:
-			log.error(f'Error during refreshing app store with ref {ref}: {e.error_message}')
-			raise AppStoreRefreshError from e
-
-	if fs_sync_dir.exists():
-		shutil.rmtree(fs_sync_dir)
-
-	archive_root = Path(archive.getnames()[0])
-	archive_apps = archive_root / 'apps'
-	for member in archive.getmembers():
-		if member.name.startswith(str(archive_apps)) and member.name != str(archive_apps):
-			fs_file = fs_sync_dir / Path(member.name).relative_to(archive_apps)
-			if member.isdir():
-				fs_file.mkdir(exist_ok=True, parents=True)
-			else:
-				with open(fs_file, 'wb') as f:
-					if data := archive.extractfile(member):
-						f.write(data.read())
-
-	with database.global_db_lock:
-		current_status = get_app_store_status()
-		if current_status.commit_id != ref:
-			log.error(
-				f'Race Condition: commit_id changed from {ref} to {current_status.commit_id}'
-				f' during app store refresh')
-		else:
-			current_status.last_update = datetime.datetime.utcnow()
-			database.set_value(STORE_KEY_CURRENT_APP_STORE_BRANCH, current_status.dict())
-
-
-@contextlib.contextmanager
-def _get_gitlab_apps_project():
-	apps_project = Gitlab('https://gitlab.com').projects.get(gconf.get('apps.app_store.project_id'))
-	yield apps_project
-
-
-class AppStoreRefreshError(Exception):
-	pass
-
-
-def refresh_init_apps():
+async def refresh_init_apps():
 	configured_init_apps = set(gconf.get('apps.initial_apps'))
 	installed_apps = get_installed_apps()
 
 	for app_name in configured_init_apps - installed_apps:
-		install_store_app(app_name, InstallationReason.CONFIG)
+		await install_store_app(app_name, InstallationReason.CONFIG)
 
 
 def get_installed_apps() -> Set[str]:
 	installed_apps_path = Path(gconf.get('path_root')) / 'core' / 'installed_apps'
+	installed_apps_path.mkdir(exist_ok=True, parents=True)
 	installed_apps = {p.name for p in installed_apps_path.iterdir()}
 	return installed_apps
 
@@ -259,4 +176,5 @@ def get_app_metadata(app_name: str) -> AppMeta:
 	app_path = get_installed_apps_path() / app_name
 	if not app_path.exists():
 		raise AppNotInstalled(app_name)
-	return AppMeta.parse_file(app_path / 'app.json')
+	with open(app_path / 'app.json') as f:
+		return AppMeta(**json.load(f))

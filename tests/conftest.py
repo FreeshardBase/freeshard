@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import shutil
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -21,6 +22,7 @@ from portal_core import Identity
 from portal_core.model.identity import OutputIdentity
 from portal_core.model.profile import Profile
 from portal_core.web.internal.call_peer import _get_app_for_ip_address
+import pytest_asyncio
 
 
 @pytest.fixture(autouse=True)
@@ -43,11 +45,11 @@ def init_db(config_override):
 	portal_core.database.init_database()
 
 
-@pytest.fixture
-def api_client(init_db) -> TestClient:
+@pytest_asyncio.fixture
+async def api_client(init_db) -> TestClient:
 	os.environ['CONFIG'] = str(Path(__file__).parent / 'config.yml')
 
-	app = portal_core.create_app()
+	app = await portal_core.create_app()
 
 	# Cookies are scoped for the domain, so we have to configure the TestClient with it.
 	# This way, the TestClient remembers cookies
@@ -157,6 +159,19 @@ def peer_mock_requests(mocker):
 		)
 
 	_get_app_for_ip_address.cache_clear()
+
+
+@pytest.fixture
+def mock_app_store(mocker):
+	async def mock_download_azure_blob_directory(directory_name: str, target_dir: Path):
+		last_elem = directory_name.split('/')[-1]
+		source_dir = Path(__file__).parent / 'mock_app_store' / last_elem
+		shutil.copytree(source_dir, target_dir)
+
+	mocker.patch(
+		'portal_core.service.app_store.download_azure_blob_directory',
+		mock_download_azure_blob_directory
+	)
 
 
 @dataclass

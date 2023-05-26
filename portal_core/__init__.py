@@ -18,7 +18,7 @@ from .web import internal, public, protected, management
 log = logging.getLogger(__name__)
 
 
-def create_app():
+async def create_app():
 	shipped_config = gconf.load('config.yml')
 	additional_config = gconf.load(os.environ['CONFIG']) if 'CONFIG' in os.environ else None
 	configure_logging()
@@ -31,17 +31,12 @@ def create_app():
 
 	default_identity = identity.init_default_identity()
 	try:
-		_render_traefik_config(default_identity)
+		_render_traefik_static_config(default_identity)
 	except FileNotFoundError:
 		log.error('Traefik template not found, Traefik config cannot be created')
 
-	app_store.set_app_store_branch('master')
-	app_store.refresh_app_store()
-	app_store.refresh_init_apps()
+	await app_store.refresh_init_apps()
 	log.debug('refreshed initial apps')
-
-	app_store.write_traefik_dyn_config()
-	log.debug('written app infra files (docker-compose and traefik)')
 
 	app_meta = metadata('portal_core')
 	app = FastAPI(
@@ -100,7 +95,7 @@ async def lifespan(_):
 		await t.wait()
 
 
-def _render_traefik_config(id_: Identity):
+def _render_traefik_static_config(id_: Identity):
 	root = Path(gconf.get('path_root'))
 	source = root / 'core/traefik.template.yml'
 	target = root / 'core/traefik.yml'
@@ -119,9 +114,9 @@ def _render_traefik_config(id_: Identity):
 		variable_end_string='%%',
 	)
 	with open(target, 'w') as f_traefik:
-		f_traefik.write(template.render(identity=id_.id[:prefix_length]))
+		f_traefik.write(template.render(identity=id_.short_id))
 
-	log.info('created traefik config')
+	log.info('created traefik static config')
 
 
 async def _log_request_and_response(request: Request, response: Response):

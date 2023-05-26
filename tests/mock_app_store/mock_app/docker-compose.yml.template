@@ -1,0 +1,21 @@
+version: '3.5'
+
+networks:
+    portal:
+        external: true
+
+services:
+    mock_app:
+        restart: always
+        image: portalapps.azurecr.io/ptl-apps/filebrowser:master
+        container_name: mock_app
+        ports:
+        - 80:80
+        volumes:
+        - "{{ fs.app_data }}:/data"
+        - "{{ fs.shared_documents }}:/data/documents"
+        - "{{ fs.shared_media }}:/data/media"
+        - "{{ fs.shared_music }}:/data/music"
+        - "/var/run/docker.sock:/var/run/docker.sock:ro"
+        networks:
+        - portal

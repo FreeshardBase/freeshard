@@ -67,7 +67,7 @@ class Lifecycle(BaseModel):
 		return v
 
 	@root_validator
-	def validate(cls, values):
+	def validate_exclusivity(cls, values):
 		if values.get('always_on') and values.get('idle_time_for_shutdown', None):
 			raise ValueError('if always_on is true, idle_time_for_shutdown must not be set')
 		if not values.get('always_on') and not values.get('idle_time_for_shutdown', None):
@@ -104,7 +104,7 @@ class InstalledApp(BaseModel):
 
 
 @signals.on_request_to_app.connect
-def update_last_access(app: InstalledApp):
+async def update_last_access(app: InstalledApp):
 	now = datetime.datetime.utcnow()
 	max_update_frequency = datetime.timedelta(seconds=gconf.get('apps.last_access.max_update_frequency'))
 	if app.last_access and now - app.last_access < max_update_frequency:

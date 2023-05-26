@@ -49,21 +49,3 @@ def included_dirs():
 					'name': str(path.relative_to(path_root)),
 					'compression': 'deflate',
 				}
-
-
-def postgres_dump():
-	postgres_user = gconf.get('services.postgres.user')
-	postgres_password = gconf.get('services.postgres.password')
-
-	docker_client = docker.from_env()
-	postgres_container: Container = docker_client.containers.get('postgres')
-	pg_dumpall = postgres_container.exec_run(
-		['pg_dumpall', '--username', postgres_user],
-		environment={'PGPASSWORD': postgres_password},
-		stdout=True, stream=True,
-	)
-
-	return {
-		'stream': pg_dumpall.output,
-		'name': 'postgres_dump.sql'
-	}

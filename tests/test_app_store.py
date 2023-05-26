@@ -4,8 +4,6 @@ import pytest
 
 from portal_core.service import app_store
 from portal_core.service.app_store import AppStoreStatus
-from portal_core.web.protected.store import StoreBranchIn
-
 
 def test_install_from_store(api_client):
 	app_store.refresh_app_store()
