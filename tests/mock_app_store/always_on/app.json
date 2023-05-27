@@ -1,0 +1,30 @@
+{
+  "v": "5.0",
+  "app_version": "0.1.0",
+  "name": "always_on",
+  "icon": "icon.svg",
+  "entrypoints": [
+    {
+      "container_name": "always_on",
+      "container_port": 80,
+      "entrypoint_port": "http"
+    }
+  ],
+  "paths": {
+    "": {
+      "access": "public",
+      "headers": {
+        "X-Ptl-Client-Id": "{{ auth.client_id }}",
+        "X-Ptl-Client-Name": "{{ auth.client_name }}",
+        "X-Ptl-Client-Type": "{{ auth.client_type }}"
+      }
+    }
+  },
+  "lifecycle": {
+    "always_on": true
+  },
+  "store_info": {
+    "description_short": "an app that is always running",
+    "is_featured": true
+  }
+}

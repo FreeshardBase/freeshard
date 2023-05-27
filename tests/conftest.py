@@ -45,13 +45,13 @@ def config_override(tmp_path, request):
 @pytest_asyncio.fixture
 async def api_client() -> TestClient:
 	os.environ['CONFIG'] = str(Path(__file__).parent / 'config.yml')
-
-	app = await portal_core.create_app()
-
-	# Cookies are scoped for the domain, so we have to configure the TestClient with it.
-	# This way, the TestClient remembers cookies
-	whoareyou = TestClient(app).get('public/meta/whoareyou').json()
 	async with docker_network_portal():
+
+		app = await portal_core.create_app()
+
+		# Cookies are scoped for the domain, so we have to configure the TestClient with it.
+		# This way, the TestClient remembers cookies
+		whoareyou = TestClient(app).get('public/meta/whoareyou').json()
 		with TestClient(app, base_url=f'https://{whoareyou["domain"]}') as client:
 			yield client
 

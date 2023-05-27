@@ -31,6 +31,7 @@ class Status(str, Enum):
 	INSTALLING = 'installing'
 	STOPPED = 'stopped'
 	RUNNING = 'running'
+	ABSENT = 'absent'
 
 
 class EntrypointPort(str, Enum):

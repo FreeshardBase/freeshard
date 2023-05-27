@@ -35,6 +35,15 @@ def list_all_apps():
 	return list(apps)
 
 
+@router.get('/{name}', response_model=InstalledApp)
+def get_app(name: str):
+	with apps_table() as apps:
+		installed_app = apps.get(Query().name == name)
+	if installed_app:
+		return installed_app
+	raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+
 @router.get('/{name}/app.json', response_model=AppMeta)
 def get_app_json(name: str):
 	with apps_table() as apps:

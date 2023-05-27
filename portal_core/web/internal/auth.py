@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 import gconf
 from cachetools import cached, TTLCache
@@ -12,7 +13,7 @@ from portal_core.model.app_meta import InstalledApp, Access, Path
 from portal_core.model.auth import AuthState
 from portal_core.model.identity import Identity, SafeIdentity
 from portal_core.service import pairing, peer as peer_service
-from portal_core.service.app_store import get_app_metadata
+from portal_core.service.app_tools import get_app_metadata
 from portal_core.service.management import validate_shared_secret, SharedSecretInvalid
 from portal_core.util.signals import on_terminal_auth, on_request_to_app, on_peer_auth
 from tinydb.table import Table
@@ -96,10 +97,12 @@ def _get_portal_identity():
 
 
 @cached(cache=TTLCache(maxsize=32, ttl=gconf.get('tests.cache_ttl', default=3)))
-def _find_app(app_name) -> InstalledApp:
+def _find_app(app_name) -> Optional[InstalledApp]:
 	with apps_table() as apps:  # type: Table
-		app = InstalledApp(**apps.get(Query().name == app_name))
-	return app
+		if result := apps.get(Query().name == app_name):
+			return InstalledApp(**result)
+		else:
+			return None
 
 
 def _match_path(uri, app: InstalledApp) -> Path:

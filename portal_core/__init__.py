@@ -12,7 +12,7 @@ from fastapi import FastAPI, Request, Response
 from portal_core.database import database, migration
 from .model.identity import Identity
 from .service import app_store, identity, app_lifecycle, peer, app_usage_reporting
-from .service.app_lifecycle import stop_all_apps, remove_all_apps
+from .service.app_tools import docker_stop_all_apps, docker_remove_all_apps
 from .util.async_util import Periodic
 from .web import internal, public, protected, management
 
@@ -90,8 +90,8 @@ async def lifespan(_):
 	for t in background_tasks:
 		t.start()
 	yield
-	await stop_all_apps()
-	await remove_all_apps()
+	await docker_stop_all_apps()
+	await docker_remove_all_apps()
 	for t in background_tasks:
 		t.stop()
 	for t in background_tasks:

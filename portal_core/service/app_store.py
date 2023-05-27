@@ -9,7 +9,7 @@ import pydantic
 import yaml
 
 from azure.storage.blob.aio import ContainerClient
-from typing import Optional, Set
+from typing import Optional
 
 import gconf
 from pydantic import BaseModel
@@ -17,9 +17,10 @@ from tinydb import Query
 
 from portal_core.database.database import apps_table, identities_table
 from portal_core.model.app_meta import AppMeta, InstalledApp, InstallationReason, Status
+from portal_core.service.app_tools import docker_create_app, get_installed_apps_path, get_installed_apps, \
+	get_app_metadata
 from portal_core.service.traefik_dynamic_config import compile_config, AppInfo
 from portal_core.model.identity import SafeIdentity, Identity
-from portal_core.util.subprocess import subprocess
 
 log = logging.getLogger(__name__)
 
@@ -64,20 +65,9 @@ async def install_store_app(
 			f'{store_branch}/all_apps/{name}',
 			get_installed_apps_path() / name,
 		)
-
 		write_traefik_dyn_config()
-
 		await render_docker_compose_template(installed_app)
-
-		await subprocess('docker-compose', 'pull', cwd=get_installed_apps_path() / name)
-
-		installed_app.status = Status.STOPPED
-		with apps_table() as apps:  # type: Table
-			apps.update(installed_app.dict(), Query().name == name)
-
-
-def get_installed_apps_path() -> Path:
-	return Path(gconf.get('path_root')) / 'core' / 'installed_apps'
+		await docker_create_app(name)
 
 
 class AppAlreadyInstalled(Exception):
@@ -128,13 +118,6 @@ async def refresh_init_apps():
 		await install_store_app(app_name, InstallationReason.CONFIG)
 
 
-def get_installed_apps() -> Set[str]:
-	installed_apps_path = Path(gconf.get('path_root')) / 'core' / 'installed_apps'
-	installed_apps_path.mkdir(exist_ok=True, parents=True)
-	installed_apps = {p.name for p in installed_apps_path.iterdir()}
-	return installed_apps
-
-
 def write_traefik_dyn_config():
 	with apps_table() as apps:
 		apps = [InstalledApp(**a) for a in apps.all()]
@@ -153,15 +136,3 @@ def write_to_yaml(spec: pydantic.BaseModel, output_path: Path):
 	with open(output_path, 'w') as f:
 		f.write('# == DO NOT MODIFY ==\n# this file is auto-generated\n\n')
 		f.write(yaml.dump(spec.dict(exclude_none=True)))
-
-
-class AppNotInstalled(Exception):
-	pass
-
-
-def get_app_metadata(app_name: str) -> AppMeta:
-	app_path = get_installed_apps_path() / app_name
-	if not app_path.exists():
-		raise AppNotInstalled(app_name)
-	with open(app_path / 'app.json') as f:
-		return AppMeta(**json.load(f))
