@@ -20,9 +20,6 @@ apps:
   app_store:
     base_url: "https://storageaccountportab0da.blob.core.windows.net"
     container_name: "app-store"
-    pull_timeout: 600
-    up_timeout: 300
-    stop_timeout: 120
   lifecycle:
     refresh_interval: 10
   initial_apps:

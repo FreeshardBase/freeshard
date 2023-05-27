@@ -1,10 +1,6 @@
-import contextlib
-import subprocess
-from contextlib import contextmanager
-from pathlib import Path
+from contextlib import asynccontextmanager
 from urllib.parse import urlparse
 
-import gconf
 from common_py.crypto import PublicKey
 from fastapi import Response
 from http_message_signatures import HTTPSignatureKeyResolver, algorithms, VerifyResult
@@ -12,10 +8,8 @@ from httpx import URL, Request
 from requests import PreparedRequest
 from requests_http_signature import HTTPSignatureAuth
 from starlette.testclient import TestClient
-from tinydb import where
 
-from portal_core.database.database import apps_table
-from portal_core.model.app_meta import InstallationReason
+from portal_core.util.subprocess import subprocess
 
 WAITING_DOCKER_IMAGE = 'nginx:alpine'
 
@@ -39,25 +33,6 @@ def add_terminal(api_client, pairing_code, t_name):
 	return api_client.post(
 		f'public/pair/terminal?code={pairing_code}',
 		json={'name': t_name})
-
-
-@contextlib.contextmanager
-def create_apps_from_docker_compose():
-	dc = Path(gconf.get('path_root')) / 'core' / 'docker-compose-apps.yml'
-	subprocess.run(
-		f'docker-compose -p apps -f {dc.name} up --remove-orphans --no-start',
-		cwd=dc.parent,
-		shell=True,
-		check=True,
-	)
-	try:
-		yield
-	finally:
-		subprocess.run(
-			f'docker-compose -p apps -f {dc.name} down', cwd=dc.parent,
-			shell=True,
-			check=True,
-		)
 
 
 def verify_signature_auth(request: PreparedRequest, pubkey: PublicKey) -> VerifyResult:
@@ -91,3 +66,12 @@ def modify_request_like_traefik_forward_auth(request: PreparedRequest) -> Reques
 			'date': request.headers['date'],
 		}
 	)
+
+
+@asynccontextmanager
+async def docker_network_portal():
+	await subprocess('docker', 'network', 'create', 'portal')
+	try:
+		yield
+	finally:
+		await subprocess('docker', 'network', 'rm', 'portal')

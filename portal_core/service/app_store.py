@@ -1,11 +1,5 @@
-import asyncio
-import contextlib
-import io
 import json
 import logging
-import shutil
-import tarfile
-from tinydb.table import Table
 import datetime
 import threading
 from pathlib import Path
@@ -15,19 +9,17 @@ import pydantic
 import yaml
 
 from azure.storage.blob.aio import ContainerClient
-from typing import Iterable, Optional, Set
+from typing import Optional, Set
 
 import gconf
-from gitlab import Gitlab, GitlabListError
 from pydantic import BaseModel
 from tinydb import Query
 
 from portal_core.database.database import apps_table, identities_table
 from portal_core.model.app_meta import AppMeta, InstalledApp, InstallationReason, Status
 from portal_core.service.traefik_dynamic_config import compile_config, AppInfo
-from .. import Identity
-from ..database import database
-from ..model.identity import SafeIdentity
+from portal_core.model.identity import SafeIdentity, Identity
+from portal_core.util.subprocess import subprocess
 
 log = logging.getLogger(__name__)
 
@@ -77,12 +69,7 @@ async def install_store_app(
 
 		await render_docker_compose_template(installed_app)
 
-		pull_process = await asyncio.create_subprocess_exec(
-			'docker-compose', 'pull',
-			cwd=get_installed_apps_path() / name,
-			stdout=asyncio.subprocess.PIPE,
-			stderr=asyncio.subprocess.PIPE)
-		await asyncio.wait_for(pull_process.wait(), timeout=gconf.get('apps.app_store.pull_timeout'))
+		await subprocess('docker-compose', 'pull', cwd=get_installed_apps_path() / name)
 
 		installed_app.status = Status.STOPPED
 		with apps_table() as apps:  # type: Table

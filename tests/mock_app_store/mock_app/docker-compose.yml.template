@@ -7,7 +7,7 @@ networks:
 services:
     mock_app:
         restart: always
-        image: portalapps.azurecr.io/ptl-apps/filebrowser:master
+        image: nginx:alpine
         container_name: mock_app
         ports:
         - 80:80

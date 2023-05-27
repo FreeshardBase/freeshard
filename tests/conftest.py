@@ -24,6 +24,8 @@ from portal_core.model.profile import Profile
 from portal_core.web.internal.call_peer import _get_app_for_ip_address
 import pytest_asyncio
 
+from tests.util import docker_network_portal
+
 
 @pytest.fixture(autouse=True)
 def config_override(tmp_path, request):
@@ -40,13 +42,8 @@ def config_override(tmp_path, request):
 			yield
 
 
-@pytest.fixture
-def init_db(config_override):
-	portal_core.database.init_database()
-
-
 @pytest_asyncio.fixture
-async def api_client(init_db) -> TestClient:
+async def api_client() -> TestClient:
 	os.environ['CONFIG'] = str(Path(__file__).parent / 'config.yml')
 
 	app = await portal_core.create_app()
@@ -54,8 +51,9 @@ async def api_client(init_db) -> TestClient:
 	# Cookies are scoped for the domain, so we have to configure the TestClient with it.
 	# This way, the TestClient remembers cookies
 	whoareyou = TestClient(app).get('public/meta/whoareyou').json()
-	with TestClient(app, base_url=f'https://{whoareyou["domain"]}') as client:
-		yield client
+	async with docker_network_portal():
+		with TestClient(app, base_url=f'https://{whoareyou["domain"]}') as client:
+			yield client
 
 
 @pytest.fixture(scope='session')
