@@ -5,13 +5,11 @@ from starlette import status
 from tinydb.operations import delete
 
 from portal_core.database.database import apps_table, terminals_table
-from portal_core.model.app_meta import AppToInstall, InstallationReason
+from portal_core.model.app_meta import InstallationReason
 from portal_core.model.profile import Profile
 from portal_core.model.terminal import Terminal, Icon
-from portal_core.service import app_infra
 from tests.conftest import management_api_mock_context
-from tests.util import get_pairing_code, add_terminal, WAITING_DOCKER_IMAGE, create_apps_from_docker_compose, \
-	pair_new_terminal
+from tests.util import get_pairing_code, add_terminal, WAITING_DOCKER_IMAGE, pair_new_terminal
 
 
 def _delete_terminal(api_client, t_id):
@@ -173,58 +171,46 @@ def test_authorization_deleted_terminal(api_client):
 	assert response.status_code == 401
 
 
-def test_last_connection(api_client):
+def test_last_connection(api_client, mock_app_store):
 	t_name = 'T1'
 	pair_new_terminal(api_client, t_name)
 	last_connection_0 = Terminal(
 		**api_client.get(f'protected/terminals/name/{t_name}').json()
 	).last_connection
 
-	with apps_table() as apps:  # type: Table
-		apps.truncate()
-		apps.insert(AppToInstall(**{
-			'name': 'foo-app',
-			'image': WAITING_DOCKER_IMAGE,
-			'port': 1,
-			'reason': InstallationReason.CUSTOM,
-		}).dict())
+	response = api_client.post('protected/apps/mock_app')
+	response.raise_for_status()
 
-	app_infra.write_traefik_dyn_config()
-	with create_apps_from_docker_compose():
-		with terminals_table() as terminals:  # type: Table
-			terminals.update(delete('last_connection'))
-		last_connection_missing = Terminal(
-			**api_client.get(f'protected/terminals/name/{t_name}').json()
-		)
-		assert not last_connection_missing.last_connection
+	with terminals_table() as terminals:  # type: Table
+		terminals.update(delete('last_connection'))
+	last_connection_missing = Terminal(
+		**api_client.get(f'protected/terminals/name/{t_name}').json()
+	)
+	assert not last_connection_missing.last_connection
 
-		sleep(0.1)
-		assert api_client.get('internal/auth', headers={
-			'X-Forwarded-Host': 'foo-app.myportal.org',
-			'X-Forwarded-Uri': '/foo'
-		}).status_code == status.HTTP_200_OK
-		last_connection_1 = Terminal(
-			**api_client.get(f'protected/terminals/name/{t_name}').json()
-		).last_connection
+	sleep(0.1)
+	assert api_client.get('internal/auth', headers={
+		'X-Forwarded-Host': 'mock_app.myportal.org',
+		'X-Forwarded-Uri': '/foo'
+	}).status_code == status.HTTP_200_OK
+	last_connection_1 = Terminal(
+		**api_client.get(f'protected/terminals/name/{t_name}').json()
+	).last_connection
 
-		sleep(0.1)
-		last_connection_2 = Terminal(
-			**api_client.get(f'protected/terminals/name/{t_name}').json()
-		).last_connection
+	sleep(0.1)
+	last_connection_2 = Terminal(
+		**api_client.get(f'protected/terminals/name/{t_name}').json()
+	).last_connection
 
-		sleep(0.1)
-		assert api_client.get('internal/auth', headers={
-			'X-Forwarded-Host': 'foo-app.myportal.org',
-			'X-Forwarded-Uri': '/foo'
-		}).status_code == status.HTTP_200_OK
-		last_connection_3 = Terminal(
-			**api_client.get(f'protected/terminals/name/{t_name}').json()
-		).last_connection
+	sleep(0.1)
+	assert api_client.get('internal/auth', headers={
+		'X-Forwarded-Host': 'mock_app.myportal.org',
+		'X-Forwarded-Uri': '/foo'
+	}).status_code == status.HTTP_200_OK
+	last_connection_3 = Terminal(
+		**api_client.get(f'protected/terminals/name/{t_name}').json()
+	).last_connection
 
-	print(last_connection_0)
-	print(last_connection_1)
-	print(last_connection_2)
-	print(last_connection_3)
 	assert last_connection_0 < last_connection_1 == last_connection_2 < last_connection_3
 
 

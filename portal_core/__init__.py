@@ -9,7 +9,7 @@ import gconf
 import jinja2
 from fastapi import FastAPI, Request, Response
 
-from portal_core.database import database, migration
+from portal_core.database import database
 from .model.identity import Identity
 from .service import app_store, identity, app_lifecycle, peer, app_usage_reporting
 from .service.app_tools import docker_stop_all_apps, docker_remove_all_apps
@@ -28,7 +28,6 @@ async def create_app():
 		log.info(f'loaded additional config {str(additional_config)}')
 
 	database.init_database()
-	migration.migrate_all()
 
 	default_identity = identity.init_default_identity()
 	try:

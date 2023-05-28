@@ -88,10 +88,6 @@ class AppMeta(BaseModel):
 
 	@root_validator(pre=True)
 	def migrate(cls, values):
-		if 'v' not in values:
-			values['v'] = '0.0'
-		if int(values['v'][0]) < 5:
-			raise ValueError('App version is too old')
 		while values['v'] != CURRENT_VERSION:
 			migrate = app_meta_migration.migrations[values['v']]
 			values = migrate(values)

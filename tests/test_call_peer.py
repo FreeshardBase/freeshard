@@ -6,8 +6,9 @@ from requests import PreparedRequest, Request
 from requests_http_signature import HTTPSignatureAuth
 
 from portal_core.model.identity import OutputIdentity
-from tests.util import verify_signature_auth, install_test_app, modify_request_like_traefik_forward_auth
+from tests.util import verify_signature_auth, modify_request_like_traefik_forward_auth
 
+pytest_plugins = ('pytest_asyncio',)
 
 @pytest.mark.skip(reason='fails sometimes with missing signature, especially on CI build')
 def test_call_peer_from_app_basic(peer_mock_requests, api_client):
@@ -42,7 +43,11 @@ def test_call_peer_from_app_post(peer_mock_requests, api_client):
 	assert received_request.body == b'foo data bar'
 
 
-def test_peer_auth_basic(peer_mock_requests, api_client):
+@pytest.mark.asyncio
+async def test_peer_auth_basic(peer_mock_requests, api_client, mock_app_store):
+	response = api_client.post('protected/apps/mock_app')
+	response.raise_for_status()
+
 	peer = peer_mock_requests.identity
 	peer_auth = HTTPSignatureAuth(
 		signature_algorithm=algorithms.RSA_PSS_SHA512,
@@ -53,24 +58,22 @@ def test_peer_auth_basic(peer_mock_requests, api_client):
 
 	request_to_traefik = Request(
 		method='GET',
-		url=f'https://myapp.{whoareyou.domain}/peer',
+		url=f'https://mock_app.{whoareyou.domain}/peer',
 		auth=peer_auth,
 	).prepare()
 
 	request_to_auth = modify_request_like_traefik_forward_auth(request_to_traefik)
 
-	with install_test_app():
+	response = api_client.send(request_to_auth)
+	assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
-		response = api_client.send(request_to_auth)
-		assert response.status_code == status.HTTP_401_UNAUTHORIZED
+	api_client.put('protected/peers', json={
+		'id': peer.short_id,
+		'name': 'peer',
+	})
 
-		api_client.put('protected/peers', json={
-			'id': peer.short_id,
-			'name': 'peer',
-		})
-
-		response = api_client.send(request_to_auth)
-		response.raise_for_status()
-		assert response.headers['X-Ptl-Client-Type'] == 'peer'
-		assert response.headers['X-Ptl-Client-Id'] == peer.id
-		assert response.headers['X-Ptl-Client-Name'] == peer.name
+	response = api_client.send(request_to_auth)
+	response.raise_for_status()
+	assert response.headers['X-Ptl-Client-Type'] == 'peer'
+	assert response.headers['X-Ptl-Client-Id'] == peer.id
+	assert response.headers['X-Ptl-Client-Name'] == peer.name

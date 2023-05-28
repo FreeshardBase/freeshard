@@ -137,12 +137,12 @@ def management_api_mock():
 
 @pytest.fixture
 def peer_mock_requests(mocker):
-	mocker.patch('portal_core.web.internal.call_peer._get_app_for_ip_address', lambda x: 'myapp')
+	mocker.patch('portal_core.web.internal.call_peer._get_app_for_ip_address', lambda x: 'mock_app')
 	_get_app_for_ip_address.cache_clear()
 	peer_identity = Identity.create('mock peer')
 	print(f'mocking peer {peer_identity.short_id}')
 	base_url = f'https://{peer_identity.domain}/core'
-	app_url = f'https://myapp.{peer_identity.domain}'
+	app_url = f'https://mock_app.{peer_identity.domain}'
 
 	with (responses.RequestsMock(assert_all_requests_are_fired=False) as rsps):
 		rsps.get(base_url + '/public/meta/whoareyou', json=OutputIdentity(**peer_identity.dict()).dict())
