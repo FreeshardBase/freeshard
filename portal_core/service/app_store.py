@@ -98,10 +98,10 @@ async def download_azure_blob_directory(directory_name: str, target_dir: Path):
 
 async def render_docker_compose_template(app: InstalledApp):
 	fs = {
-		'app_data': Path(gconf.get('path_root')) / 'user_data' / 'app_data' / app.name,
-		'shared_documents': Path(gconf.get('path_root')) / 'user_data' / 'shared' / 'documents',
-		'shared_media': Path(gconf.get('path_root')) / 'user_data' / 'shared' / 'media',
-		'shared_music': Path(gconf.get('path_root')) / 'user_data' / 'shared' / 'music',
+		'app_data': (Path(gconf.get('path_root')) / 'user_data' / 'app_data' / app.name).absolute(),
+		'shared_documents': (Path(gconf.get('path_root')) / 'user_data' / 'shared' / 'documents').absolute(),
+		'shared_media': (Path(gconf.get('path_root')) / 'user_data' / 'shared' / 'media').absolute(),
+		'shared_music': (Path(gconf.get('path_root')) / 'user_data' / 'shared' / 'music').absolute(),
 	}
 
 	with identities_table() as identities:

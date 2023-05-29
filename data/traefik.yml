@@ -1,0 +1,33 @@
+entryPoints:
+  http:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: https
+          scheme: https
+  https:
+    address: ":443"
+  mqtt:
+    address: ":8883"
+
+providers:
+  file:
+    directory: "traefik_dyn"
+    watch: true
+  docker:
+    exposedByDefault: false
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: "contact@getportal.net"
+      storage: "acme.json"
+      caServer: "https://acme-v02.api.letsencrypt.org/directory"
+      dnsChallenge:
+        provider: azure
+
+
+api:
+  dashboard: true
+  insecure: true

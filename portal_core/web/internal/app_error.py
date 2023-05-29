@@ -1,5 +1,6 @@
 import base64
 import logging
+import sys
 from functools import lru_cache
 from pathlib import Path
 
@@ -10,6 +11,8 @@ from docker import errors as docker_errors
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
+
+from portal_core.util.misc import project_root
 
 log = logging.getLogger(__name__)
 
@@ -78,7 +81,7 @@ def get_docker_client():
 
 @lru_cache()
 def get_template_splash():
-	with open(Path.cwd() / 'data' / 'splash.html', 'r') as f:
+	with open(project_root / 'data' / 'splash.html', 'r') as f:
 		template = jinja2.Template(f.read())
 	return template
 
