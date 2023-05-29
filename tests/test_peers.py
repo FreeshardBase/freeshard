@@ -35,7 +35,6 @@ def test_info_is_resolved(peer_mock_requests, api_client):
 	assert peer.name == 'mock peer'
 
 
-
 def test_add_invalid_id(api_client):
 	response = api_client.put('protected/peers', json={
 		'id': 'foo',

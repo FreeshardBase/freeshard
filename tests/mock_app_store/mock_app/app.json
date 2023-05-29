@@ -8,6 +8,11 @@
       "container_name": "mock_app",
       "container_port": 80,
       "entrypoint_port": "http"
+    },
+    {
+      "container_name": "mock_app",
+      "container_port": 1883,
+      "entrypoint_port": "mqtt"
     }
   ],
   "paths": {

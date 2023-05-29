@@ -44,15 +44,6 @@ def get_app(name: str):
 	raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
 
-@router.get('/{name}/app.json', response_model=AppMeta)
-def get_app_json(name: str):
-	with apps_table() as apps:
-		installed_app = apps.get(Query().name == name)
-	if installed_app:
-		return installed_app
-	return app_store.get_store_app(name)
-
-
 @router.delete('/{name}', status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def uninstall_app(name: str):
 	with apps_table() as apps:
@@ -66,17 +57,3 @@ async def install_app(name: str):
 		await app_store.install_store_app(name)
 	except AppAlreadyInstalled:
 		raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f'App {name} is already installed')
-
-
-def _get_metadata_tar(name) -> tarfile.TarFile:
-	docker_client = DockerClient(base_url='unix://var/run/docker.sock')
-	try:
-		container = docker_client.containers.get(name)
-	except docker_errors.NotFound as e:
-		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from e
-	bits, _ = container.get_archive('/portal_meta/icon.svg')
-	f = io.BytesIO()
-	for chunk in bits:
-		f.write(chunk)
-	f.seek(0)
-	return tarfile.open(fileobj=f)

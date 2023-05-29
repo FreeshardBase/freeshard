@@ -33,17 +33,6 @@ class AppStoreStatus(BaseModel):
 	last_update: Optional[datetime.datetime]
 
 
-def get_store_app(name) -> AppMeta:
-	sync_dir = Path(gconf.get('path_root')) / 'core' / 'appstore'
-	app_dir = sync_dir / name
-	if not app_dir.exists():
-		raise KeyError(f'no app named {name}')
-	with open(app_dir / 'app.json') as f:
-		app = json.load(f)
-		assert (a := app['name']) == (d := app_dir.name), f'app with name {a} in directory with name {d}'
-		return AppMeta.parse_obj(app)
-
-
 async def install_store_app(
 		name: str,
 		installation_reason: InstallationReason = InstallationReason.STORE,
@@ -101,7 +90,7 @@ async def render_docker_compose_template(app: InstalledApp):
 
 	with identities_table() as identities:
 		default_identity = Identity(**identities.get(Query().is_default == True))  # noqa: E712
-	portal = SafeIdentity(**default_identity.dict())
+	portal = SafeIdentity.from_identity(default_identity)
 
 	app_dir = get_installed_apps_path() / app.name
 	template = jinja2.Template((app_dir / 'docker-compose.yml.template').read_text())
@@ -125,7 +114,7 @@ def write_traefik_dyn_config():
 
 	with identities_table() as identities:
 		default_identity = Identity(**identities.get(Query().is_default == True))  # noqa: E712
-	portal = SafeIdentity(**default_identity.dict())
+	portal = SafeIdentity.from_identity(default_identity)
 
 	traefik_dyn_filename = Path(gconf.get('path_root')) / 'core' / 'traefik_dyn' / 'traefik_dyn.yml'
 	write_to_yaml(compile_config(app_infos, portal), traefik_dyn_filename)

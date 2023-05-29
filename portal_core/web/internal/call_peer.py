@@ -29,6 +29,7 @@ async def call_peer(portal_id: str, rest: str, request: Request):
 
 @lru_cache()
 def _get_app_for_ip_address(ip_address: str):
+	# todo: test this
 	docker_client = _get_docker_client()
 	docker_client.networks.get('portal')
 	containers: List[Container] = docker_client.containers.list()

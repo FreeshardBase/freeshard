@@ -1,6 +1,3 @@
-from portal_core.service import app_store
-
-
 def test_install_app(api_client, management_api_mock, mock_app_store):
 	installed_apps = api_client.get('protected/apps').json()
 	assert not any(a['name'] == 'mock_app' for a in installed_apps)

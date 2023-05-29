@@ -64,3 +64,10 @@ def test_headers(api_client, mock_app_store):
 	assert response_auth.headers['X-Ptl-Client-Name'] == t_name
 	assert response_auth.headers['X-Ptl-ID'] == default_identity['id']
 	assert response_auth.headers['X-Ptl-Foo'] == 'bar'
+
+
+def test_fail_unknown_app(api_client):
+	assert api_client.get('internal/auth', headers={
+		'X-Forwarded-Host': 'unknown.myportal.org',
+		'X-Forwarded-Uri': '/pub'
+	}).status_code == status.HTTP_404_NOT_FOUND

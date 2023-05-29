@@ -68,7 +68,7 @@ def verify_terminal_jwt(token: str = None):
 	try:
 		jwt_secret = database.get_value(STORE_KEY_JWT_SECRET)
 	except KeyError as e:
-		raise InvalidJwt from e
+		raise RuntimeError from e
 
 	bearer = 'Bearer '
 	if token.startswith(bearer):
