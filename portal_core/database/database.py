@@ -2,6 +2,7 @@ import logging
 import threading
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Iterator
 
 import gconf
 from tinydb import TinyDB, Query, JSONStorage
@@ -43,37 +44,37 @@ def get_db() -> TinyDB:
 
 
 @contextmanager
-def apps_table() -> Table:
+def apps_table() -> Iterator[Table]:
 	with get_db() as db:
 		yield db.table('apps')
 
 
 @contextmanager
-def identities_table() -> Table:
+def identities_table() -> Iterator[Table]:
 	with get_db() as db:
 		yield db.table('identities')
 
 
 @contextmanager
-def terminals_table() -> Table:
+def terminals_table() -> Iterator[Table]:
 	with get_db() as db:
 		yield db.table('terminals')
 
 
 @contextmanager
-def peers_table() -> Table:
+def peers_table() -> Iterator[Table]:
 	with get_db() as db:
 		yield db.table('peers')
 
 
 @contextmanager
-def tours_table() -> Table:
+def tours_table() -> Iterator[Table]:
 	with get_db() as db:
 		yield db.table('tours')
 
 
 @contextmanager
-def app_usage_track_table() -> Table:
+def app_usage_track_table() -> Iterator[Table]:
 	with get_db() as db:
 		yield db.table('app_usage_track')
 

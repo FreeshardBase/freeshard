@@ -16,7 +16,7 @@ from portal_core.service import pairing, peer as peer_service
 from portal_core.service.app_tools import get_app_metadata
 from portal_core.service.management import validate_shared_secret, SharedSecretInvalid
 from portal_core.util.signals import on_terminal_auth, on_request_to_app, on_peer_auth
-from tinydb.table import Table
+
 log = logging.getLogger(__name__)
 
 router = APIRouter()

@@ -4,10 +4,8 @@ import time
 from typing import Dict
 
 import portal_core.util.signals
-from portal_core.database.database import apps_table
 from portal_core.model.app_meta import InstalledApp
 from portal_core.service.app_tools import docker_start_app, docker_stop_app, get_installed_apps, get_app_metadata
-from tinydb.table import Table
 
 log = logging.getLogger(__name__)
 

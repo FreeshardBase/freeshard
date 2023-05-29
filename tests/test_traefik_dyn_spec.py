@@ -4,9 +4,6 @@ import gconf
 import pytest
 import yaml
 
-from portal_core.model.app_meta import InstallationReason
-from portal_core.service import identity, app_store
-
 pytest_plugins = ('pytest_asyncio',)
 
 
@@ -16,8 +13,8 @@ async def test_template_is_written(api_client, mock_app_store):
 		output = yaml.safe_load(f)
 		out_middlewares: dict = output['http']['middlewares']
 
-		assert set(out_middlewares.keys()) == {'app-error', 'auth', 'strip', 'auth-public', 'auth-private',
-											   'auth-management'}
+		assert set(out_middlewares.keys()) == {
+			'app-error', 'auth', 'strip', 'auth-public', 'auth-private', 'auth-management'}
 		assert 'authResponseHeadersRegex' in out_middlewares['auth']['forwardAuth']
 
 		out_services_http: dict = output['http']['services']

@@ -4,12 +4,11 @@ from time import sleep
 from starlette import status
 from tinydb.operations import delete
 
-from portal_core.database.database import apps_table, terminals_table
-from portal_core.model.app_meta import InstallationReason
+from portal_core.database.database import terminals_table
 from portal_core.model.profile import Profile
 from portal_core.model.terminal import Terminal, Icon
 from tests.conftest import management_api_mock_context
-from tests.util import get_pairing_code, add_terminal, WAITING_DOCKER_IMAGE, pair_new_terminal
+from tests.util import get_pairing_code, add_terminal, pair_new_terminal
 
 
 def _delete_terminal(api_client, t_id):

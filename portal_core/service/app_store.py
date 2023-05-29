@@ -1,6 +1,6 @@
-import json
 import logging
 import datetime
+import shutil
 import threading
 from pathlib import Path
 
@@ -16,9 +16,9 @@ from pydantic import BaseModel
 from tinydb import Query
 
 from portal_core.database.database import apps_table, identities_table
-from portal_core.model.app_meta import AppMeta, InstalledApp, InstallationReason, Status
+from portal_core.model.app_meta import InstalledApp, InstallationReason, Status
 from portal_core.service.app_tools import docker_create_app, get_installed_apps_path, get_installed_apps, \
-	get_app_metadata
+	get_app_metadata, docker_remove_app
 from portal_core.service.traefik_dynamic_config import compile_config, AppInfo
 from portal_core.model.identity import SafeIdentity, Identity
 
@@ -38,18 +38,18 @@ async def install_store_app(
 		installation_reason: InstallationReason = InstallationReason.STORE,
 		store_branch: Optional[str] = 'feature-docker-compose',  # todo: change back to master
 ):
-	with apps_table() as apps:  # type: Table
-		if apps.contains(Query().name == name):
-			raise AppAlreadyInstalled(name)
-		installed_app = InstalledApp(
-			name=name,
-			installation_reason=installation_reason,
-			status=Status.INSTALLING,
-			from_branch=store_branch,
-		)
-		apps.insert(installed_app.dict())
-
 	with install_lock:
+		with apps_table() as apps:  # type: Table
+			if apps.contains(Query().name == name):
+				raise AppAlreadyInstalled(name)
+			installed_app = InstalledApp(
+				name=name,
+				installation_reason=installation_reason,
+				status=Status.INSTALLING,
+				from_branch=store_branch,
+			)
+			apps.insert(installed_app.dict())
+
 		await download_azure_blob_directory(
 			f'{store_branch}/all_apps/{name}',
 			get_installed_apps_path() / name,
@@ -59,7 +59,23 @@ async def install_store_app(
 		await docker_create_app(name)
 
 
+async def uninstall_app(name: str):
+	with install_lock:
+		with apps_table() as apps:
+			if not apps.contains(Query().name == name):
+				raise AppNotInstalled(name)
+		await docker_remove_app(name)
+		shutil.rmtree(Path(get_installed_apps_path() / name))
+		with apps_table() as apps:
+			apps.remove(Query().name == name)
+		write_traefik_dyn_config()
+
+
 class AppAlreadyInstalled(Exception):
+	pass
+
+
+class AppNotInstalled(Exception):
 	pass
 
 

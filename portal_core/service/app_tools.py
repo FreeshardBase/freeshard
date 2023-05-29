@@ -5,7 +5,6 @@ from typing import Set
 
 import gconf
 from tinydb import Query
-from tinydb.table import Table
 
 from portal_core.database.database import apps_table
 from portal_core.model.app_meta import Status, AppMeta
@@ -14,25 +13,25 @@ from portal_core.util.subprocess import subprocess
 
 async def docker_create_app(name: str):
 	await subprocess('docker-compose', 'create', cwd=get_installed_apps_path() / name)
-	with apps_table() as apps:  # type: Table
+	with apps_table() as apps:
 		apps.update({'status': Status.STOPPED}, Query().name == name)
 
 
 async def docker_start_app(name: str):
 	await subprocess('docker-compose', 'up', '-d', cwd=get_installed_apps_path() / name)
-	with apps_table() as apps:  # type: Table
+	with apps_table() as apps:
 		apps.update({'status': Status.RUNNING}, Query().name == name)
 
 
 async def docker_stop_app(name: str):
 	await subprocess('docker-compose', 'stop', cwd=get_installed_apps_path() / name)
-	with apps_table() as apps:  # type: Table
+	with apps_table() as apps:
 		apps.update({'status': Status.STOPPED}, Query().name == name)
 
 
 async def docker_remove_app(name: str):
 	await subprocess('docker-compose', 'down', cwd=get_installed_apps_path() / name)
-	with apps_table() as apps:  # type: Table
+	with apps_table() as apps:
 		apps.update({'status': Status.ABSENT}, Query().name == name)
 
 

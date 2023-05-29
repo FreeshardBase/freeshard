@@ -19,8 +19,7 @@ router = APIRouter()
 @router.get('/app_error/{status}')
 def app_error(status: int, request: Request):
 	behaviour = get_splash_behaviour(request)
-	with open(Path.cwd() / 'data' / 'splash.html', 'r') as f:
-		template = jinja2.Template(f.read())
+	template = get_template_splash()
 	return HTMLResponse(content=template.render(**behaviour.dict()), status_code=status)
 
 

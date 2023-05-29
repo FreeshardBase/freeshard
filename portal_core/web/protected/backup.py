@@ -2,9 +2,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-import docker
 import gconf
-from docker.models.containers import Container
 from fastapi import APIRouter
 from starlette.responses import StreamingResponse
 from zipstream import ZipStream
@@ -20,18 +18,20 @@ router = APIRouter(
 
 @router.get('/export')
 def export_backup():
-	zs = ZipStream(content_generator())
-
-	default_identity_id = get_default_identity().short_id
-	formatted_now = datetime.now().strftime("%Y-%m-%d %H-%M")
-	filename = f'Backup of Portal {default_identity_id} - {formatted_now}.zip'
-
 	log.info('exporting full backup')
+	zs = ZipStream(content_generator())
 	return StreamingResponse(
 		zs.stream(),
 		media_type='application/zip',
-		headers={'Content-Disposition': f'attachment; filename={filename}'}
+		headers={'Content-Disposition': f'attachment; filename={get_filename()}'}
 	)
+
+
+def get_filename():
+	default_identity_id = get_default_identity().short_id
+	formatted_now = datetime.now().strftime("%Y-%m-%d %H-%M")
+	filename = f'Backup of Portal {default_identity_id} - {formatted_now}.zip'
+	return filename
 
 
 def content_generator():

@@ -1,20 +1,15 @@
-import io
 import logging
-import tarfile
-from contextlib import suppress
 from typing import List
 
-from docker import DockerClient, errors as docker_errors
 from fastapi import APIRouter, status, HTTPException
 from fastapi.responses import Response
-from tinydb import where, Query
+from tinydb import Query
 
-import portal_core.service.app_store
 from portal_core.database.database import apps_table
-from portal_core.model.app_meta import InstalledApp, AppMeta
+from portal_core.model.app_meta import InstalledApp
 from portal_core.service import app_store
 
-from portal_core.service.app_store import AppAlreadyInstalled
+from portal_core.service.app_store import AppAlreadyInstalled, AppNotInstalled
 
 log = logging.getLogger(__name__)
 
@@ -26,13 +21,7 @@ router = APIRouter(
 @router.get('', response_model=List[InstalledApp])
 def list_all_apps():
 	with apps_table() as apps:
-		apps = [InstalledApp(**a) for a in apps.all()]
-	docker_client = DockerClient(base_url='unix://var/run/docker.sock')
-	containers = {c.name: c for c in docker_client.containers.list(all=True)}
-	for app in apps:
-		with suppress(KeyError):
-			app.status = containers[app.name].status
-	return list(apps)
+		return apps.all()
 
 
 @router.get('/{name}', response_model=InstalledApp)
@@ -45,14 +34,17 @@ def get_app(name: str):
 
 
 @router.delete('/{name}', status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
-def uninstall_app(name: str):
-	with apps_table() as apps:
-		apps.remove(where('name') == name)
-	portal_core.service.app_store.write_traefik_dyn_config()
+async def uninstall_app(name: str):
+	# todo: return early
+	try:
+		await app_store.uninstall_app(name)
+	except AppNotInstalled:
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'App {name} is not installed')
 
 
 @router.post('/{name}', status_code=status.HTTP_201_CREATED)
 async def install_app(name: str):
+	# todo: return early
 	try:
 		await app_store.install_store_app(name)
 	except AppAlreadyInstalled:
