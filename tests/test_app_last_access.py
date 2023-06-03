@@ -18,7 +18,7 @@ def test_app_last_access_is_set(api_client):
 	response.raise_for_status()
 
 	assert _get_last_access_time_delta('filebrowser') < 0.1
-	time.sleep(1)
+	time.sleep(3)
 	assert _get_last_access_time_delta('filebrowser') >= 1
 
 	api_client.get('internal/auth', headers={
@@ -38,7 +38,7 @@ def test_app_last_access_is_debounced(api_client):
 	assert _get_last_access_time_delta('filebrowser') < 0.1
 	last_access = _get_last_access_time('filebrowser')
 
-	time.sleep(0.3)
+	time.sleep(0.1)
 	api_client.get('internal/auth', headers={
 		'X-Forwarded-Host': 'filebrowser.myportal.org',
 		'X-Forwarded-Uri': '/share/foo'
@@ -46,7 +46,7 @@ def test_app_last_access_is_debounced(api_client):
 
 	assert _get_last_access_time('filebrowser') == last_access
 
-	time.sleep(0.8)
+	time.sleep(3)
 	api_client.get('internal/auth', headers={
 		'X-Forwarded-Host': 'filebrowser.myportal.org',
 		'X-Forwarded-Uri': '/share/foo'

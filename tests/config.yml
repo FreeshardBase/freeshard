@@ -14,7 +14,7 @@ apps:
   app_store:
     refresh_interval: 3
   last_access:
-    max_update_frequency: 1
+    max_update_frequency: 3
   usage_reporting:
     tracking_schedule: '* * * * * *'
     reporting_schedule: '* * * * * */3'

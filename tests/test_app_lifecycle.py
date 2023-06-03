@@ -21,14 +21,14 @@ def test_app_starts_and_stops(api_client, mock_app_store):
 
 	def assert_app_running():
 		assert docker_client.containers.get('quick_stop').status == 'running'
+		assert InstalledApp.parse_obj(api_client.get('protected/apps/quick_stop').json()).status == Status.RUNNING
 
 	def assert_app_exited():
 		assert docker_client.containers.get('quick_stop').status == 'exited'
+		assert InstalledApp.parse_obj(api_client.get('protected/apps/quick_stop').json()).status == Status.STOPPED
 
 	retry(assert_app_running, timeout=10, retry_errors=[AssertionError])
-	assert InstalledApp.parse_obj(api_client.get('protected/apps/quick_stop').json()).status == Status.RUNNING
 	retry(assert_app_exited, timeout=15, retry_errors=[AssertionError])
-	assert InstalledApp.parse_obj(api_client.get('protected/apps/quick_stop').json()).status == Status.STOPPED
 
 	response = api_client.get('internal/auth', headers={
 		'X-Forwarded-Host': 'quick_stop.myportal.org',
