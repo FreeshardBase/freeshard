@@ -10,6 +10,7 @@ from time import sleep
 import gconf
 import psycopg
 import pytest
+import pytest_asyncio
 import responses
 from fastapi.testclient import TestClient
 from psycopg.conninfo import make_conninfo
@@ -20,9 +21,6 @@ import portal_core
 from portal_core.model.identity import OutputIdentity, Identity
 from portal_core.model.profile import Profile
 from portal_core.web.internal.call_peer import _get_app_for_ip_address
-import pytest_asyncio
-
-from tests.util import docker_network_portal
 
 
 @pytest.fixture(autouse=True)
@@ -42,14 +40,13 @@ def config_override(tmp_path, request):
 
 @pytest_asyncio.fixture
 async def api_client() -> TestClient:
-	async with docker_network_portal():
-		app = portal_core.create_app()
+	app = portal_core.create_app()
 
-		# Cookies are scoped for the domain, so we have to configure the TestClient with it.
-		# This way, the TestClient remembers cookies
-		whoareyou = TestClient(app).get('public/meta/whoareyou').json()
-		with TestClient(app, base_url=f'https://{whoareyou["domain"]}') as client:
-			yield client
+	# Cookies are scoped for the domain, so we have to configure the TestClient with it.
+	# This way, the TestClient remembers cookies
+	whoareyou = TestClient(app).get('public/meta/whoareyou').json()
+	with TestClient(app, base_url=f'https://{whoareyou["domain"]}') as client:
+		yield client
 
 
 @pytest.fixture(scope='session')

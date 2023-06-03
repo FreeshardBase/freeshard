@@ -1,5 +1,6 @@
 import asyncio
 import json
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Set
 
@@ -64,6 +65,15 @@ def get_app_metadata(app_name: str) -> AppMeta:
 		raise AppNotInstalled(app_name)
 	with open(app_path / 'app.json') as f:
 		return AppMeta(**json.load(f))
+
+
+@asynccontextmanager
+async def docker_network_portal():
+	await subprocess('docker', 'network', 'create', 'portal')
+	try:
+		yield
+	finally:
+		await subprocess('docker', 'network', 'rm', 'portal')
 
 
 class AppNotInstalled(Exception):
