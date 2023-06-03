@@ -1,6 +1,5 @@
 import base64
 import logging
-import sys
 from functools import lru_cache
 from pathlib import Path
 
