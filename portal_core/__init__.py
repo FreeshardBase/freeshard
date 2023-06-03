@@ -88,12 +88,12 @@ async def lifespan(_):
 
 	yield
 
-	await docker_stop_all_apps()
-	await docker_remove_all_apps()
 	for t in background_tasks:
 		t.stop()
 	for t in background_tasks:
 		await t.wait()
+	await docker_stop_all_apps()
+	await docker_remove_all_apps()
 
 
 def _copy_traefik_static_config():
