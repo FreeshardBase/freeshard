@@ -17,8 +17,7 @@ from requests import PreparedRequest
 from responses import RequestsMock
 
 import portal_core
-from portal_core import Identity
-from portal_core.model.identity import OutputIdentity
+from portal_core.model.identity import OutputIdentity, Identity
 from portal_core.model.profile import Profile
 from portal_core.web.internal.call_peer import _get_app_for_ip_address
 import pytest_asyncio
@@ -44,7 +43,6 @@ def config_override(tmp_path, request):
 @pytest_asyncio.fixture
 async def api_client() -> TestClient:
 	async with docker_network_portal():
-
 		app = portal_core.create_app()
 
 		# Cookies are scoped for the domain, so we have to configure the TestClient with it.
