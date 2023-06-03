@@ -66,6 +66,7 @@ def configure_logging():
 
 @asynccontextmanager
 async def lifespan(_):
+	await app_store.login_docker_registries()
 	await app_store.refresh_init_apps()
 	log.debug('refreshed initial apps')
 

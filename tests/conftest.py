@@ -163,7 +163,7 @@ def mock_app_store(mocker):
 		shutil.copytree(source_dir, target_dir)
 
 	mocker.patch(
-		'portal_core.service.app_store.download_azure_blob_directory',
+		'portal_core.service.app_store._download_azure_blob_directory',
 		mock_download_azure_blob_directory
 	)
 

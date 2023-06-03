@@ -21,6 +21,7 @@ from portal_core.service.app_tools import docker_create_app, get_installed_apps_
 	get_app_metadata, docker_remove_app
 from portal_core.service.traefik_dynamic_config import compile_config, AppInfo
 from portal_core.model.identity import SafeIdentity, Identity
+from portal_core.util.subprocess import subprocess
 
 log = logging.getLogger(__name__)
 
@@ -50,12 +51,12 @@ async def install_store_app(
 			)
 			apps.insert(installed_app.dict())
 
-		await download_azure_blob_directory(
+		await _download_azure_blob_directory(
 			f'{store_branch}/all_apps/{name}',
 			get_installed_apps_path() / name,
 		)
-		write_traefik_dyn_config()
-		await render_docker_compose_template(installed_app)
+		_write_traefik_dyn_config()
+		await _render_docker_compose_template(installed_app)
 		await docker_create_app(name)
 
 
@@ -68,7 +69,7 @@ async def uninstall_app(name: str):
 		shutil.rmtree(Path(get_installed_apps_path() / name))
 		with apps_table() as apps:
 			apps.remove(Query().name == name)
-		write_traefik_dyn_config()
+		_write_traefik_dyn_config()
 
 
 class AppAlreadyInstalled(Exception):
@@ -79,7 +80,7 @@ class AppNotInstalled(Exception):
 	pass
 
 
-async def download_azure_blob_directory(directory_name: str, target_dir: Path):
+async def _download_azure_blob_directory(directory_name: str, target_dir: Path):
 	async with ContainerClient(
 			account_url=gconf.get('apps.app_store.base_url'),
 			container_name=gconf.get('apps.app_store.container_name'),
@@ -96,7 +97,7 @@ async def download_azure_blob_directory(directory_name: str, target_dir: Path):
 				f.write(await download_blob.readall())
 
 
-async def render_docker_compose_template(app: InstalledApp):
+async def _render_docker_compose_template(app: InstalledApp):
 	fs = {
 		'app_data': (Path(gconf.get('path_root')) / 'user_data' / 'app_data' / app.name).absolute(),
 		'shared_documents': (Path(gconf.get('path_root')) / 'user_data' / 'shared' / 'documents').absolute(),
@@ -123,7 +124,7 @@ async def refresh_init_apps():
 		await install_store_app(app_name, InstallationReason.CONFIG)
 
 
-def write_traefik_dyn_config():
+def _write_traefik_dyn_config():
 	with apps_table() as apps:
 		apps = [InstalledApp(**a) for a in apps.all()]
 	app_infos = [AppInfo(get_app_metadata(a.name), installed_app=a) for a in apps]
@@ -133,11 +134,18 @@ def write_traefik_dyn_config():
 	portal = SafeIdentity.from_identity(default_identity)
 
 	traefik_dyn_filename = Path(gconf.get('path_root')) / 'core' / 'traefik_dyn' / 'traefik_dyn.yml'
-	write_to_yaml(compile_config(app_infos, portal), traefik_dyn_filename)
+	_write_to_yaml(compile_config(app_infos, portal), traefik_dyn_filename)
 
 
-def write_to_yaml(spec: pydantic.BaseModel, output_path: Path):
+def _write_to_yaml(spec: pydantic.BaseModel, output_path: Path):
 	output_path.parent.mkdir(exist_ok=True, parents=True)
 	with open(output_path, 'w') as f:
 		f.write('# == DO NOT MODIFY ==\n# this file is auto-generated\n\n')
 		f.write(yaml.dump(spec.dict(exclude_none=True)))
+
+
+async def login_docker_registries():
+	registries = gconf.get('apps.registries')
+	for r in registries:
+		await subprocess('docker', 'login', '-u', r['username'], '-p', r['password'], r['uri'])
+		log.debug(f'logged in to registry {r["uri"]}')
