@@ -1,8 +1,11 @@
+import io
 import logging
+import mimetypes
+import re
 from typing import List
 
 from fastapi import APIRouter, status, HTTPException
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from tinydb import Query
 
 from portal_core.database.database import apps_table
@@ -10,6 +13,9 @@ from portal_core.model.app_meta import InstalledApp
 from portal_core.service import app_store
 
 from portal_core.service.app_store import AppAlreadyInstalled, AppNotInstalled
+
+
+from portal_core.service.app_tools import get_installed_apps_path
 
 log = logging.getLogger(__name__)
 
@@ -31,6 +37,24 @@ def get_app(name: str):
 	if installed_app:
 		return installed_app
 	raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+
+@router.get('/{name}/icon')
+def get_app_icon(name: str):
+	matcher = re.compile(r'^icon\..+$')
+
+	app_path = get_installed_apps_path() / name
+	if app_path.exists() and app_path.is_dir():
+		try:
+			icon_filename = [f for f in app_path.iterdir() if matcher.match(f.name)][0]
+		except IndexError:
+			pass
+		else:
+			with open(icon_filename, 'rb') as icon_file:
+				buffer = io.BytesIO(icon_file.read())
+			return StreamingResponse(buffer, media_type=mimetypes.guess_type(icon_filename)[0])
+
+	raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'No icon for app named {name}')
 
 
 @router.delete('/{name}', status_code=status.HTTP_204_NO_CONTENT, response_class=Response)

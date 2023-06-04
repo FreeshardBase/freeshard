@@ -65,10 +65,7 @@ def verify_terminal_jwt(token: str = None):
 	if not token:
 		raise InvalidJwt('Missing JWT')
 
-	try:
-		jwt_secret = database.get_value(STORE_KEY_JWT_SECRET)
-	except KeyError as e:
-		raise RuntimeError from e
+	jwt_secret = _ensure_jwt_secret()
 
 	bearer = 'Bearer '
 	if token.startswith(bearer):
