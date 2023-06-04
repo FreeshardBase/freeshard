@@ -39,7 +39,11 @@ def config_override(tmp_path, request):
 
 
 @pytest_asyncio.fixture
-async def api_client() -> TestClient:
+async def api_client(mocker) -> TestClient:
+	async def noop():
+		pass
+
+	mocker.patch('portal_core.service.app_store.login_docker_registries', noop)
 	app = portal_core.create_app()
 
 	# Cookies are scoped for the domain, so we have to configure the TestClient with it.
