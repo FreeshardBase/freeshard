@@ -30,12 +30,12 @@ unittest:
     - virtualenv venv
     - source venv/bin/activate
     - pip install ".[dev]"
-    - cd tests
-    - pytest
+    - pytest tests
   services:
     - postgres:14
   variables:
     GCONF_SERVICES_POSTGRES_HOST: postgres
+    CONFIG: tests/config.yml
   tags:
     - portal
 

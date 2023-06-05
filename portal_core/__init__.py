@@ -13,7 +13,6 @@ from portal_core.database import database
 from .service import app_store, identity, app_lifecycle, peer, app_usage_reporting
 from .service.app_tools import docker_stop_all_apps, docker_remove_all_apps, docker_network_portal
 from .util.async_util import Periodic
-from .util.misc import project_root
 from .web import internal, public, protected, management
 
 log = logging.getLogger(__name__)
@@ -100,7 +99,7 @@ async def lifespan(_):
 
 
 def _copy_traefik_static_config():
-	source = project_root / 'data' / 'traefik.yml'
+	source = Path.cwd() / 'data' / 'traefik.yml'
 	root = Path(gconf.get('path_root'))
 	target = root / 'core' / 'traefik.yml'
 	shutil.copy(source, target)
