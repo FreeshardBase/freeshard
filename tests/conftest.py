@@ -21,6 +21,7 @@ import portal_core
 from portal_core.model.identity import OutputIdentity, Identity
 from portal_core.model.profile import Profile
 from portal_core.web.internal.call_peer import _get_app_for_ip_address
+from tests.util import docker_network_portal
 
 
 @pytest.fixture(autouse=True)
@@ -44,13 +45,15 @@ async def api_client(mocker) -> TestClient:
 		pass
 
 	mocker.patch('portal_core.service.app_store.login_docker_registries', noop)
-	app = portal_core.create_app()
 
-	# Cookies are scoped for the domain, so we have to configure the TestClient with it.
-	# This way, the TestClient remembers cookies
-	whoareyou = TestClient(app).get('public/meta/whoareyou').json()
-	with TestClient(app, base_url=f'https://{whoareyou["domain"]}') as client:
-		yield client
+	async with docker_network_portal():
+		app = portal_core.create_app()
+
+		# Cookies are scoped for the domain, so we have to configure the TestClient with it.
+		# This way, the TestClient remembers cookies
+		whoareyou = TestClient(app).get('public/meta/whoareyou').json()
+		with TestClient(app, base_url=f'https://{whoareyou["domain"]}') as client:
+			yield client
 
 
 @pytest.fixture(scope='session')

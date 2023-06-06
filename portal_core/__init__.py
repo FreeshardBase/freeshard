@@ -11,7 +11,7 @@ from fastapi import FastAPI, Request, Response
 
 from portal_core.database import database
 from .service import app_store, identity, app_lifecycle, peer, app_usage_reporting
-from .service.app_tools import docker_stop_all_apps, docker_remove_all_apps, docker_network_portal
+from .service.app_tools import docker_stop_all_apps, docker_remove_all_apps
 from .util.async_util import Periodic
 from .web import internal, public, protected, management
 
@@ -67,35 +67,33 @@ def configure_logging():
 async def lifespan(_):
 	await app_store.login_docker_registries()
 
-	async with docker_network_portal():
+	await app_store.refresh_init_apps()
+	log.debug('refreshed initial apps')
 
-		await app_store.refresh_init_apps()
-		log.debug('refreshed initial apps')
+	background_tasks = [
+		Periodic(
+			app_lifecycle.control_apps,
+			delay=gconf.get('apps.lifecycle.refresh_interval')),
+		Periodic(
+			peer.update_all_peer_pubkeys, delay=60),
+		Periodic(
+			app_usage_reporting.track_currently_installed_apps,
+			cron=gconf.get('apps.usage_reporting.tracking_schedule')),
+		Periodic(
+			app_usage_reporting.report_app_usage,
+			cron=gconf.get('apps.usage_reporting.reporting_schedule')),
+	]
+	for t in background_tasks:
+		t.start()
 
-		background_tasks = [
-			Periodic(
-				app_lifecycle.control_apps,
-				delay=gconf.get('apps.lifecycle.refresh_interval')),
-			Periodic(
-				peer.update_all_peer_pubkeys, delay=60),
-			Periodic(
-				app_usage_reporting.track_currently_installed_apps,
-				cron=gconf.get('apps.usage_reporting.tracking_schedule')),
-			Periodic(
-				app_usage_reporting.report_app_usage,
-				cron=gconf.get('apps.usage_reporting.reporting_schedule')),
-		]
-		for t in background_tasks:
-			t.start()
+	yield  # === run app ===
 
-		yield  # === run app ===
-
-		for t in background_tasks:
-			t.stop()
-		for t in background_tasks:
-			await t.wait()
-		await docker_stop_all_apps()
-		await docker_remove_all_apps()
+	for t in background_tasks:
+		t.stop()
+	for t in background_tasks:
+		await t.wait()
+	await docker_stop_all_apps()
+	await docker_remove_all_apps()
 
 
 def _copy_traefik_static_config():
