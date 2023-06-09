@@ -8,10 +8,10 @@ from portal_core.database.database import apps_table
 from portal_core.model.app_meta import InstalledApp
 
 
-def test_app_last_access_is_set(api_client):
+async def test_app_last_access_is_set(api_client):
 	assert _get_last_access_time_delta('filebrowser') is None
 
-	response = api_client.get('internal/auth', headers={
+	response = await api_client.get('internal/auth', headers={
 		'X-Forwarded-Host': 'filebrowser.myportal.org',
 		'X-Forwarded-Uri': '/share/foo'
 	})
@@ -21,7 +21,7 @@ def test_app_last_access_is_set(api_client):
 	time.sleep(3)
 	assert _get_last_access_time_delta('filebrowser') >= 1
 
-	api_client.get('internal/auth', headers={
+	await api_client.get('internal/auth', headers={
 		'X-Forwarded-Host': 'filebrowser.myportal.org',
 		'X-Forwarded-Uri': '/share/foo'
 	})
@@ -29,8 +29,8 @@ def test_app_last_access_is_set(api_client):
 	assert _get_last_access_time_delta('filebrowser') < 0.1
 
 
-def test_app_last_access_is_debounced(api_client):
-	api_client.get('internal/auth', headers={
+async def test_app_last_access_is_debounced(api_client):
+	await api_client.get('internal/auth', headers={
 		'X-Forwarded-Host': 'filebrowser.myportal.org',
 		'X-Forwarded-Uri': '/share/foo'
 	})
@@ -39,7 +39,7 @@ def test_app_last_access_is_debounced(api_client):
 	last_access = _get_last_access_time('filebrowser')
 
 	time.sleep(0.1)
-	api_client.get('internal/auth', headers={
+	await api_client.get('internal/auth', headers={
 		'X-Forwarded-Host': 'filebrowser.myportal.org',
 		'X-Forwarded-Uri': '/share/foo'
 	})
@@ -47,7 +47,7 @@ def test_app_last_access_is_debounced(api_client):
 	assert _get_last_access_time('filebrowser') == last_access
 
 	time.sleep(3)
-	api_client.get('internal/auth', headers={
+	await api_client.get('internal/auth', headers={
 		'X-Forwarded-Host': 'filebrowser.myportal.org',
 		'X-Forwarded-Uri': '/share/foo'
 	})

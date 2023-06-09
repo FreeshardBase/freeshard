@@ -1,8 +1,10 @@
 from pathlib import Path
 from zipfile import ZipFile
 
+from httpx import AsyncClient
 
-def test_backup(api_client, tmp_path, postgres):
+
+async def test_backup(api_client: AsyncClient, tmp_path, postgres):
 	root_ = tmp_path / 'path_root'
 	backup_ = tmp_path / 'backup'
 	file_not_included = Path('not included')
@@ -10,10 +12,9 @@ def test_backup(api_client, tmp_path, postgres):
 
 	zip_path = tmp_path / 'backup.zip'
 
-	with api_client.stream('GET', 'protected/backup/export') as r:
-		r.raise_for_status()
+	async with api_client.stream('GET', 'protected/backup/export') as response:  # type: AsyncIterator[httpx.Response]
 		with open(zip_path, 'wb') as f:
-			for chunk in r.iter_bytes(chunk_size=8192):
+			async for chunk in response.aiter_bytes():
 				f.write(chunk)
 
 	zip_file = ZipFile(zip_path)

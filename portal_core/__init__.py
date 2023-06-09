@@ -10,8 +10,9 @@ import gconf
 from fastapi import FastAPI, Request, Response
 
 from portal_core.database import database
-from .service import app_store, identity, app_lifecycle, peer, app_usage_reporting
-from .service.app_tools import docker_stop_all_apps, docker_remove_all_apps
+from .service import app_installation, identity, app_lifecycle, peer, app_usage_reporting
+from .service.app_installation import cancel_all_installations
+from .service.app_tools import docker_stop_all_apps, docker_shutdown_all_apps
 from .util.async_util import Periodic
 from .web import internal, public, protected, management
 
@@ -65,9 +66,9 @@ def configure_logging():
 
 @asynccontextmanager
 async def lifespan(_):
-	await app_store.login_docker_registries()
+	await app_installation.login_docker_registries()
 
-	await app_store.refresh_init_apps()
+	await app_installation.refresh_init_apps()
 	log.debug('refreshed initial apps')
 
 	background_tasks = [
@@ -88,12 +89,13 @@ async def lifespan(_):
 
 	yield  # === run app ===
 
+	await cancel_all_installations(wait=True)
 	for t in background_tasks:
 		t.stop()
 	for t in background_tasks:
 		await t.wait()
 	await docker_stop_all_apps()
-	await docker_remove_all_apps()
+	await docker_shutdown_all_apps()
 
 
 def _copy_traefik_static_config():

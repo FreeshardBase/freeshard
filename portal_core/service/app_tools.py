@@ -24,15 +24,23 @@ async def docker_start_app(name: str):
 
 
 async def docker_stop_app(name: str):
+	with apps_table() as apps:
+		# todo: think more about how to handle different states
+		if apps.get(Query().name == name)['status'] != Status.RUNNING:
+			return
 	await subprocess('docker-compose', 'stop', cwd=get_installed_apps_path() / name)
 	with apps_table() as apps:
 		apps.update({'status': Status.STOPPED}, Query().name == name)
 
 
-async def docker_remove_app(name: str):
+async def docker_shutdown_app(name: str):
+	with apps_table() as apps:
+		# todo: think more about how to handle different states
+		if apps.get(Query().name == name)['status'] != Status.STOPPED:
+			return
 	await subprocess('docker-compose', 'down', cwd=get_installed_apps_path() / name)
 	with apps_table() as apps:
-		apps.update({'status': Status.ABSENT}, Query().name == name)
+		apps.update({'status': Status.DOWN}, Query().name == name)
 
 
 async def docker_stop_all_apps():
@@ -41,9 +49,9 @@ async def docker_stop_all_apps():
 	await asyncio.gather(*tasks)
 
 
-async def docker_remove_all_apps():
+async def docker_shutdown_all_apps():
 	apps = get_installed_apps()
-	tasks = [docker_remove_app(app) for app in apps]
+	tasks = [docker_shutdown_app(app) for app in apps]
 	await asyncio.gather(*tasks)
 
 
@@ -61,10 +69,10 @@ def get_installed_apps() -> Set[str]:
 def get_app_metadata(app_name: str) -> AppMeta:
 	app_path = get_installed_apps_path() / app_name
 	if not app_path.exists():
-		raise AppNotInstalled(app_name)
+		raise NoSuchAppDirectory(app_name)
 	with open(app_path / 'app.json') as f:
 		return AppMeta(**json.load(f))
 
 
-class AppNotInstalled(Exception):
+class NoSuchAppDirectory(Exception):
 	pass

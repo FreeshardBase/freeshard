@@ -9,9 +9,9 @@ from tinydb import Query
 
 from portal_core.database.database import apps_table
 from portal_core.model.app_meta import InstalledApp
-from portal_core.service import app_store
+from portal_core.service import app_installation
 
-from portal_core.service.app_store import AppAlreadyInstalled, AppNotInstalled
+from portal_core.service.app_installation import AppAlreadyInstalled, AppNotInstalled
 
 from portal_core.service.app_tools import get_installed_apps_path, get_app_metadata
 
@@ -51,7 +51,7 @@ def get_app_icon(name: str):
 async def uninstall_app(name: str):
 	# todo: return early
 	try:
-		await app_store.uninstall_app(name)
+		await app_installation.uninstall_app(name)
 	except AppNotInstalled:
 		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'App {name} is not installed')
 
@@ -60,6 +60,6 @@ async def uninstall_app(name: str):
 async def install_app(name: str):
 	# todo: return early
 	try:
-		await app_store.install_store_app(name)
+		await app_installation.install_store_app(name)
 	except AppAlreadyInstalled:
 		raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f'App {name} is already installed')

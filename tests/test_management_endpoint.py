@@ -1,12 +1,15 @@
-def test_install_app(api_client, management_api_mock, mock_app_store):
-	installed_apps = api_client.get('protected/apps').json()
+from httpx import AsyncClient
+
+
+async def test_install_app(api_client: AsyncClient, management_api_mock, mock_app_store):
+	installed_apps = (await api_client.get('protected/apps')).json()
 	assert not any(a['name'] == 'mock_app' for a in installed_apps)
 
-	response = api_client.post(
+	response = await api_client.post(
 		'management/apps/mock_app',
 		headers={'authorization': 'constantSharedSecret'}
 	)
 	response.raise_for_status()
 
-	installed_apps = api_client.get('protected/apps').json()
+	installed_apps = (await api_client.get('protected/apps')).json()
 	assert any(a['name'] == 'mock_app' for a in installed_apps)

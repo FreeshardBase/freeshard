@@ -1,17 +1,21 @@
 import asyncio
+import logging
+
+log = logging.getLogger(__name__)
 
 
 async def subprocess(*args, cwd=None):
-	up_process = await asyncio.create_subprocess_exec(
+	process = await asyncio.create_subprocess_exec(
 		*args,
 		cwd=cwd,
 		stdout=asyncio.subprocess.PIPE,
 		stderr=asyncio.subprocess.PIPE)
-	stdout, stderr = await up_process.communicate()
+	log.debug(f'[{" ".join(args)}] started at {cwd}')
+	stdout, stderr = await process.communicate()
 
-	if up_process.returncode != 0:
+	if process.returncode != 0:
 		raise SubprocessError(
-			f'[{up_process!r} exited with {up_process.returncode}]\n' +
+			f'[{process!r} exited with {process.returncode}]\n' +
 			f'[stdout]\n{stdout.decode()}' +
 			f'[stderr]\n{stderr.decode()}'
 		)

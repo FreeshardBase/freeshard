@@ -12,7 +12,8 @@ import psycopg
 import pytest
 import pytest_asyncio
 import responses
-from fastapi.testclient import TestClient
+from asgi_lifespan import LifespanManager
+from httpx import AsyncClient
 from psycopg.conninfo import make_conninfo
 from requests import PreparedRequest
 from responses import RequestsMock
@@ -21,7 +22,9 @@ import portal_core
 from portal_core.model.identity import OutputIdentity, Identity
 from portal_core.model.profile import Profile
 from portal_core.web.internal.call_peer import _get_app_for_ip_address
-from tests.util import docker_network_portal
+from tests.util import docker_network_portal, wait_until_all_apps_installed
+
+pytest_plugins = ('pytest_asyncio',)
 
 
 @pytest.fixture(autouse=True)
@@ -40,19 +43,22 @@ def config_override(tmp_path, request):
 
 
 @pytest_asyncio.fixture
-async def api_client(mocker) -> TestClient:
+async def api_client(mocker, event_loop) -> AsyncClient:
 	async def noop():
 		pass
 
-	mocker.patch('portal_core.service.app_store.login_docker_registries', noop)
+	mocker.patch('portal_core.service.app_installation.login_docker_registries', noop)
 
 	async with docker_network_portal():
 		app = portal_core.create_app()
-
-		# Cookies are scoped for the domain, so we have to configure the TestClient with it.
-		# This way, the TestClient remembers cookies
-		whoareyou = TestClient(app).get('public/meta/whoareyou').json()
-		with TestClient(app, base_url=f'https://{whoareyou["domain"]}') as client:
+		# for the LifeSpanManager, see: https://github.com/encode/httpx/issues/1024
+		async with LifespanManager(app), AsyncClient(app=app, base_url='https://init') as client:
+			whoareyou = (await client.get('/public/meta/whoareyou')).json()
+			# Cookies are scoped for the domain,
+			# so we have to configure the TestClient with the correct domain.
+			# This way, the TestClient remembers cookies
+			client.base_url = f'https://{whoareyou["domain"]}'
+			await wait_until_all_apps_installed(client)
 			yield client
 
 
@@ -167,7 +173,7 @@ def mock_app_store(mocker):
 		shutil.copytree(source_dir, target_dir)
 
 	mocker.patch(
-		'portal_core.service.app_store._download_azure_blob_directory',
+		'portal_core.service.app_installation._download_azure_blob_directory',
 		mock_download_azure_blob_directory
 	)
 

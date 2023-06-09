@@ -21,4 +21,6 @@ apps:
 
 log:
   levels:
-    'portal_core.service.app_lifecycle': debug
+    'portal_core.service.app_installation': debug
+    'portal_core.service.app_usage_reporting': error
+    'portal_core.util.subprocess': debug

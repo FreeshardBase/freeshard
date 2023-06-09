@@ -1,31 +1,31 @@
-import logging
+import asyncio
 import datetime
+import logging
 import shutil
-import threading
+from contextlib import suppress
 from pathlib import Path
+from typing import Optional, Dict
 
+import gconf
 import jinja2
 import pydantic
 import yaml
-
 from azure.storage.blob.aio import ContainerClient
-from typing import Optional
-
-import gconf
 from pydantic import BaseModel
 from tinydb import Query
 
 from portal_core.database.database import apps_table, identities_table
 from portal_core.model.app_meta import InstalledApp, InstallationReason, Status
-from portal_core.service.app_tools import docker_create_app, get_installed_apps_path, get_installed_apps, \
-	get_app_metadata, docker_remove_app
-from portal_core.service.traefik_dynamic_config import compile_config, AppInfo
 from portal_core.model.identity import SafeIdentity, Identity
+from portal_core.service.app_tools import docker_create_app, get_installed_apps_path, get_installed_apps, \
+	get_app_metadata, docker_shutdown_app
+from portal_core.service.traefik_dynamic_config import compile_config, AppInfo
 from portal_core.util.subprocess import subprocess
 
 log = logging.getLogger(__name__)
 
-install_lock = threading.RLock()
+install_lock = asyncio.Lock()
+installation_tasks: Dict[str, asyncio.Task] = {}
 
 
 class AppStoreStatus(BaseModel):
@@ -39,37 +39,84 @@ async def install_store_app(
 		installation_reason: InstallationReason = InstallationReason.STORE,
 		store_branch: Optional[str] = 'feature-docker-compose',  # todo: change back to master
 ):
-	with install_lock:
-		with apps_table() as apps:  # type: Table
-			if apps.contains(Query().name == name):
-				raise AppAlreadyInstalled(name)
-			installed_app = InstalledApp(
-				name=name,
-				installation_reason=installation_reason,
-				status=Status.INSTALLING,
-				from_branch=store_branch,
-			)
-			apps.insert(installed_app.dict())
-
-		await _download_azure_blob_directory(
-			f'{store_branch}/all_apps/{name}',
-			get_installed_apps_path() / name,
+	with apps_table() as apps:
+		if apps.contains(Query().name == name):
+			raise AppAlreadyInstalled(name)
+		installed_app = InstalledApp(
+			name=name,
+			installation_reason=installation_reason,
+			status=Status.INSTALLATION_QUEUED,
+			from_branch=store_branch,
 		)
-		_write_traefik_dyn_config()
-		await _render_docker_compose_template(installed_app)
-		await docker_create_app(name)
+		apps.insert(installed_app.dict())
+
+	task = asyncio.create_task(_install_app_task(installed_app))
+	installation_tasks[name] = task
+	log.info(f'created installation task for {name}')
+	log.debug(f'installation tasks: {installation_tasks.keys()}')
+
+
+async def _install_app_task(installed_app: InstalledApp):
+	async with install_lock:
+		log.info(f'starting installation of {installed_app.name}')
+		with apps_table() as apps:
+			apps.update({'status': Status.INSTALLING}, Query().name == installed_app.name)
+		try:
+			log.debug(f'downloading app {installed_app.name} from store')
+			await _download_azure_blob_directory(
+				f'{installed_app.from_branch}/all_apps/{installed_app.name}',
+				get_installed_apps_path() / installed_app.name,
+			)
+			log.debug('updating traefik dynamic config')
+			_write_traefik_dyn_config()
+			log.debug(f'creating docker-compose.yml for app {installed_app.name}')
+			await _render_docker_compose_template(installed_app)
+			log.debug(f'creating containers for app {installed_app.name}')
+			await docker_create_app(installed_app.name)
+			log.info(f'finished installation of {installed_app.name}')
+		except Exception as e:
+			log.error(f'Error while installing app {installed_app.name}: {e!r}')
+			with apps_table() as apps:
+				apps.update({'status': Status.ERROR}, Query().name == installed_app.name)
+		finally:
+			del installation_tasks[installed_app.name]
+
+
+
+async def cancel_all_installations(wait=False):
+	for name in list(installation_tasks.keys()):
+		await cancel_installation(name)
+	if wait:
+		for task in list(installation_tasks.values()):
+			with suppress(asyncio.CancelledError):
+				await task
+
+
+async def cancel_installation(name: str):
+	if name not in installation_tasks:
+		raise AppNotInstalled(name)
+	installation_tasks[name].cancel()
+	with apps_table() as apps:
+		apps.update({'status': Status.ERROR}, Query().name == name)
+	log.debug(f'cancelled installation of {name}')
 
 
 async def uninstall_app(name: str):
-	with install_lock:
+	async with install_lock:
+		log.debug(f'starting uninstallation of {name}')
 		with apps_table() as apps:
 			if not apps.contains(Query().name == name):
 				raise AppNotInstalled(name)
-		await docker_remove_app(name)
+		log.debug(f'shutting down docker container for app {name}')
+		await docker_shutdown_app(name)
+		log.debug(f'deleting app data for {name}')
 		shutil.rmtree(Path(get_installed_apps_path() / name))
+		log.debug(f'removing app {name} from database')
 		with apps_table() as apps:
 			apps.remove(Query().name == name)
+		log.debug('updating traefik dynamic config')
 		_write_traefik_dyn_config()
+		log.debug(f'finished uninstallation of {name}')
 
 
 class AppAlreadyInstalled(Exception):
@@ -126,7 +173,7 @@ async def refresh_init_apps():
 
 def _write_traefik_dyn_config():
 	with apps_table() as apps:
-		apps = [InstalledApp(**a) for a in apps.all()]
+		apps = [InstalledApp(**a) for a in apps.all() if a['status'] != Status.INSTALLATION_QUEUED]
 	app_infos = [AppInfo(get_app_metadata(a.name), installed_app=a) for a in apps]
 
 	with identities_table() as identities:

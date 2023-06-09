@@ -28,10 +28,12 @@ class Access(str, Enum):
 
 class Status(str, Enum):
 	UNKNOWN = 'unknown'
+	INSTALLATION_QUEUED = 'installation_queued'
 	INSTALLING = 'installing'
 	STOPPED = 'stopped'
 	RUNNING = 'running'
-	ABSENT = 'absent'
+	DOWN = 'down'
+	ERROR = 'error'
 
 
 class EntrypointPort(str, Enum):
