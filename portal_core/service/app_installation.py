@@ -20,6 +20,7 @@ from portal_core.model.identity import SafeIdentity, Identity
 from portal_core.service.app_tools import docker_create_app, get_installed_apps_path, get_installed_apps, \
 	get_app_metadata, docker_shutdown_app
 from portal_core.service.traefik_dynamic_config import compile_config, AppInfo
+from portal_core.util import signals
 from portal_core.util.subprocess import subprocess
 
 log = logging.getLogger(__name__)
@@ -52,15 +53,18 @@ async def install_store_app(
 
 	task = asyncio.create_task(_install_app_task(installed_app))
 	installation_tasks[name] = task
+	signals.on_apps_update.send()
 	log.info(f'created installation task for {name}')
 	log.debug(f'installation tasks: {installation_tasks.keys()}')
 
 
 async def _install_app_task(installed_app: InstalledApp):
+	await asyncio.sleep(10)
 	async with install_lock:
 		log.info(f'starting installation of {installed_app.name}')
 		with apps_table() as apps:
 			apps.update({'status': Status.INSTALLING}, Query().name == installed_app.name)
+		signals.on_apps_update.send()
 		try:
 			log.debug(f'downloading app {installed_app.name} from store')
 			await _download_azure_blob_directory(
@@ -78,9 +82,9 @@ async def _install_app_task(installed_app: InstalledApp):
 			log.error(f'Error while installing app {installed_app.name}: {e!r}')
 			with apps_table() as apps:
 				apps.update({'status': Status.ERROR}, Query().name == installed_app.name)
+			signals.on_apps_update.send()
 		finally:
 			del installation_tasks[installed_app.name]
-
 
 
 async def cancel_all_installations(wait=False):
@@ -98,6 +102,7 @@ async def cancel_installation(name: str):
 	installation_tasks[name].cancel()
 	with apps_table() as apps:
 		apps.update({'status': Status.ERROR}, Query().name == name)
+	signals.on_apps_update.send()
 	log.debug(f'cancelled installation of {name}')
 
 
@@ -116,6 +121,7 @@ async def uninstall_app(name: str):
 			apps.remove(Query().name == name)
 		log.debug('updating traefik dynamic config')
 		_write_traefik_dyn_config()
+		signals.on_apps_update.send()
 		log.debug(f'finished uninstallation of {name}')
 
 

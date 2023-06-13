@@ -7,7 +7,7 @@ from typing import Dict, List
 from pydantic import BaseModel
 from starlette.websockets import WebSocket
 
-from portal_core.database.database import terminals_table
+from portal_core.database.database import terminals_table, apps_table
 from portal_core.model.terminal import Terminal
 from portal_core.util import signals
 from portal_core.util.async_util import BackgroundTask
@@ -53,12 +53,15 @@ class WSWorker(BackgroundTask):
 		while True:
 			message = await self.outgoing_messages.get()
 			log.debug(f'sending {message.message_type} message')
-			await asyncio.gather(*[s.send_text(message.json()) for s in self.active_sockets])
+			try:
+				await asyncio.gather(*[s.send_text(message.json()) for s in self.active_sockets])
+			except Exception as e:
+				log.error(f'Error during websocket sending: {e}')
 
 	async def _send_heartbeats(self):
 		while True:
-			await self.broadcast_message('heartbeat', message={})
-			await asyncio.sleep(5)
+			await self.broadcast_message('heartbeat')
+			await asyncio.sleep(30)
 
 	async def connect(self, websocket: WebSocket):
 		await websocket.accept()
@@ -70,11 +73,11 @@ class WSWorker(BackgroundTask):
 	async def send_personal_message(self, message: str, websocket: WebSocket):
 		await websocket.send_text(message)
 
-	async def broadcast_message(self, message_type: str, message: Dict | List):
+	async def broadcast_message(self, message_type: str, message: Dict | List | None = None):
 		log.debug(f'enqueuing {message_type} message for sending, queue size: {self.outgoing_messages.qsize()}')
 		await self.outgoing_messages.put(Message(
 			message_type=message_type,
-			message=message,
+			message=message or {},
 		))
 
 
@@ -84,9 +87,17 @@ ws_worker = WSWorker()
 @signals.on_terminals_update.connect
 def send_terminals_update(_):
 	with terminals_table() as terminals:  # type: Table
-		asyncio.run(ws_worker.broadcast_message('terminals', terminals.all()))
+		all_terminals = terminals.all()
+	asyncio.get_event_loop().create_task(ws_worker.broadcast_message('terminals_update', all_terminals))
 
 
 @signals.on_terminal_add.connect
 def send_terminal_add(terminal: Terminal):
-	asyncio.run(ws_worker.broadcast_message('terminal_add', terminal))
+	asyncio.get_event_loop().create_task(ws_worker.broadcast_message('terminal_add', terminal.dict()))
+
+
+@signals.on_apps_update.connect
+def send_apps_update(_):
+	with apps_table() as apps:
+		all_apps = apps.all()
+	asyncio.get_event_loop().create_task(ws_worker.broadcast_message('apps_update', all_apps))

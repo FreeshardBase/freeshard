@@ -11,7 +11,7 @@ from portal_core.database.database import apps_table
 from portal_core.model.app_meta import InstalledApp
 from portal_core.service import app_installation
 from portal_core.service.app_installation import AppAlreadyInstalled, AppNotInstalled
-from portal_core.service.app_tools import get_installed_apps_path, get_app_metadata
+from portal_core.service.app_tools import get_installed_apps_path, get_app_metadata, NoSuchAppDirectory
 
 log = logging.getLogger(__name__)
 
@@ -37,7 +37,10 @@ def get_app(name: str):
 
 @router.get('/{name}/icon')
 def get_app_icon(name: str):
-	app_meta = get_app_metadata(name)
+	try:
+		app_meta = get_app_metadata(name)
+	except NoSuchAppDirectory:
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'App {name} is not installed')
 	icon_filename = get_installed_apps_path() / name / app_meta.icon
 
 	with open(icon_filename, 'rb') as icon_file:

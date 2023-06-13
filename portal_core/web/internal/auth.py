@@ -77,7 +77,7 @@ async def authenticate_and_authorize(
 				.render(auth=auth_state.header_values, portal=portal_header_values)
 	log.debug(f'granted auth for {x_forwarded_host}{x_forwarded_uri} with headers {response.headers.items()}')
 
-	await on_request_to_app.send_async(app)
+	on_request_to_app.send(app)
 
 
 def _match_app(x_forwarded_host) -> InstalledApp:

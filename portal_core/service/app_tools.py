@@ -8,6 +8,8 @@ from tinydb import Query
 
 from portal_core.database.database import apps_table
 from portal_core.model.app_meta import Status, AppMeta
+from portal_core.util import signals
+from portal_core.util.misc import throttle
 from portal_core.util.subprocess import subprocess
 
 
@@ -15,12 +17,15 @@ async def docker_create_app(name: str):
 	await subprocess('docker-compose', 'create', cwd=get_installed_apps_path() / name)
 	with apps_table() as apps:
 		apps.update({'status': Status.STOPPED}, Query().name == name)
+	signals.on_apps_update.send()
 
 
+@throttle(5)
 async def docker_start_app(name: str):
 	await subprocess('docker-compose', 'up', '-d', cwd=get_installed_apps_path() / name)
 	with apps_table() as apps:
 		apps.update({'status': Status.RUNNING}, Query().name == name)
+	signals.on_apps_update.send()
 
 
 async def docker_stop_app(name: str):
@@ -31,6 +36,7 @@ async def docker_stop_app(name: str):
 	await subprocess('docker-compose', 'stop', cwd=get_installed_apps_path() / name)
 	with apps_table() as apps:
 		apps.update({'status': Status.STOPPED}, Query().name == name)
+	signals.on_apps_update.send()
 
 
 async def docker_shutdown_app(name: str):
@@ -41,6 +47,7 @@ async def docker_shutdown_app(name: str):
 	await subprocess('docker-compose', 'down', cwd=get_installed_apps_path() / name)
 	with apps_table() as apps:
 		apps.update({'status': Status.DOWN}, Query().name == name)
+	signals.on_apps_update.send()
 
 
 async def docker_stop_all_apps():

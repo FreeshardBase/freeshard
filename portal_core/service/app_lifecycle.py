@@ -3,16 +3,16 @@ import logging
 import time
 from typing import Dict
 
-import portal_core.util.signals
 from portal_core.model.app_meta import InstalledApp
 from portal_core.service.app_tools import docker_start_app, docker_stop_app, get_installed_apps, get_app_metadata
+from portal_core.util import signals
 
 log = logging.getLogger(__name__)
 
 last_access_dict: Dict[str, float] = dict()
 
 
-@portal_core.util.signals.on_request_to_app.connect
+@signals.on_request_to_app.connect
 async def ensure_app_is_running(app: InstalledApp):
 	global last_access_dict
 	last_access_dict[app.name] = time.time()
