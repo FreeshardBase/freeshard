@@ -10,9 +10,7 @@ from tinydb import Query
 from portal_core.database.database import apps_table
 from portal_core.model.app_meta import InstalledApp
 from portal_core.service import app_installation
-
 from portal_core.service.app_installation import AppAlreadyInstalled, AppNotInstalled
-
 from portal_core.service.app_tools import get_installed_apps_path, get_app_metadata
 
 log = logging.getLogger(__name__)
@@ -49,7 +47,6 @@ def get_app_icon(name: str):
 
 @router.delete('/{name}', status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def uninstall_app(name: str):
-	# todo: return early
 	try:
 		await app_installation.uninstall_app(name)
 	except AppNotInstalled:
@@ -58,7 +55,6 @@ async def uninstall_app(name: str):
 
 @router.post('/{name}', status_code=status.HTTP_201_CREATED)
 async def install_app(name: str):
-	# todo: return early
 	try:
 		await app_installation.install_store_app(name)
 	except AppAlreadyInstalled:

@@ -18,6 +18,7 @@ setup(
 		'tinydb-serialization',
 		'uvicorn',
 		'fastapi',
+		'websockets',
 		'pyjwt',
 		'pydantic',
 		'Jinja2',

@@ -5,15 +5,16 @@ import sys
 from contextlib import asynccontextmanager
 from importlib.metadata import metadata
 from pathlib import Path
+from typing import List
 
 import gconf
 from fastapi import FastAPI, Request, Response
 
-from portal_core.database import database
-from .service import app_installation, identity, app_lifecycle, peer, app_usage_reporting
+from .database import database
+from .service import app_installation, identity, app_lifecycle, peer, app_usage_reporting, websocket
 from .service.app_installation import cancel_all_installations
 from .service.app_tools import docker_stop_all_apps, docker_shutdown_all_apps
-from .util.async_util import Periodic
+from .util.async_util import Periodic, BackgroundTask
 from .web import internal, public, protected, management
 
 log = logging.getLogger(__name__)
@@ -71,7 +72,7 @@ async def lifespan(_):
 	await app_installation.refresh_init_apps()
 	log.debug('refreshed initial apps')
 
-	background_tasks = [
+	background_tasks: List[BackgroundTask] = [
 		Periodic(
 			app_lifecycle.control_apps,
 			delay=gconf.get('apps.lifecycle.refresh_interval')),
@@ -83,6 +84,7 @@ async def lifespan(_):
 		Periodic(
 			app_usage_reporting.report_app_usage,
 			cron=gconf.get('apps.usage_reporting.reporting_schedule')),
+		websocket.ws_worker,
 	]
 	for t in background_tasks:
 		t.start()

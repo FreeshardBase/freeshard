@@ -10,6 +10,7 @@ from tinydb import Query
 from portal_core.database.database import terminals_table
 from portal_core.model.terminal import Terminal, InputTerminal
 from portal_core.service import pairing
+from portal_core.util.signals import on_terminals_update
 
 log = logging.getLogger(__name__)
 
@@ -56,6 +57,7 @@ def edit_terminal(id_: str, terminal: InputTerminal):
 			existing_terminal.name = terminal.name
 			existing_terminal.icon = terminal.icon
 			terminals.update(existing_terminal.dict(), Query().id == id_)
+			on_terminals_update.send()
 		else:
 			raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
@@ -64,6 +66,7 @@ def edit_terminal(id_: str, terminal: InputTerminal):
 def delete_terminal_by_id(id_: str):
 	with terminals_table() as terminals:  # type: Table
 		terminals.remove(Query().id == id_)
+	on_terminals_update.send()
 
 
 @router.get('/pairing-code', response_model=PairingCode, status_code=status.HTTP_201_CREATED)
