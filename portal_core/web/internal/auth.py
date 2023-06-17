@@ -23,7 +23,7 @@ router = APIRouter()
 
 
 @router.get('/authenticate_terminal', status_code=status.HTTP_200_OK)
-def authenticate_terminal(response: Response, authorization: str = Cookie(None)):
+async def authenticate_terminal(response: Response, authorization: str = Cookie(None)):
 	if not authorization:
 		raise HTTPException(status.HTTP_401_UNAUTHORIZED)
 
@@ -35,7 +35,7 @@ def authenticate_terminal(response: Response, authorization: str = Cookie(None))
 		response.headers['X-Ptl-Client-Type'] = 'terminal'
 		response.headers['X-Ptl-Client-Id'] = terminal.id
 		response.headers['X-Ptl-Client-Name'] = terminal.name
-		on_terminal_auth.send(terminal)
+		await on_terminal_auth.send_async(terminal)
 
 
 @router.get('/authenticate_management', status_code=status.HTTP_200_OK)
@@ -77,7 +77,7 @@ async def authenticate_and_authorize(
 				.render(auth=auth_state.header_values, portal=portal_header_values)
 	log.debug(f'granted auth for {x_forwarded_host}{x_forwarded_uri} with headers {response.headers.items()}')
 
-	on_request_to_app.send(app)
+	await on_request_to_app.send_async(app)
 
 
 def _match_app(x_forwarded_host) -> InstalledApp:
@@ -118,7 +118,7 @@ async def _get_auth_state(request, authorization) -> AuthState:
 	except pairing.InvalidJwt as e:
 		log.debug(f'invalid terminal JWT: {e}')
 	else:
-		on_terminal_auth.send(terminal)
+		await on_terminal_auth.send_async(terminal)
 		return AuthState(
 			x_ptl_client_type=AuthState.ClientType.TERMINAL,
 			x_ptl_client_id=terminal.id,
@@ -132,7 +132,7 @@ async def _get_auth_state(request, authorization) -> AuthState:
 	except KeyError as e:
 		log.debug(f'no such peer: {e}')
 	else:
-		on_peer_auth.send(peer)
+		await on_peer_auth.send_async(peer)
 		return AuthState(
 			x_ptl_client_type=AuthState.ClientType.PEER,
 			x_ptl_client_id=peer.id,

@@ -17,7 +17,7 @@ async def docker_create_app(name: str):
 	await subprocess('docker-compose', 'create', cwd=get_installed_apps_path() / name)
 	with apps_table() as apps:
 		apps.update({'status': Status.STOPPED}, Query().name == name)
-	signals.on_apps_update.send()
+	await signals.on_apps_update.send_async()
 
 
 @throttle(5)
@@ -25,7 +25,7 @@ async def docker_start_app(name: str):
 	await subprocess('docker-compose', 'up', '-d', cwd=get_installed_apps_path() / name)
 	with apps_table() as apps:
 		apps.update({'status': Status.RUNNING}, Query().name == name)
-	signals.on_apps_update.send()
+	await signals.on_apps_update.send_async()
 
 
 async def docker_stop_app(name: str):
@@ -36,7 +36,7 @@ async def docker_stop_app(name: str):
 	await subprocess('docker-compose', 'stop', cwd=get_installed_apps_path() / name)
 	with apps_table() as apps:
 		apps.update({'status': Status.STOPPED}, Query().name == name)
-	signals.on_apps_update.send()
+	await signals.on_apps_update.send_async()
 
 
 async def docker_shutdown_app(name: str):
@@ -47,7 +47,7 @@ async def docker_shutdown_app(name: str):
 	await subprocess('docker-compose', 'down', cwd=get_installed_apps_path() / name)
 	with apps_table() as apps:
 		apps.update({'status': Status.DOWN}, Query().name == name)
-	signals.on_apps_update.send()
+	await signals.on_apps_update.send_async()
 
 
 async def docker_stop_all_apps():

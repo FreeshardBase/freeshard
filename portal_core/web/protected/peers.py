@@ -34,7 +34,7 @@ def get_peer_by_id(id):
 
 
 @router.put('', response_model=Peer)
-def put_peer(p: InputPeer):
+async def put_peer(p: InputPeer):
 	with peers_table() as peers:  # type: Table
 		if peers.get(Query().id.matches(f'{p.id}:*')):
 			peers.update(p.dict(exclude={'id'}), Query().id.matches(f'{p.id}:*'))
@@ -42,7 +42,7 @@ def put_peer(p: InputPeer):
 		else:
 			peers.insert(p.dict())
 			log.info(f'added {p}')
-	signals.on_peer_write.send(Peer(**p.dict()))
+	await signals.on_peer_write.send_async(Peer(**p.dict()))
 	return p
 
 

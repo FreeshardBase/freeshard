@@ -1,3 +1,4 @@
+import importlib
 import json
 import re
 import shutil
@@ -21,6 +22,7 @@ from responses import RequestsMock
 import portal_core
 from portal_core.model.identity import OutputIdentity, Identity
 from portal_core.model.profile import Profile
+from portal_core.service import websocket
 from portal_core.web.internal.call_peer import _get_app_for_ip_address
 from tests.util import docker_network_portal, wait_until_all_apps_installed
 
@@ -44,6 +46,9 @@ def config_override(tmp_path, request):
 
 @pytest_asyncio.fixture
 async def api_client(mocker, event_loop) -> AsyncClient:
+	# Modules that define some global state need to be reloaded
+	importlib.reload(websocket)
+
 	async def noop():
 		pass
 

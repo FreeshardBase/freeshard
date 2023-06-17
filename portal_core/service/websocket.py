@@ -85,19 +85,19 @@ ws_worker = WSWorker()
 
 
 @signals.on_terminals_update.connect
-def send_terminals_update(_):
+async def send_terminals_update(_):
 	with terminals_table() as terminals:  # type: Table
 		all_terminals = terminals.all()
-	asyncio.get_event_loop().create_task(ws_worker.broadcast_message('terminals_update', all_terminals))
+	await ws_worker.broadcast_message('terminals_update', all_terminals)
 
 
 @signals.on_terminal_add.connect
-def send_terminal_add(terminal: Terminal):
-	asyncio.get_event_loop().create_task(ws_worker.broadcast_message('terminal_add', terminal.dict()))
+async def send_terminal_add(terminal: Terminal):
+	await ws_worker.broadcast_message('terminal_add', terminal.dict())
 
 
 @signals.on_apps_update.connect
-def send_apps_update(_):
+async def send_apps_update(_):
 	with apps_table() as apps:
 		all_apps = apps.all()
-	asyncio.get_event_loop().create_task(ws_worker.broadcast_message('apps_update', all_apps))
+	await ws_worker.broadcast_message('apps_update', all_apps)

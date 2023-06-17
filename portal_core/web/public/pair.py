@@ -17,7 +17,7 @@ router = APIRouter(
 
 
 @router.post('/terminal', status_code=status.HTTP_201_CREATED)
-def add_terminal(code: str, terminal: InputTerminal, response: Response):
+async def add_terminal(code: str, terminal: InputTerminal, response: Response):
 	try:
 		pairing.redeem_pairing_code(code)
 	except (KeyError, pairing.InvalidPairingCode, pairing.PairingCodeExpired) as e:
@@ -37,9 +37,9 @@ def add_terminal(code: str, terminal: InputTerminal, response: Response):
 		domain=default_identity.domain,
 		secure=True, httponly=True, expires=60 * 60 * 24 * 356 * 10)
 
-	on_terminals_update.send()
-	on_terminal_add.send(new_terminal)
+	await on_terminals_update.send_async()
+	await on_terminal_add.send_async(new_terminal)
 	if is_first_terminal:
-		on_first_terminal_add.send(new_terminal)
+		await on_first_terminal_add.send_async(new_terminal)
 
 	log.info(f'added {new_terminal}')

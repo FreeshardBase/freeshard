@@ -105,7 +105,7 @@ class InstalledApp(BaseModel):
 
 
 @signals.on_request_to_app.connect
-def update_last_access(app: InstalledApp):
+async def update_last_access(app: InstalledApp):
 	now = datetime.datetime.utcnow()
 	max_update_frequency = datetime.timedelta(seconds=gconf.get('apps.last_access.max_update_frequency'))
 	if app.last_access and now - app.last_access < max_update_frequency:
