@@ -7,7 +7,7 @@ from typing import Dict, List
 from pydantic import BaseModel
 from starlette.websockets import WebSocket
 
-from portal_core.database.database import terminals_table, apps_table
+from portal_core.database.database import terminals_table, installed_apps_table
 from portal_core.model.terminal import Terminal
 from portal_core.util import signals
 from portal_core.util.async_util import BackgroundTask
@@ -98,6 +98,6 @@ async def send_terminal_add(terminal: Terminal):
 
 @signals.on_apps_update.connect
 async def send_apps_update(_):
-	with apps_table() as apps:
-		all_apps = apps.all()
+	with installed_apps_table() as installed_apps:
+		all_apps = installed_apps.all()
 	await ws_worker.broadcast_message('apps_update', all_apps)

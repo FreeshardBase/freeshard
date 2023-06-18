@@ -3,8 +3,9 @@ import logging
 import time
 from typing import Dict
 
-from portal_core.model.app_meta import InstalledApp
-from portal_core.service.app_tools import docker_start_app, docker_stop_app, get_installed_apps, get_app_metadata
+from portal_core.database.database import installed_apps_table
+from portal_core.model.app_meta import InstalledApp, Status
+from portal_core.service.app_tools import docker_start_app, docker_stop_app, get_app_metadata
 from portal_core.util import signals
 
 log = logging.getLogger(__name__)
@@ -20,8 +21,12 @@ async def ensure_app_is_running(app: InstalledApp):
 
 
 async def control_apps():
-	all_apps = get_installed_apps()
-	tasks = [control_app(app) for app in all_apps]
+	with installed_apps_table() as installed_apps:
+		installed_apps = [
+			InstalledApp.parse_obj(a)
+			for a in installed_apps.all()
+			if a['status'] not in (Status.INSTALLATION_QUEUED, Status.INSTALLING)]
+	tasks = [control_app(app.name) for app in installed_apps]
 	await asyncio.gather(*tasks)
 
 

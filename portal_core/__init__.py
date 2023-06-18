@@ -11,7 +11,7 @@ import gconf
 from fastapi import FastAPI, Request, Response
 
 from .database import database
-from .service import app_installation, identity, app_lifecycle, peer, app_usage_reporting, websocket
+from .service import app_installation, identity, app_lifecycle, peer, app_usage_reporting, websocket, migration
 from .service.app_installation import cancel_all_installations
 from .service.app_tools import docker_stop_all_apps, docker_shutdown_all_apps
 from .util.async_util import Periodic, BackgroundTask
@@ -68,6 +68,8 @@ def configure_logging():
 @asynccontextmanager
 async def lifespan(_):
 	await app_installation.login_docker_registries()
+
+	await migration.migrate()
 
 	await app_installation.refresh_init_apps()
 	log.debug('refreshed initial apps')

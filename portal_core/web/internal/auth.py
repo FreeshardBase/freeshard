@@ -8,7 +8,7 @@ from http_message_signatures import InvalidSignature
 from jinja2 import Template
 from tinydb import Query
 
-from portal_core.database.database import apps_table, identities_table
+from portal_core.database.database import installed_apps_table, identities_table
 from portal_core.model.app_meta import InstalledApp, Access, Path
 from portal_core.model.auth import AuthState
 from portal_core.model.identity import Identity, SafeIdentity
@@ -98,8 +98,8 @@ def _get_portal_identity():
 
 @cached(cache=TTLCache(maxsize=32, ttl=gconf.get('tests.cache_ttl', default=3)))
 def _find_app(app_name) -> Optional[InstalledApp]:
-	with apps_table() as apps:  # type: Table
-		if result := apps.get(Query().name == app_name):
+	with installed_apps_table() as installed_apps:  # type: Table
+		if result := installed_apps.get(Query().name == app_name):
 			return InstalledApp(**result)
 		else:
 			return None

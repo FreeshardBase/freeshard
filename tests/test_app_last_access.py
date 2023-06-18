@@ -4,7 +4,7 @@ from typing import Optional
 
 from tinydb import Query
 
-from portal_core.database.database import apps_table
+from portal_core.database.database import installed_apps_table
 from portal_core.model.app_meta import InstalledApp
 
 
@@ -58,6 +58,6 @@ def _get_last_access_time_delta(app_name: str) -> Optional[float]:
 
 
 def _get_last_access_time(app_name: str) -> Optional[datetime]:
-	with apps_table() as apps:  # type: Table
-		app = InstalledApp(**apps.get(Query().name == app_name))
+	with installed_apps_table() as installed_apps:  # type: Table
+		app = InstalledApp(**installed_apps.get(Query().name == app_name))
 	return app.last_access

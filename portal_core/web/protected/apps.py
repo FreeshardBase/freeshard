@@ -7,7 +7,7 @@ from fastapi import APIRouter, status, HTTPException
 from fastapi.responses import Response, StreamingResponse
 from tinydb import Query
 
-from portal_core.database.database import apps_table
+from portal_core.database.database import installed_apps_table
 from portal_core.model.app_meta import InstalledApp
 from portal_core.service import app_installation
 from portal_core.service.app_installation import AppAlreadyInstalled, AppNotInstalled
@@ -22,14 +22,14 @@ router = APIRouter(
 
 @router.get('', response_model=List[InstalledApp])
 def list_all_apps():
-	with apps_table() as apps:
-		return apps.all()
+	with installed_apps_table() as installed_apps:
+		return installed_apps.all()
 
 
 @router.get('/{name}', response_model=InstalledApp)
 def get_app(name: str):
-	with apps_table() as apps:
-		installed_app = apps.get(Query().name == name)
+	with installed_apps_table() as installed_apps:
+		installed_app = installed_apps.get(Query().name == name)
 	if installed_app:
 		return installed_app
 	raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)

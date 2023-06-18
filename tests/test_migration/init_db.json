@@ -1,0 +1,12 @@
+{
+  "apps": {
+    "1": {
+      "name": "filebrowser",
+      "installation_reason": "config"
+    },
+    "2": {
+      "name": "overleaf",
+      "installation_reason": "store"
+    }
+  }
+}

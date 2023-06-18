@@ -6,7 +6,7 @@ import gconf
 from pydantic import BaseModel, root_validator, validator
 from tinydb import Query
 
-from portal_core.database.database import apps_table
+from portal_core.database.database import installed_apps_table
 from portal_core.model import app_meta_migration
 from portal_core.util import signals
 
@@ -110,5 +110,5 @@ async def update_last_access(app: InstalledApp):
 	max_update_frequency = datetime.timedelta(seconds=gconf.get('apps.last_access.max_update_frequency'))
 	if app.last_access and now - app.last_access < max_update_frequency:
 		return
-	with apps_table() as apps:  # type: Table
-		apps.update({'last_access': now}, Query().name == app.name)
+	with installed_apps_table() as installed_apps:  # type: Table
+		installed_apps.update({'last_access': now}, Query().name == app.name)
