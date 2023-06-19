@@ -112,3 +112,8 @@ async def update_last_access(app: InstalledApp):
 		return
 	with installed_apps_table() as installed_apps:  # type: Table
 		installed_apps.update({'last_access': now}, Query().name == app.name)
+
+
+if __name__ == '__main__':
+	with open(f'schema_app_meta_{CURRENT_VERSION}.json', 'w') as f:
+		f.write(AppMeta.schema_json(indent=2))

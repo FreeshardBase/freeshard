@@ -31,10 +31,7 @@ unittest:
     - source venv/bin/activate
     - pip install ".[dev]"
     - pytest tests
-  services:
-    - postgres:14
   variables:
-    GCONF_SERVICES_POSTGRES_HOST: postgres
     CONFIG: tests/config.yml
   tags:
     - portal
@@ -88,3 +85,10 @@ pages:
       - if: $CI_COMMIT_TAG
   tags:
     - portal
+
+json-schema:
+  stage: release
+  image: mcr.microsoft.com/azure-cli
+  script:
+    - python -m portal_core.model.app_meta
+    - az storage blob upload-batch --destination "json-schema/$CI_COMMIT_REF_SLUG" --source schema_app_meta_* --sas-token $AZ_STORAGE_SAS_TOKEN --account-name storageaccountportab0da --overwrite
