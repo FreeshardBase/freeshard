@@ -5,11 +5,6 @@ dns:
   prefix length: 6
 
 services:
-  postgres:
-    host: postgres
-    port: 5432
-    user: postgres
-    password: ES9BOPusdVKoydq6
   backup:
     included_globs:
       - core/portal_core_config.yml

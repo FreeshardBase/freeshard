@@ -6,16 +6,13 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from time import sleep
 
 import gconf
-import psycopg
 import pytest
 import pytest_asyncio
 import responses
 from asgi_lifespan import LifespanManager
 from httpx import AsyncClient
-from psycopg.conninfo import make_conninfo
 from requests import PreparedRequest
 from responses import RequestsMock
 
@@ -65,34 +62,6 @@ async def api_client(mocker, event_loop) -> AsyncClient:
 			client.base_url = f'https://{whoareyou["domain"]}'
 			await wait_until_all_apps_installed(client)
 			yield client
-
-
-@pytest.fixture(scope='session')
-def postgres(request):
-	pg_host = gconf.get('services.postgres.host')
-	pg_port = gconf.get('services.postgres.port')
-	pg_user = gconf.get('services.postgres.user')
-	pg_password = gconf.get('services.postgres.password')
-	postgres_conn_string = make_conninfo('', host=pg_host, port=pg_port, user=pg_user, password=pg_password)
-
-	print(f'\nPostgres connection: {postgres_conn_string}')
-
-	if gconf.get('services.postgres.host') == 'localhost':
-		request.getfixturevalue('docker_services')
-
-	for i in range(60):
-		try:
-			sleep(1)
-			conn = psycopg.connect(postgres_conn_string)
-		except psycopg.OperationalError as e:
-			print(e)
-		else:
-			conn.close()
-			break
-	else:
-		raise TimeoutError('Postgres did not start in time')
-
-	return postgres_conn_string
 
 
 mock_profile = Profile(

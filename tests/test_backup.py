@@ -4,7 +4,7 @@ from zipfile import ZipFile
 from httpx import AsyncClient
 
 
-async def test_backup(api_client: AsyncClient, tmp_path, postgres):
+async def test_backup(api_client: AsyncClient, tmp_path):
 	root_ = tmp_path / 'path_root'
 	backup_ = tmp_path / 'backup'
 	file_not_included = Path('not included')
