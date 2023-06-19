@@ -6,11 +6,13 @@ import gconf
 from pydantic import BaseModel, root_validator, validator
 from tinydb import Query
 
+from pathlib import Path as FilePath
+
 from portal_core.database.database import installed_apps_table
 from portal_core.model import app_meta_migration
 from portal_core.util import signals
 
-CURRENT_VERSION = '5.0'
+CURRENT_VERSION = '1.0'
 
 
 class InstallationReason(str, Enum):
@@ -115,5 +117,7 @@ async def update_last_access(app: InstalledApp):
 
 
 if __name__ == '__main__':
-	with open(f'schema_app_meta_{CURRENT_VERSION}.json', 'w') as f:
+	dest_dir = FilePath('schemas')
+	dest_dir.mkdir(exist_ok=True)
+	with open(dest_dir / f'schema_app_meta_{CURRENT_VERSION}.json', 'w') as f:
 		f.write(AppMeta.schema_json(indent=2))

@@ -71,7 +71,7 @@ def get_app_metadata(app_name: str) -> AppMeta:
 	app_path = get_installed_apps_path() / app_name
 	if not app_path.exists():
 		raise NoSuchAppDirectory(app_name)
-	with open(app_path / 'app.json') as f:
+	with open(app_path / 'app_meta.json') as f:
 		return AppMeta(**json.load(f))
 
 

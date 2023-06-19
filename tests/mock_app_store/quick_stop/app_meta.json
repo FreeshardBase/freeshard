@@ -1,11 +1,11 @@
 {
-  "v": "5.0",
+  "v": "1.0",
   "app_version": "0.1.0",
-  "name": "always_on",
+  "name": "quick_stop",
   "icon": "icon.svg",
   "entrypoints": [
     {
-      "container_name": "always_on",
+      "container_name": "quick_stop",
       "container_port": 80,
       "entrypoint_port": "http"
     }
@@ -21,10 +21,11 @@
     }
   },
   "lifecycle": {
-    "always_on": true
+    "always_on": false,
+    "idle_time_for_shutdown": 5
   },
   "store_info": {
-    "description_short": "an app that is always running",
+    "description_short": "an app that stops after 5 seconds",
     "is_featured": true
   }
 }

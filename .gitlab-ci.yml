@@ -87,7 +87,12 @@ pages:
 
 json-schema:
   stage: release
-  image: mcr.microsoft.com/azure-cli
+  image: registry.gitlab.com/ptl/portal-ci-image:main
   script:
+    - virtualenv venv
+    - source venv/bin/activate
+    - pip install ".[dev]"
     - python -m portal_core.model.app_meta
-    - az storage blob upload-batch --destination "json-schema/$CI_COMMIT_REF_SLUG" --source schema_app_meta_* --sas-token $AZ_STORAGE_SAS_TOKEN --account-name storageaccountportab0da --overwrite
+    - az storage blob upload-batch --destination "json-schema/$CI_COMMIT_REF_SLUG" --source schemas --sas-token $AZ_STORAGE_SAS_TOKEN --account-name storageaccountportab0da --overwrite
+  tags:
+    - portal
