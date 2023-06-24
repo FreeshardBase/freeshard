@@ -13,9 +13,7 @@ services:
         - 80:80
         volumes:
         - "{{ fs.app_data }}:/data"
-        - "{{ fs.shared_documents }}:/data/documents"
-        - "{{ fs.shared_media }}:/data/media"
-        - "{{ fs.shared_music }}:/data/music"
+        - "{{ fs.shared }}:/data/shared"
         - "/var/run/docker.sock:/var/run/docker.sock:ro"
         networks:
         - portal
