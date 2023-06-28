@@ -18,7 +18,7 @@ from portal_core.database.database import installed_apps_table, identities_table
 from portal_core.model.app_meta import InstalledApp, InstallationReason, Status
 from portal_core.model.identity import SafeIdentity, Identity
 from portal_core.service.app_tools import docker_create_app, get_installed_apps_path, get_app_metadata, \
-	docker_shutdown_app
+	docker_shutdown_app, docker_stop_app
 from portal_core.service.traefik_dynamic_config import compile_config, AppInfo
 from portal_core.util import signals
 from portal_core.util.subprocess import subprocess
@@ -106,13 +106,18 @@ async def cancel_installation(name: str):
 
 
 async def uninstall_app(name: str):
+	log.info(f'starting uninstallation of {name}')
+	with installed_apps_table() as installed_apps:
+		if not installed_apps.contains(Query().name == name):
+			raise AppNotInstalled(name)
+		installed_apps.update({'status': Status.UNINSTALLING}, Query().name == name)
+	await signals.on_apps_update.send_async()
+
 	async with install_lock:
-		log.debug(f'starting uninstallation of {name}')
-		with installed_apps_table() as installed_apps:
-			if not installed_apps.contains(Query().name == name):
-				raise AppNotInstalled(name)
 		log.debug(f'shutting down docker container for app {name}')
-		await docker_shutdown_app(name)
+		await docker_stop_app(name, set_status=False)
+		await docker_shutdown_app(name, set_status=False)
+
 		log.debug(f'deleting app data for {name}')
 		shutil.rmtree(Path(get_installed_apps_path() / name))
 		log.debug(f'removing app {name} from database')

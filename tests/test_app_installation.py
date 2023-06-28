@@ -46,3 +46,24 @@ async def test_uninstall_app(api_client: AsyncClient):
 
 	with pytest.raises(NotFound):
 		docker_client.containers.get('filebrowser')
+
+
+async def test_uninstall_running_app(api_client: AsyncClient, mock_app_store):
+	docker_client = docker.from_env()
+	await install_app_and_wait(api_client, 'mock_app')
+
+	# Start the app
+	response = await api_client.get('internal/auth', headers={
+		'X-Forwarded-Host': 'mock_app.myportal.org',
+		'X-Forwarded-Uri': '/pub'
+	})
+	response.raise_for_status()
+
+	response = await api_client.delete('protected/apps/mock_app')
+	assert response.status_code == status.HTTP_204_NO_CONTENT
+
+	response = (await api_client.get('protected/apps')).json()
+	assert len(response) == 1  # Filebrowser is still installed
+
+	with pytest.raises(NotFound):
+		docker_client.containers.get('mock_app')

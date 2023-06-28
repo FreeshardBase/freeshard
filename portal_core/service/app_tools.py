@@ -21,31 +21,40 @@ async def docker_create_app(name: str):
 
 @throttle(5)
 async def docker_start_app(name: str):
+	with installed_apps_table() as installed_apps:
+		# todo: think more about how to handle different states
+		if installed_apps.get(Query().name == name)['status'] \
+				not in [Status.STOPPED, Status.RUNNING]:
+			return
 	await subprocess('docker-compose', 'up', '-d', cwd=get_installed_apps_path() / name)
 	with installed_apps_table() as installed_apps:
 		installed_apps.update({'status': Status.RUNNING}, Query().name == name)
 	await signals.on_apps_update.send_async()
 
 
-async def docker_stop_app(name: str):
+async def docker_stop_app(name: str, set_status: bool = True):
 	with installed_apps_table() as installed_apps:
 		# todo: think more about how to handle different states
-		if installed_apps.get(Query().name == name)['status'] != Status.RUNNING:
+		if installed_apps.get(Query().name == name)['status'] \
+				not in [Status.RUNNING, Status.UNINSTALLING]:
 			return
 	await subprocess('docker-compose', 'stop', cwd=get_installed_apps_path() / name)
-	with installed_apps_table() as installed_apps:
-		installed_apps.update({'status': Status.STOPPED}, Query().name == name)
+	if set_status:
+		with installed_apps_table() as installed_apps:
+			installed_apps.update({'status': Status.STOPPED}, Query().name == name)
 	await signals.on_apps_update.send_async()
 
 
-async def docker_shutdown_app(name: str):
+async def docker_shutdown_app(name: str, set_status: bool = True):
 	with installed_apps_table() as installed_apps:
 		# todo: think more about how to handle different states
-		if installed_apps.get(Query().name == name)['status'] != Status.STOPPED:
+		if installed_apps.get(Query().name == name)['status'] \
+				not in [Status.STOPPED, Status.UNINSTALLING]:
 			return
 	await subprocess('docker-compose', 'down', cwd=get_installed_apps_path() / name)
-	with installed_apps_table() as installed_apps:
-		installed_apps.update({'status': Status.DOWN}, Query().name == name)
+	if set_status:
+		with installed_apps_table() as installed_apps:
+			installed_apps.update({'status': Status.DOWN}, Query().name == name)
 	await signals.on_apps_update.send_async()
 
 

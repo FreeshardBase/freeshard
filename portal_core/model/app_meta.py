@@ -34,6 +34,7 @@ class Status(str, Enum):
 	INSTALLING = 'installing'
 	STOPPED = 'stopped'
 	RUNNING = 'running'
+	UNINSTALLING = 'uninstalling'
 	DOWN = 'down'
 	ERROR = 'error'
 
