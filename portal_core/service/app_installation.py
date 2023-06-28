@@ -40,9 +40,13 @@ async def install_store_app(
 		installation_reason: InstallationReason = InstallationReason.STORE,
 		store_branch: Optional[str] = 'feature-docker-compose',  # todo: change back to master
 ):
+	if not app_exists(name, store_branch):
+		raise AppDoesNotExist(name)
+
 	with installed_apps_table() as installed_apps:
 		if installed_apps.contains(Query().name == name):
 			raise AppAlreadyInstalled(name)
+
 		installed_app = InstalledApp(
 			name=name,
 			installation_reason=installation_reason,
@@ -133,8 +137,21 @@ class AppAlreadyInstalled(Exception):
 	pass
 
 
+class AppDoesNotExist(Exception):
+	pass
+
+
 class AppNotInstalled(Exception):
 	pass
+
+
+async def app_exists(name: str, branch: str = 'feature-docker-compose') -> bool:
+	async with ContainerClient(
+			account_url=gconf.get('apps.app_store.base_url'),
+			container_name=gconf.get('apps.app_store.container_name'),
+	) as container_client:
+		directory_name = f'{branch}/all_apps/{name}/'
+		return len(list(container_client.list_blobs(name_starts_with=directory_name))) > 0
 
 
 async def _download_azure_blob_directory(directory_name: str, target_dir: Path):
