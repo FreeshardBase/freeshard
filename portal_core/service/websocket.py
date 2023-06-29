@@ -101,3 +101,8 @@ async def send_apps_update(_):
 	with installed_apps_table() as installed_apps:
 		all_apps = installed_apps.all()
 	await ws_worker.broadcast_message('apps_update', all_apps)
+
+
+@signals.on_app_install_error.connect
+async def send_app_install_error(e: Exception, name: str):
+	await ws_worker.broadcast_message('app_install_error', {'name': name, 'error': f'{type(e).__name__} {e}'})

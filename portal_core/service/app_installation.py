@@ -86,6 +86,7 @@ async def _install_app_task(installed_app: InstalledApp):
 			with installed_apps_table() as installed_apps:
 				installed_apps.update({'status': Status.ERROR}, Query().name == installed_app.name)
 			await signals.on_apps_update.send_async()
+			await signals.on_app_install_error.send_async(e, name=installed_app.name)
 		finally:
 			del installation_tasks[installed_app.name]
 
