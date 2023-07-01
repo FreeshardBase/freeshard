@@ -11,6 +11,7 @@ import gconf
 import pytest
 import pytest_asyncio
 import responses
+import yappi
 from asgi_lifespan import LifespanManager
 from httpx import AsyncClient
 from requests import PreparedRequest
@@ -150,6 +151,23 @@ def mock_app_store(mocker):
 		'portal_core.service.app_installation._download_azure_blob_directory',
 		mock_download_azure_blob_directory
 	)
+
+	async def mock_app_exists(name: str, branch: str = 'feature-docker-compose') -> bool:
+		mock_app_store_dir = Path(__file__).parent / 'mock_app_store'
+		return (mock_app_store_dir / name).exists()
+
+	mocker.patch(
+		'portal_core.service.app_installation._app_exists',
+		mock_app_exists
+	)
+
+
+@pytest.fixture
+def profile_with_yappi():
+	yappi.set_clock_type("WALL")
+	with yappi.run():
+		yield
+	yappi.get_func_stats().print_all()
 
 
 @dataclass

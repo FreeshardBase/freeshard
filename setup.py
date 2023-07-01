@@ -46,6 +46,7 @@ setup(
 			'pytest-docker',
 			'pytest-mock',
 			'pytest-asyncio',
+			'yappi',
 			'responses',
 			'aioresponses',
 			'datamodel-code-generator[http]'
