@@ -44,6 +44,14 @@ class EntrypointPort(str, Enum):
 	MQTTS_1883 = 'mqtt'
 
 
+class PortalSize(str, Enum):
+	XS = 'xs'
+	S = 's'
+	M = 'm'
+	L = 'l'
+	XL = 'xl'
+
+
 class StoreInfo(BaseModel):
 	description_short: Optional[str]
 	description_long: Optional[Union[str, List[str]]]
@@ -89,6 +97,7 @@ class AppMeta(BaseModel):
 	entrypoints: List[Entrypoint]
 	paths: Dict[str, Path]
 	lifecycle: Lifecycle = Lifecycle(idle_time_for_shutdown=60)
+	minimum_portal_size: PortalSize = PortalSize.XS
 	store_info: Optional[StoreInfo]
 
 	@root_validator(pre=True)
