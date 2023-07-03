@@ -47,10 +47,15 @@ async def api_client(mocker, event_loop) -> AsyncClient:
 	# Modules that define some global state need to be reloaded
 	importlib.reload(websocket)
 
+	async def noop():
+		pass
+
+	mocker.patch('portal_core.service.app_installation.login_docker_registries', noop)
+
 	async with docker_network_portal():
 		app = portal_core.create_app()
 		# for the LifeSpanManager, see: https://github.com/encode/httpx/issues/1024
-		async with LifespanManager(app, startup_timeout=15), AsyncClient(app=app, base_url='https://init') as client:
+		async with LifespanManager(app), AsyncClient(app=app, base_url='https://init') as client:
 			whoareyou = (await client.get('/public/meta/whoareyou')).json()
 			# Cookies are scoped for the domain,
 			# so we have to configure the TestClient with the correct domain.
