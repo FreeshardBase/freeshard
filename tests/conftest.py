@@ -1,3 +1,4 @@
+import asyncio
 import importlib
 import json
 import re
@@ -21,10 +22,18 @@ import portal_core
 from portal_core.model.identity import OutputIdentity, Identity
 from portal_core.model.profile import Profile
 from portal_core.service import websocket
+from portal_core.service.app_installation import login_docker_registries
 from portal_core.web.internal.call_peer import _get_app_for_ip_address
 from tests.util import docker_network_portal, wait_until_all_apps_installed
 
 pytest_plugins = ('pytest_asyncio',)
+
+
+@pytest.fixture(autouse=True, scope='session')
+def setup_all():
+	# Logging in with each api_client hit a rate limit or something.
+	# We do it one time here, and then patch the login function to noop for each api_client
+	asyncio.run(login_docker_registries())
 
 
 @pytest.fixture(autouse=True)
