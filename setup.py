@@ -20,7 +20,7 @@ setup(
 		'fastapi',
 		'websockets',
 		'pyjwt',
-		'pydantic',
+		'pydantic==1.*',
 		'Jinja2',
 		'pyyaml',
 		'docker',
