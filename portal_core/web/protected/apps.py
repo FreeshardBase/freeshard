@@ -8,10 +8,11 @@ from fastapi.responses import Response, StreamingResponse
 from tinydb import Query
 
 from portal_core.database.database import installed_apps_table
-from portal_core.model.app_meta import InstalledApp
+from portal_core.model.app_meta import InstalledAppWithMeta, InstalledApp
 from portal_core.service import app_installation
 from portal_core.service.app_installation import AppAlreadyInstalled, AppNotInstalled
-from portal_core.service.app_tools import get_installed_apps_path, get_app_metadata, NoSuchAppDirectory
+from portal_core.service.app_tools import get_installed_apps_path, get_app_metadata, MetadataNotFound, \
+	enrich_installed_app_with_meta
 
 log = logging.getLogger(__name__)
 
@@ -20,18 +21,19 @@ router = APIRouter(
 )
 
 
-@router.get('', response_model=List[InstalledApp])
+@router.get('', response_model=List[InstalledAppWithMeta])
 def list_all_apps():
 	with installed_apps_table() as installed_apps:
-		return installed_apps.all()
+		apps = [InstalledApp.parse_obj(app) for app in installed_apps.all()]
+	return [enrich_installed_app_with_meta(app) for app in apps]
 
 
-@router.get('/{name}', response_model=InstalledApp)
+@router.get('/{name}', response_model=InstalledAppWithMeta)
 def get_app(name: str):
 	with installed_apps_table() as installed_apps:
 		installed_app = installed_apps.get(Query().name == name)
 	if installed_app:
-		return installed_app
+		return enrich_installed_app_with_meta(InstalledApp.parse_obj(installed_app))
 	raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
 
@@ -39,7 +41,7 @@ def get_app(name: str):
 def get_app_icon(name: str):
 	try:
 		app_meta = get_app_metadata(name)
-	except NoSuchAppDirectory:
+	except MetadataNotFound:
 		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'App {name} is not installed')
 	icon_filename = get_installed_apps_path() / name / app_meta.icon
 

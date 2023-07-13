@@ -6,7 +6,7 @@ import gconf
 from tinydb import Query
 
 from portal_core.database.database import installed_apps_table
-from portal_core.model.app_meta import Status, AppMeta, InstalledApp
+from portal_core.model.app_meta import Status, AppMeta, InstalledApp, InstalledAppWithMeta
 from portal_core.util import signals
 from portal_core.util.misc import throttle
 from portal_core.util.subprocess import subprocess
@@ -79,10 +79,24 @@ def get_installed_apps_path() -> Path:
 def get_app_metadata(app_name: str) -> AppMeta:
 	app_path = get_installed_apps_path() / app_name
 	if not app_path.exists():
-		raise NoSuchAppDirectory(app_name)
-	with open(app_path / 'app_meta.json') as f:
-		return AppMeta(**json.load(f))
+		raise MetadataNotFound(app_name)
+	try:
+		with open(app_path / 'app_meta.json') as f:
+			return AppMeta(**json.load(f))
+	except (FileNotFoundError, json.JSONDecodeError):
+		raise MetadataNotFound(app_name)
 
 
-class NoSuchAppDirectory(Exception):
+def enrich_installed_app_with_meta(installed_app: InstalledApp) -> InstalledAppWithMeta:
+	try:
+		metadata = get_app_metadata(installed_app.name)
+	except MetadataNotFound:
+		metadata = None
+	return InstalledAppWithMeta(
+		**installed_app.dict(),
+		meta=metadata
+	)
+
+
+class MetadataNotFound(Exception):
 	pass

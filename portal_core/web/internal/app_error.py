@@ -10,7 +10,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from portal_core.service.app_tools import get_app_metadata, NoSuchAppDirectory, get_installed_apps_path
+from portal_core.service.app_tools import get_app_metadata, MetadataNotFound, get_installed_apps_path
 
 log = logging.getLogger(__name__)
 
@@ -88,7 +88,7 @@ def get_template_splash():
 def data_url(app_name):
 	try:
 		app_meta = get_app_metadata(app_name)
-	except NoSuchAppDirectory:
+	except MetadataNotFound:
 		return PLACEHOLDER_DATA
 	icon_file = get_installed_apps_path() / app_name / app_meta.icon
 

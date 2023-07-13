@@ -1,12 +1,11 @@
 import datetime
 from enum import Enum
+from pathlib import Path as FilePath
 from typing import Optional, List, Dict, Union
 
 import gconf
 from pydantic import BaseModel, root_validator, validator
 from tinydb import Query
-
-from pathlib import Path as FilePath
 
 from portal_core.database.database import installed_apps_table
 from portal_core.model import app_meta_migration
@@ -76,7 +75,7 @@ class Lifecycle(BaseModel):
 
 	@validator('idle_time_for_shutdown')
 	def validate_idle_time_for_shutdown(cls, v):
-		if v < 5:
+		if v and v < 5:
 			raise ValueError(f'idle_time_for_shutdown must be at least 5, was {v}')
 		return v
 
@@ -114,6 +113,10 @@ class InstalledApp(BaseModel):
 	status: str = Status.UNKNOWN
 	last_access: Optional[datetime.datetime] = None
 	from_branch: str
+
+
+class InstalledAppWithMeta(InstalledApp):
+	meta: AppMeta | None
 
 
 @signals.on_request_to_app.connect
