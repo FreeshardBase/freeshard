@@ -74,6 +74,7 @@ async def _install_app_task(installed_app: InstalledApp):
 				f'{installed_app.from_branch}/all_apps/{installed_app.name}',
 				get_installed_apps_path() / installed_app.name,
 			)
+			await signals.on_apps_update.send_async()
 			log.debug('updating traefik dynamic config')
 			_write_traefik_dyn_config()
 			log.debug(f'creating docker-compose.yml for app {installed_app.name}')
