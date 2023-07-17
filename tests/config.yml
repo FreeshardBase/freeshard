@@ -11,9 +11,3 @@ apps:
   usage_reporting:
     tracking_schedule: '* * * * * *'
     reporting_schedule: '* * * * * */3'
-
-log:
-  levels:
-    'portal_core.service.app_installation': debug
-    'portal_core.service.app_usage_reporting': error
-    'portal_core.service.migration': debug

@@ -39,3 +39,4 @@ log:
   levels:
     portal_core: info
     gunicorn: warning
+    'portal_core.database': debug

@@ -1,5 +1,7 @@
 import logging
 import threading
+import time
+import traceback
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
@@ -32,7 +34,9 @@ def get_db() -> TinyDB:
 	serialization = SerializationMiddleware(JSONStorage)
 	serialization.register_serializer(DateTimeSerializer(), 'TinyDate')
 
+	start_time = time.monotonic()
 	with global_db_lock:
+		wait_time = time.monotonic()
 		with TinyDB(
 				Path(gconf.get('path_root')) / 'core' / 'portal_core_db.json',
 				storage=serialization,
@@ -41,6 +45,11 @@ def get_db() -> TinyDB:
 				create_dirs=True,
 		) as db_:
 			yield db_
+		end_time = time.monotonic()
+		log.debug(
+			f'waiting for db_lock for {wait_time - start_time :.3f}s, operation took {end_time - wait_time :.3f}s')
+		if end_time - start_time > .2:
+			log.debug('Stacktrace:\n' + ''.join(traceback.format_stack()))
 
 
 @contextmanager
