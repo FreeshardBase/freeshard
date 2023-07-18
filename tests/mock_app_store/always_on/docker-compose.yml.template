@@ -1,0 +1,15 @@
+version: '3.5'
+
+networks:
+    portal:
+        external: true
+
+services:
+    always_on:
+        restart: always
+        image: nginx:alpine
+        container_name: always_on
+        ports:
+        - 80:80
+        networks:
+        - portal

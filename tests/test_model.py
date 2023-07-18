@@ -1,6 +1,6 @@
 import pytest
 
-from portal_core.model.app import Lifecycle
+from portal_core.model.app_meta import Lifecycle
 from portal_core.model.util import PropertyBaseModel
 
 

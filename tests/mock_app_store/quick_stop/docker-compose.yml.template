@@ -1,0 +1,15 @@
+version: '3.5'
+
+networks:
+    portal:
+        external: true
+
+services:
+    quick_stop:
+        restart: always
+        image: nginx:alpine
+        container_name: quick_stop
+        ports:
+        - 80:80
+        networks:
+        - portal

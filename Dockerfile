@@ -1,12 +1,14 @@
 # Build
-FROM python:3.8 as build
+FROM python:3.11 as build
 
 RUN python3 -m venv /venv
 COPY . /project
 RUN /venv/bin/pip install /project
 
 # Production
-FROM python:3.8 as production
+FROM python:3.11 as production
+
+RUN apt-get update && apt-get install -y docker docker-compose
 
 COPY --from=build /venv /venv
 COPY config.yml .

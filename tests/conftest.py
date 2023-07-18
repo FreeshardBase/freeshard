@@ -1,26 +1,39 @@
+import asyncio
+import importlib
 import json
-import os
 import re
+import shutil
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from time import sleep
 
 import gconf
-import psycopg
 import pytest
+import pytest_asyncio
 import responses
-from fastapi.testclient import TestClient
-from psycopg.conninfo import make_conninfo
+import yappi
+from asgi_lifespan import LifespanManager
+from httpx import AsyncClient
 from requests import PreparedRequest
 from responses import RequestsMock
 
 import portal_core
-from portal_core import Identity
-from portal_core.model.identity import OutputIdentity
+from portal_core.model.identity import OutputIdentity, Identity
 from portal_core.model.profile import Profile
+from portal_core.service import websocket
+from portal_core.service.app_installation import login_docker_registries
 from portal_core.web.internal.call_peer import _get_app_for_ip_address
+from tests.util import docker_network_portal, wait_until_all_apps_installed
+
+pytest_plugins = ('pytest_asyncio',)
+
+
+@pytest.fixture(autouse=True, scope='session')
+def setup_all():
+	# Logging in with each api_client hit a rate limit or something.
+	# We do it one time here, and then patch the login function to noop for each api_client
+	asyncio.run(login_docker_registries())
 
 
 @pytest.fixture(autouse=True)
@@ -38,50 +51,27 @@ def config_override(tmp_path, request):
 			yield
 
 
-@pytest.fixture
-def init_db(config_override):
-	portal_core.database.init_database()
+@pytest_asyncio.fixture
+async def api_client(mocker, event_loop) -> AsyncClient:
+	# Modules that define some global state need to be reloaded
+	importlib.reload(websocket)
 
+	async def noop():
+		pass
 
-@pytest.fixture
-def api_client(init_db) -> TestClient:
-	os.environ['CONFIG'] = str(Path(__file__).parent / 'config.yml')
+	mocker.patch('portal_core.service.app_installation.login_docker_registries', noop)
 
-	app = portal_core.create_app()
-
-	# Cookies are scoped for the domain, so we have to configure the TestClient with it.
-	# This way, the TestClient remembers cookies
-	whoareyou = TestClient(app).get('public/meta/whoareyou').json()
-	with TestClient(app, base_url=f'https://{whoareyou["domain"]}') as client:
-		yield client
-
-
-@pytest.fixture(scope='session')
-def postgres(request):
-	pg_host = gconf.get('services.postgres.host')
-	pg_port = gconf.get('services.postgres.port')
-	pg_user = gconf.get('services.postgres.user')
-	pg_password = gconf.get('services.postgres.password')
-	postgres_conn_string = make_conninfo('', host=pg_host, port=pg_port, user=pg_user, password=pg_password)
-
-	print(f'\nPostgres connection: {postgres_conn_string}')
-
-	if gconf.get('services.postgres.host') == 'localhost':
-		request.getfixturevalue('docker_services')
-
-	for i in range(60):
-		try:
-			sleep(1)
-			conn = psycopg.connect(postgres_conn_string)
-		except psycopg.OperationalError as e:
-			print(e)
-		else:
-			conn.close()
-			break
-	else:
-		raise TimeoutError('Postgres did not start in time')
-
-	return postgres_conn_string
+	async with docker_network_portal():
+		app = portal_core.create_app()
+		# for the LifeSpanManager, see: https://github.com/encode/httpx/issues/1024
+		async with LifespanManager(app), AsyncClient(app=app, base_url='https://init') as client:
+			whoareyou = (await client.get('/public/meta/whoareyou')).json()
+			# Cookies are scoped for the domain,
+			# so we have to configure the TestClient with the correct domain.
+			# This way, the TestClient remembers cookies
+			client.base_url = f'https://{whoareyou["domain"]}'
+			await wait_until_all_apps_installed(client)
+			yield client
 
 
 mock_profile = Profile(
@@ -137,12 +127,12 @@ def management_api_mock():
 
 @pytest.fixture
 def peer_mock_requests(mocker):
-	mocker.patch('portal_core.web.internal.call_peer._get_app_for_ip_address', lambda x: 'myapp')
+	mocker.patch('portal_core.web.internal.call_peer._get_app_for_ip_address', lambda x: 'mock_app')
 	_get_app_for_ip_address.cache_clear()
 	peer_identity = Identity.create('mock peer')
 	print(f'mocking peer {peer_identity.short_id}')
 	base_url = f'https://{peer_identity.domain}/core'
-	app_url = f'https://myapp.{peer_identity.domain}'
+	app_url = f'https://mock_app.{peer_identity.domain}'
 
 	with (responses.RequestsMock(assert_all_requests_are_fired=False) as rsps):
 		rsps.get(base_url + '/public/meta/whoareyou', json=OutputIdentity(**peer_identity.dict()).dict())
@@ -157,6 +147,36 @@ def peer_mock_requests(mocker):
 		)
 
 	_get_app_for_ip_address.cache_clear()
+
+
+@pytest.fixture
+def mock_app_store(mocker):
+	async def mock_download_azure_blob_directory(directory_name: str, target_dir: Path):
+		last_elem = directory_name.split('/')[-1]
+		source_dir = Path(__file__).parent / 'mock_app_store' / last_elem
+		shutil.copytree(source_dir, target_dir)
+
+	mocker.patch(
+		'portal_core.service.app_installation._download_azure_blob_directory',
+		mock_download_azure_blob_directory
+	)
+
+	async def mock_app_exists(name: str, branch: str = 'feature-docker-compose') -> bool:
+		mock_app_store_dir = Path(__file__).parent / 'mock_app_store'
+		return (mock_app_store_dir / name).exists()
+
+	mocker.patch(
+		'portal_core.service.app_installation._app_exists',
+		mock_app_exists
+	)
+
+
+@pytest.fixture
+def profile_with_yappi():
+	yappi.set_clock_type("WALL")
+	with yappi.run():
+		yield
+	yappi.get_func_stats().print_all()
 
 
 @dataclass

@@ -1,3 +1,5 @@
+import asyncio
+
 import requests
 from http_message_signatures import algorithms
 from requests_http_signature import HTTPSignatureAuth
@@ -6,9 +8,13 @@ from portal_core.model.identity import Identity
 from portal_core.service import identity as identity_service
 
 
-def signed_request(*args, identity: Identity = None, **kwargs) -> requests.Response:
+async def signed_request(*args, identity: Identity = None, **kwargs) -> requests.Response:
 	auth = get_signature_auth(identity)
-	return requests.request(*args, auth=auth, **kwargs)
+
+	def do_request():
+		return requests.request(*args, auth=auth, **kwargs)
+
+	return await asyncio.get_running_loop().run_in_executor(None, do_request)
 
 
 def get_signature_auth(identity: Identity = None):

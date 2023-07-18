@@ -1,0 +1,50 @@
+{
+  "v": "1.0",
+  "app_version": "0.1.0",
+  "name": "filebrowser",
+  "icon": "icon.svg",
+  "entrypoints": [
+    {
+      "container_name": "filebrowser",
+      "container_port": 80,
+      "entrypoint_port": "http"
+    }
+  ],
+  "paths": {
+    "": {
+      "access": "private",
+      "headers": {
+        "X-Ptl-Client-Id": "{{ auth.client_id }}",
+        "X-Ptl-Client-Name": "{{ auth.client_name }}",
+        "X-Ptl-Client-Type": "{{ auth.client_type }}"
+      }
+    },
+    "/share/": {
+      "access": "public",
+      "headers": {
+        "X-Ptl-Client-Type": "{{ auth.client_type }}"
+      }
+    },
+    "/static/": {
+      "access": "public",
+      "headers": {
+        "X-Ptl-Client-Type": "{{ auth.client_type }}"
+      }
+    },
+    "/api/public/": {
+      "access": "public",
+      "headers": {
+        "X-Ptl-Client-Type": "{{ auth.client_type }}"
+      }
+    }
+  },
+  "lifecycle": {
+    "always_on": false,
+    "idle_time_for_shutdown": 3600
+  },
+  "store_info": {
+    "description_short": "filebrowser provides a file managing interface.",
+    "description_long": "filebrowser provides a file managing interface within a specified directory and it can be used to upload, delete, preview, rename and edit your files.",
+    "is_featured": true
+  }
+}

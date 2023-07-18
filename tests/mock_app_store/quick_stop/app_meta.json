@@ -1,0 +1,31 @@
+{
+  "v": "1.0",
+  "app_version": "0.1.0",
+  "name": "quick_stop",
+  "icon": "icon.svg",
+  "entrypoints": [
+    {
+      "container_name": "quick_stop",
+      "container_port": 80,
+      "entrypoint_port": "http"
+    }
+  ],
+  "paths": {
+    "": {
+      "access": "public",
+      "headers": {
+        "X-Ptl-Client-Id": "{{ auth.client_id }}",
+        "X-Ptl-Client-Name": "{{ auth.client_name }}",
+        "X-Ptl-Client-Type": "{{ auth.client_type }}"
+      }
+    }
+  },
+  "lifecycle": {
+    "always_on": false,
+    "idle_time_for_shutdown": 5
+  },
+  "store_info": {
+    "description_short": "an app that stops after 5 seconds",
+    "is_featured": true
+  }
+}
