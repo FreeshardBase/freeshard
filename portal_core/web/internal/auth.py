@@ -39,12 +39,12 @@ async def authenticate_terminal(response: Response, authorization: str = Cookie(
 
 
 @router.get('/authenticate_management', status_code=status.HTTP_200_OK)
-def authenticate_management(authorization: str = Header(None)):
+async def authenticate_management(authorization: str = Header(None)):
 	if not authorization:
 		raise HTTPException(status.HTTP_401_UNAUTHORIZED)
 
 	try:
-		validate_shared_secret(authorization)
+		await validate_shared_secret(authorization)
 	except SharedSecretInvalid:
 		raise HTTPException(status.HTTP_401_UNAUTHORIZED)
 

@@ -46,9 +46,10 @@ def get_db() -> TinyDB:
 		) as db_:
 			yield db_
 		end_time = time.monotonic()
-		log.debug(
-			f'waiting for db_lock for {wait_time - start_time :.3f}s, operation took {end_time - wait_time :.3f}s')
-		if end_time - start_time > .2:
+		if end_time - start_time > 1:
+			log.debug(
+				f'waiting for db_lock for {wait_time - start_time :.3f}s, '
+				f'operation took {end_time - wait_time :.3f}s')
 			log.debug('Stacktrace:\n' + ''.join(traceback.format_stack()))
 
 

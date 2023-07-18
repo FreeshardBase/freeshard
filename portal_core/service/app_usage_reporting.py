@@ -52,7 +52,7 @@ async def report_app_usage():
 	url = f'{api_url}/app_usage'
 
 	for i in range(10):
-		response = signed_request('POST', url, json=report.dict())
+		response = await signed_request('POST', url, json=report.dict())
 		if response.status_code == status.HTTP_409_CONFLICT:
 			log.warning('conflict while sending app usage report, aborting')
 			return

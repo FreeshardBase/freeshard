@@ -10,7 +10,7 @@ async def test_refresh_shared_secret(api_client: AsyncClient, management_api_moc
 	with pytest.raises(KeyError):
 		database.get_value(STORE_KEY_MANAGEMENT_SHARED_KEY)
 
-	management.refresh_shared_secret()
+	await management.refresh_shared_secret()
 
 	assert database.get_value(STORE_KEY_MANAGEMENT_SHARED_KEY)
 

@@ -23,7 +23,7 @@ async def call_peer(portal_id: str, rest: str, request: Request):
 	log.debug(f'call peer: {url}')
 
 	body = await request.body()
-	response = signed_request(request.method, url, data=body)
+	response = await signed_request(request.method, url, data=body)
 	return StreamingResponse(status_code=response.status_code, content=response.iter_content())
 
 
