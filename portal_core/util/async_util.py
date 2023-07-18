@@ -1,14 +1,30 @@
 import asyncio
 import logging
 import time
+from abc import ABC, abstractmethod
 from contextlib import suppress
 from typing import Callable, Awaitable
+
 from croniter import croniter, CroniterBadCronError
 
 log = logging.getLogger(__name__)
 
 
-class Periodic:
+class BackgroundTask(ABC):
+	@abstractmethod
+	def start(self):
+		...
+
+	@abstractmethod
+	def stop(self):
+		...
+
+	@abstractmethod
+	async def wait(self):
+		...
+
+
+class Periodic(BackgroundTask):
 	def __init__(self, func: Callable[[], Awaitable], *, delay=None, cron=None):
 		if not any([delay, cron]):
 			raise TypeError('one of delay, cron must be provided')

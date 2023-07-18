@@ -82,5 +82,5 @@ class _KR(HTTPSignatureKeyResolver):
 
 
 @signals.on_peer_write.connect
-def _on_peer_write(peer: Peer):
+async def _on_peer_write(peer: Peer):
 	update_peer_meta(peer)

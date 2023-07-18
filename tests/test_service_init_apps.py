@@ -1,50 +1,21 @@
 import gconf
+from httpx import AsyncClient
 
-from portal_core import database
-from portal_core.database.database import apps_table
-from portal_core.model.app import InstallationReason, App
-from portal_core.service import init_apps, app_store, app_infra
+import portal_core.service.app_installation
+from tests.util import wait_until_all_apps_installed
 
-init_app_conf = {'apps': {'initial_apps': ['app-foo', 'app-bar']}}
+init_app_conf = {'apps': {'initial_apps': ['filebrowser', 'mock_app']}}
 
 
-def test_add_init_app(init_db, monkeypatch):
-	def mp_get_store_app(name) -> App:
-		return App(**{
-			'name': name,
-			'description': f'this is {name}',
-			'image': f'image-{name}',
-			'port': 1,
-			'authentication': {
-				'default_access': 'private',
-				'peer_paths': None,
-				'private_paths': None,
-				'public_paths': ['/pub']
-			},
-		})
-
-	monkeypatch.setattr(app_store, 'get_store_app', mp_get_store_app)
-	monkeypatch.setattr(app_infra, 'refresh_app_infra', lambda: None)
-
-	with database.apps_table() as apps:
-		apps.insert({
-			'name': 'app-bar',
-			'description': 'this is app-bar',
-			'image': 'image-app-bar',
-			'port': 1,
-			'installation_reason': InstallationReason.CONFIG,
-		})
-		apps.insert({
-			'name': 'app-boo',
-			'description': 'this is app-boo',
-			'image': 'image-app-boo',
-			'port': 1,
-			'installation_reason': InstallationReason.CUSTOM,
-		})
+async def test_add_init_app(api_client: AsyncClient, mock_app_store):
+	response = await api_client.get('/protected/apps')
+	response.raise_for_status()
+	assert {j['name'] for j in response.json()} == {'filebrowser'}
 
 	with gconf.override_conf(init_app_conf):
-		init_apps.refresh_init_apps()
+		await portal_core.service.app_installation.refresh_init_apps()
+	await wait_until_all_apps_installed(api_client)
 
-	with apps_table() as apps:
-		app_names = {a['name'] for a in apps.all()}
-	assert app_names == {'app-foo', 'app-bar', 'app-boo'}
+	response = await api_client.get('/protected/apps')
+	response.raise_for_status()
+	assert {j['name'] for j in response.json()} == {'filebrowser', 'mock_app'}

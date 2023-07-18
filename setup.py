@@ -6,7 +6,7 @@ log = logging.getLogger(__name__)
 
 setup(
 	name='portal_core',
-	version='0.20.0',
+	version='0.21.0',
 	packages=find_packages(),
 	url='https://gitlab.com/ptl/portal_core',
 	author='Max von Tettenborn',
@@ -18,8 +18,9 @@ setup(
 		'tinydb-serialization',
 		'uvicorn',
 		'fastapi',
+		'websockets',
 		'pyjwt',
-		'pydantic',
+		'pydantic==1.*',
 		'Jinja2',
 		'pyyaml',
 		'docker',
@@ -33,6 +34,8 @@ setup(
 		'aiozipstream',
 		'email-validator',
 		'croniter',
+		'azure-storage-blob',
+		'asgi-lifespan==2.*',
 		'common_py @ git+https://app_controller:MzJwN_VwwEyVmtj22LXx@gitlab.com/ptl/common_py.git',
 	],
 	extras_require={
@@ -43,6 +46,7 @@ setup(
 			'pytest-docker',
 			'pytest-mock',
 			'pytest-asyncio',
+			'yappi',
 			'responses',
 			'aioresponses',
 			'datamodel-code-generator[http]'

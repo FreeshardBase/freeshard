@@ -10,7 +10,6 @@ stages:
 variables:
   IMAGE_TAG_REF: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
   IMAGE_TAG_VERSION: $CI_REGISTRY_IMAGE:$CI_COMMIT_TAG
-  POSTGRES_HOST_AUTH_METHOD: trust  # https://gitlab.com/gitlab-org/gitlab/-/issues/206944
 
 ruff:
   stage: lint
@@ -30,12 +29,9 @@ unittest:
     - virtualenv venv
     - source venv/bin/activate
     - pip install ".[dev]"
-    - cd tests
-    - pytest
-  services:
-    - postgres:14
+    - pytest tests
   variables:
-    GCONF_SERVICES_POSTGRES_HOST: postgres
+    CONFIG: tests/config.yml
   tags:
     - portal
 
@@ -86,5 +82,17 @@ pages:
       - public
   rules:
       - if: $CI_COMMIT_TAG
+  tags:
+    - portal
+
+json-schema:
+  stage: release
+  image: registry.gitlab.com/ptl/portal-ci-image:main
+  script:
+    - virtualenv venv
+    - source venv/bin/activate
+    - pip install ".[dev]"
+    - python -m portal_core.model.app_meta
+    - az storage blob upload-batch --destination "json-schema/$CI_COMMIT_REF_SLUG" --source schemas --sas-token $AZ_STORAGE_SAS_TOKEN --account-name storageaccountportab0da --overwrite
   tags:
     - portal

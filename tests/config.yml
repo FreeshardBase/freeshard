@@ -1,24 +1,13 @@
 tests:
   cache_ttl: 0
 
-services:
-  postgres:
-    host: localhost
-    port: 5432
-    user: postgres
-    password: postgres
-
 apps:
   lifecycle:
     refresh_interval: 2
   app_store:
     refresh_interval: 3
   last_access:
-    max_update_frequency: 1
+    max_update_frequency: 3
   usage_reporting:
     tracking_schedule: '* * * * * *'
     reporting_schedule: '* * * * * */3'
-
-log:
-  levels:
-    'portal_core.service.app_lifecycle': debug

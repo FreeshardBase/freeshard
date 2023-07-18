@@ -1,59 +1,46 @@
+import asyncio
 import logging
 import time
 from typing import Dict
 
-import docker
-from docker import errors as docker_errors
-from docker.models.containers import Container
-
-import portal_core.util.signals
-from portal_core.database.database import apps_table
-from portal_core.model.app import InstalledApp, Lifecycle
+from portal_core.database.database import installed_apps_table
+from portal_core.model.app_meta import InstalledApp, Status
+from portal_core.service.app_tools import docker_start_app, docker_stop_app, get_app_metadata
+from portal_core.util import signals
 
 log = logging.getLogger(__name__)
 
 last_access_dict: Dict[str, float] = dict()
 
 
-@portal_core.util.signals.on_request_to_app.connect
-def ensure_app_is_running(app: InstalledApp):
+@signals.on_request_to_app.connect
+async def ensure_app_is_running(app: InstalledApp):
 	global last_access_dict
 	last_access_dict[app.name] = time.time()
-
-	docker_client = docker.from_env()
-	try:
-		docker_client.containers.get(app.name).start()
-	except docker_errors.NotFound:
-		log.error(f'No container for app: {app.name}')
+	await docker_start_app(app.name)
 
 
 async def control_apps():
+	with installed_apps_table() as installed_apps:
+		installed_apps = [
+			InstalledApp.parse_obj(a)
+			for a in installed_apps.all()
+			if a['status'] not in (Status.INSTALLATION_QUEUED, Status.INSTALLING)]
+	tasks = [control_app(app.name) for app in installed_apps]
+	await asyncio.gather(*tasks)
+
+
+async def control_app(name: str):
 	global last_access_dict
-	docker_client = docker.from_env()
-	containers = {c.name: c for c in docker_client.containers.list(all=True)}
-
-	with apps_table() as apps:  # type: Table
-		all_apps = [InstalledApp.parse_obj(a) for a in apps.all()]
-
-	for app in all_apps:
-		lifecycle = Lifecycle.parse_obj(app.lifecycle)
-		try:
-			container: Container = containers[app.name]
-		except KeyError:
-			log.warning(f'container for {app.name} not found')
-			continue
-
-		if container.status == 'running' and not lifecycle.always_on:
-			last_access = last_access_dict.get(app.name, 0.0)
-			idle_time_for_shutdown = lifecycle.idle_time_for_shutdown
-			if last_access < time.time() - idle_time_for_shutdown:
-				log.debug(f'stopping {app.name} due to inactivity')
-				container.stop()
-
-		if container.status == 'created' and lifecycle.always_on:
-			log.debug(f'starting {app.name} because it is always on')
-			container.start()
+	meta = get_app_metadata(name)
+	if meta.lifecycle.always_on:
+		await docker_start_app(meta.name)
+	else:
+		last_access = last_access_dict.get(meta.name, 0.0)
+		idle_time_for_shutdown = meta.lifecycle.idle_time_for_shutdown
+		if last_access < time.time() - idle_time_for_shutdown:
+			await docker_stop_app(meta.name)
 
 
-class NoSuchApp(Exception):
+class AppNotStarted(Exception):
 	pass

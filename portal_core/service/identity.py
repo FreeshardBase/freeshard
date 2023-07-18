@@ -48,10 +48,10 @@ def get_default_identity() -> Identity:
 
 
 @on_first_terminal_add.connect
-def enrich_identity_from_profile(_):
+async def enrich_identity_from_profile(_):
 	api_url = gconf.get('management.api_url')
 	url = f'{api_url}/profile'
-	response = signed_request('GET', url)
+	response = await signed_request('GET', url)
 	try:
 		response.raise_for_status()
 	except HTTPError as e:

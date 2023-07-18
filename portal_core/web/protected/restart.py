@@ -13,6 +13,7 @@ router = APIRouter(
 
 @router.post('', status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def restart():
+	# todo: try this using docker-compose and a detached subprocess
 	with open('/core/restart_core', 'w') as f:
 		f.write(datetime.now().isoformat())
 	log.info('scheduled restart of portal services')

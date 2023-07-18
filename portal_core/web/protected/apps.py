@@ -1,21 +1,18 @@
 import io
 import logging
 import mimetypes
-import re
-import tarfile
-from contextlib import suppress
-from pathlib import Path
 from typing import List
 
-import gconf
-from docker import DockerClient, errors as docker_errors
 from fastapi import APIRouter, status, HTTPException
 from fastapi.responses import Response, StreamingResponse
-from tinydb import where, Query
+from tinydb import Query
 
-from portal_core.database.database import apps_table
-from portal_core.model.app import InstallationReason, InstalledApp, App, AppToInstall
-from portal_core.service import app_infra, app_store
+from portal_core.database.database import installed_apps_table
+from portal_core.model.app_meta import InstalledAppWithMeta, InstalledApp
+from portal_core.service import app_installation
+from portal_core.service.app_installation import AppAlreadyInstalled, AppNotInstalled
+from portal_core.service.app_tools import get_installed_apps_path, get_app_metadata, MetadataNotFound, \
+	enrich_installed_app_with_meta
 
 log = logging.getLogger(__name__)
 
@@ -24,85 +21,46 @@ router = APIRouter(
 )
 
 
-@router.get('', response_model=List[InstalledApp])
+@router.get('', response_model=List[InstalledAppWithMeta])
 def list_all_apps():
-	with apps_table() as apps:
-		apps = [InstalledApp(**a) for a in apps.all()]
-	docker_client = DockerClient(base_url='unix://var/run/docker.sock')
-	containers = {c.name: c for c in docker_client.containers.list(all=True)}
-	for app in apps:
-		with suppress(KeyError):
-			app.status = containers[app.name].status
-	return list(apps)
+	with installed_apps_table() as installed_apps:
+		apps = [InstalledApp.parse_obj(app) for app in installed_apps.all()]
+	return [enrich_installed_app_with_meta(app) for app in apps]
+
+
+@router.get('/{name}', response_model=InstalledAppWithMeta)
+def get_app(name: str):
+	with installed_apps_table() as installed_apps:
+		installed_app = installed_apps.get(Query().name == name)
+	if installed_app:
+		return enrich_installed_app_with_meta(InstalledApp.parse_obj(installed_app))
+	raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
 
 @router.get('/{name}/icon')
 def get_app_icon(name: str):
-	matcher = re.compile(r'^icon\..+$')
+	try:
+		app_meta = get_app_metadata(name)
+	except MetadataNotFound:
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'App {name} is not installed')
+	icon_filename = get_installed_apps_path() / name / app_meta.icon
 
-	app_repo = Path(gconf.get('path_root')) / 'core' / 'appstore' / name
-	if app_repo.exists() and app_repo.is_dir():
-		try:
-			icon_filename = [f for f in app_repo.iterdir() if matcher.match(f.name)][0]
-		except IndexError:
-			pass
-		else:
-			with open(icon_filename, 'rb') as icon_file:
-				buffer = io.BytesIO(icon_file.read())
-			return StreamingResponse(buffer, media_type=mimetypes.guess_type(icon_filename)[0])
-
-	else:
-		try:
-			tar = _get_metadata_tar(name)
-		except docker_errors.NotFound:
-			raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'No icon for app named {name}')
-		try:
-			icon_filename = [n for n in tar.getnames() if matcher.match(n)][0]
-		except IndexError:
-			pass
-		else:
-			return StreamingResponse(tar.extractfile(icon_filename), media_type=mimetypes.guess_type(icon_filename)[0])
-
-	raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'No icon for app named {name}')
-
-
-@router.get('/{name}/app.json', response_model=App)
-def get_app_json(name: str):
-	with apps_table() as apps:
-		installed_app = apps.get(Query().name == name)
-	if installed_app:
-		return installed_app
-	return app_store.get_store_app(name)
-
-
-
-@router.post('', status_code=status.HTTP_201_CREATED)
-def install_app(input_app: App):
-	app_to_install = AppToInstall(
-		**input_app.dict(),
-		installation_reason=InstallationReason.CUSTOM,
-	)
-	with apps_table() as apps:
-		apps.insert(app_to_install.dict())
-		app_infra.refresh_app_infra()
+	with open(icon_filename, 'rb') as icon_file:
+		buffer = io.BytesIO(icon_file.read())
+	return StreamingResponse(buffer, media_type=mimetypes.guess_type(icon_filename)[0])
 
 
 @router.delete('/{name}', status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
-def uninstall_app(name: str):
-	with apps_table() as apps:
-		apps.remove(where('name') == name)
-	app_infra.refresh_app_infra()
-
-
-def _get_metadata_tar(name) -> tarfile.TarFile:
-	docker_client = DockerClient(base_url='unix://var/run/docker.sock')
+async def uninstall_app(name: str):
 	try:
-		container = docker_client.containers.get(name)
-	except docker_errors.NotFound as e:
-		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from e
-	bits, _ = container.get_archive('/portal_meta/icon.svg')
-	f = io.BytesIO()
-	for chunk in bits:
-		f.write(chunk)
-	f.seek(0)
-	return tarfile.open(fileobj=f)
+		await app_installation.uninstall_app(name)
+	except AppNotInstalled:
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'App {name} is not installed')
+
+
+@router.post('/{name}', status_code=status.HTTP_201_CREATED)
+async def install_app(name: str):
+	try:
+		await app_installation.install_store_app(name)
+	except AppAlreadyInstalled:
+		raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f'App {name} is already installed')

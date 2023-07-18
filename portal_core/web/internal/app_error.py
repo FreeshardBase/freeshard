@@ -4,12 +4,13 @@ from functools import lru_cache
 from pathlib import Path
 
 import docker
-import gconf
 import jinja2
 from docker import errors as docker_errors
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
+
+from portal_core.service.app_tools import get_app_metadata, MetadataNotFound, get_installed_apps_path
 
 log = logging.getLogger(__name__)
 
@@ -19,8 +20,7 @@ router = APIRouter()
 @router.get('/app_error/{status}')
 def app_error(status: int, request: Request):
 	behaviour = get_splash_behaviour(request)
-	with open(Path.cwd() / 'data' / 'splash.html', 'r') as f:
-		template = jinja2.Template(f.read())
+	template = get_template_splash()
 	return HTMLResponse(content=template.render(**behaviour.dict()), status_code=status)
 
 
@@ -84,17 +84,13 @@ def get_template_splash():
 	return template
 
 
-@lru_cache(maxsize=4)
+@lru_cache(maxsize=16)
 def data_url(app_name):
-	app_store_dir = Path(gconf.get('path_root')) / 'core' / 'appstore'
 	try:
-		app_dir = list(app_store_dir.glob(app_name))[0]
-	except IndexError:
+		app_meta = get_app_metadata(app_name)
+	except MetadataNotFound:
 		return PLACEHOLDER_DATA
-	try:
-		icon_file = list(app_dir.glob('icon.*'))[0]
-	except IndexError:
-		return PLACEHOLDER_DATA
+	icon_file = get_installed_apps_path() / app_name / app_meta.icon
 
 	b64 = base64.b64encode(icon_file.read_bytes()).decode()
 	image_type = icon_file.suffix[1:]

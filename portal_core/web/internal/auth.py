@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 
 import gconf
 from cachetools import cached, TTLCache
@@ -7,11 +8,12 @@ from http_message_signatures import InvalidSignature
 from jinja2 import Template
 from tinydb import Query
 
-from portal_core.database.database import apps_table, identities_table
-from portal_core.model.app import InstalledApp, Access, Path
+from portal_core.database.database import installed_apps_table, identities_table
+from portal_core.model.app_meta import InstalledApp, Access, Path
 from portal_core.model.auth import AuthState
 from portal_core.model.identity import Identity, SafeIdentity
 from portal_core.service import pairing, peer as peer_service
+from portal_core.service.app_tools import get_app_metadata
 from portal_core.service.management import validate_shared_secret, SharedSecretInvalid
 from portal_core.util.signals import on_terminal_auth, on_request_to_app, on_peer_auth
 
@@ -21,7 +23,7 @@ router = APIRouter()
 
 
 @router.get('/authenticate_terminal', status_code=status.HTTP_200_OK)
-def authenticate_terminal(response: Response, authorization: str = Cookie(None)):
+async def authenticate_terminal(response: Response, authorization: str = Cookie(None)):
 	if not authorization:
 		raise HTTPException(status.HTTP_401_UNAUTHORIZED)
 
@@ -33,16 +35,16 @@ def authenticate_terminal(response: Response, authorization: str = Cookie(None))
 		response.headers['X-Ptl-Client-Type'] = 'terminal'
 		response.headers['X-Ptl-Client-Id'] = terminal.id
 		response.headers['X-Ptl-Client-Name'] = terminal.name
-		on_terminal_auth.send(terminal)
+		await on_terminal_auth.send_async(terminal)
 
 
 @router.get('/authenticate_management', status_code=status.HTTP_200_OK)
-def authenticate_management(authorization: str = Header(None)):
+async def authenticate_management(authorization: str = Header(None)):
 	if not authorization:
 		raise HTTPException(status.HTTP_401_UNAUTHORIZED)
 
 	try:
-		validate_shared_secret(authorization)
+		await validate_shared_secret(authorization)
 	except SharedSecretInvalid:
 		raise HTTPException(status.HTTP_401_UNAUTHORIZED)
 
@@ -75,10 +77,10 @@ async def authenticate_and_authorize(
 				.render(auth=auth_state.header_values, portal=portal_header_values)
 	log.debug(f'granted auth for {x_forwarded_host}{x_forwarded_uri} with headers {response.headers.items()}')
 
-	on_request_to_app.send(app)
+	await on_request_to_app.send_async(app)
 
 
-def _match_app(x_forwarded_host):
+def _match_app(x_forwarded_host) -> InstalledApp:
 	app_name = x_forwarded_host.split('.')[0]
 	app = _find_app(app_name)
 	if not app:
@@ -91,18 +93,21 @@ def _match_app(x_forwarded_host):
 def _get_portal_identity():
 	with identities_table() as identities:
 		default_identity = Identity(**identities.get(Query().is_default == True))  # noqa: E712
-	return SafeIdentity(**default_identity.dict())
+	return SafeIdentity.from_identity(default_identity)
 
 
 @cached(cache=TTLCache(maxsize=32, ttl=gconf.get('tests.cache_ttl', default=3)))
-def _find_app(app_name):
-	with apps_table() as apps:  # type: Table
-		app = InstalledApp(**apps.get(Query().name == app_name))
-	return app
+def _find_app(app_name) -> Optional[InstalledApp]:
+	with installed_apps_table() as installed_apps:  # type: Table
+		if result := installed_apps.get(Query().name == app_name):
+			return InstalledApp(**result)
+		else:
+			return None
 
 
 def _match_path(uri, app: InstalledApp) -> Path:
-	for path, props in sorted(app.paths.items(), key=lambda x: len(x[0]), reverse=True):  # type: (str, Path)
+	app_meta = get_app_metadata(app.name)
+	for path, props in sorted(app_meta.paths.items(), key=lambda x: len(x[0]), reverse=True):  # type: (str, Path)
 		if uri.startswith(path):
 			return props
 
@@ -113,7 +118,7 @@ async def _get_auth_state(request, authorization) -> AuthState:
 	except pairing.InvalidJwt as e:
 		log.debug(f'invalid terminal JWT: {e}')
 	else:
-		on_terminal_auth.send(terminal)
+		await on_terminal_auth.send_async(terminal)
 		return AuthState(
 			x_ptl_client_type=AuthState.ClientType.TERMINAL,
 			x_ptl_client_id=terminal.id,
@@ -127,7 +132,7 @@ async def _get_auth_state(request, authorization) -> AuthState:
 	except KeyError as e:
 		log.debug(f'no such peer: {e}')
 	else:
-		on_peer_auth.send(peer)
+		await on_peer_auth.send_async(peer)
 		return AuthState(
 			x_ptl_client_type=AuthState.ClientType.PEER,
 			x_ptl_client_id=peer.id,

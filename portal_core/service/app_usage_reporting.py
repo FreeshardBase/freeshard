@@ -7,8 +7,8 @@ from requests import HTTPError
 from starlette import status
 from tinydb import Query
 
-from portal_core.database.database import apps_table, app_usage_track_table
-from portal_core.model.app import InstalledApp
+from portal_core.database.database import installed_apps_table, app_usage_track_table
+from portal_core.model.app_meta import InstalledApp
 from portal_core.model.app_usage import AppUsageTrack, AppUsageReport
 from portal_core.service.signed_call import signed_request
 
@@ -16,8 +16,8 @@ log = logging.getLogger(__name__)
 
 
 async def track_currently_installed_apps():
-	with apps_table() as apps:  # type: Table
-		all_apps = [InstalledApp.parse_obj(a) for a in apps.all()]
+	with installed_apps_table() as installed_apps:  # type: Table
+		all_apps = [InstalledApp.parse_obj(a) for a in installed_apps.all()]
 	track = AppUsageTrack(
 		timestamp=datetime.utcnow(),
 		installed_apps=[app.name for app in all_apps]
@@ -52,7 +52,7 @@ async def report_app_usage():
 	url = f'{api_url}/app_usage'
 
 	for i in range(10):
-		response = signed_request('POST', url, json=report.dict())
+		response = await signed_request('POST', url, json=report.dict())
 		if response.status_code == status.HTTP_409_CONFLICT:
 			log.warning('conflict while sending app usage report, aborting')
 			return

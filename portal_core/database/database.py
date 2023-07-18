@@ -1,7 +1,10 @@
 import logging
 import threading
+import time
+import traceback
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Iterator
 
 import gconf
 from tinydb import TinyDB, Query, JSONStorage
@@ -31,7 +34,9 @@ def get_db() -> TinyDB:
 	serialization = SerializationMiddleware(JSONStorage)
 	serialization.register_serializer(DateTimeSerializer(), 'TinyDate')
 
+	start_time = time.monotonic()
 	with global_db_lock:
+		wait_time = time.monotonic()
 		with TinyDB(
 				Path(gconf.get('path_root')) / 'core' / 'portal_core_db.json',
 				storage=serialization,
@@ -40,40 +45,46 @@ def get_db() -> TinyDB:
 				create_dirs=True,
 		) as db_:
 			yield db_
+		end_time = time.monotonic()
+		if end_time - start_time > 1:
+			log.debug(
+				f'waiting for db_lock for {wait_time - start_time :.3f}s, '
+				f'operation took {end_time - wait_time :.3f}s')
+			log.debug('Stacktrace:\n' + ''.join(traceback.format_stack()))
 
 
 @contextmanager
-def apps_table() -> Table:
+def installed_apps_table() -> Iterator[Table]:
 	with get_db() as db:
-		yield db.table('apps')
+		yield db.table('installed_apps')
 
 
 @contextmanager
-def identities_table() -> Table:
+def identities_table() -> Iterator[Table]:
 	with get_db() as db:
 		yield db.table('identities')
 
 
 @contextmanager
-def terminals_table() -> Table:
+def terminals_table() -> Iterator[Table]:
 	with get_db() as db:
 		yield db.table('terminals')
 
 
 @contextmanager
-def peers_table() -> Table:
+def peers_table() -> Iterator[Table]:
 	with get_db() as db:
 		yield db.table('peers')
 
 
 @contextmanager
-def tours_table() -> Table:
+def tours_table() -> Iterator[Table]:
 	with get_db() as db:
 		yield db.table('tours')
 
 
 @contextmanager
-def app_usage_track_table() -> Table:
+def app_usage_track_table() -> Iterator[Table]:
 	with get_db() as db:
 		yield db.table('app_usage_track')
 

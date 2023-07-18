@@ -1,47 +1,36 @@
 import logging
 import os
+import shutil
 import sys
 from contextlib import asynccontextmanager
 from importlib.metadata import metadata
 from pathlib import Path
+from typing import List
 
 import gconf
-import jinja2
 from fastapi import FastAPI, Request, Response
 
-from portal_core.database import database, migration
-from .model.identity import Identity
-from .service import app_store, init_apps, app_infra, identity, app_lifecycle, peer, app_usage_reporting
-from .util.async_util import Periodic
+from .database import database
+from .service import app_installation, identity, app_lifecycle, peer, app_usage_reporting, websocket, migration
+from .service.app_installation import cancel_all_installations
+from .service.app_tools import docker_stop_all_apps, docker_shutdown_all_apps
+from .util.async_util import Periodic, BackgroundTask
 from .web import internal, public, protected, management
 
 log = logging.getLogger(__name__)
 
 
 def create_app():
-	shipped_config = gconf.load('config.yml')
-	additional_config = gconf.load(os.environ['CONFIG']) if 'CONFIG' in os.environ else None
+	if 'CONFIG' in os.environ:
+		for c in os.environ['CONFIG'].split(','):
+			gconf.load(c)
+	else:
+		gconf.load('config.yml')
 	configure_logging()
-	log.info(f'loaded shipped config {str(shipped_config)}')
-	if additional_config:
-		log.info(f'loaded additional config {str(additional_config)}')
 
 	database.init_database()
-	migration.migrate_all()
-
-	default_identity = identity.init_default_identity()
-	try:
-		_render_traefik_config(default_identity)
-	except FileNotFoundError:
-		log.error('Traefik template not found, Traefik config cannot be created')
-
-	app_store.set_app_store_branch('master')
-	app_store.refresh_app_store()
-	init_apps.refresh_init_apps()
-	log.debug('refreshed initial apps')
-
-	app_infra.refresh_app_infra()
-	log.debug('written app infra files (docker-compose and traefik)')
+	identity.init_default_identity()
+	_copy_traefik_static_config()
 
 	app_meta = metadata('portal_core')
 	app = FastAPI(
@@ -78,7 +67,14 @@ def configure_logging():
 
 @asynccontextmanager
 async def lifespan(_):
-	background_tasks = [
+	await app_installation.login_docker_registries()
+
+	await migration.migrate()
+
+	await app_installation.refresh_init_apps()
+	log.debug('refreshed initial apps')
+
+	background_tasks: List[BackgroundTask] = [
 		Periodic(
 			app_lifecycle.control_apps,
 			delay=gconf.get('apps.lifecycle.refresh_interval')),
@@ -90,38 +86,27 @@ async def lifespan(_):
 		Periodic(
 			app_usage_reporting.report_app_usage,
 			cron=gconf.get('apps.usage_reporting.reporting_schedule')),
+		websocket.ws_worker,
 	]
 	for t in background_tasks:
 		t.start()
-	yield
+
+	yield  # === run app ===
+
+	await cancel_all_installations(wait=True)
 	for t in background_tasks:
 		t.stop()
 	for t in background_tasks:
 		await t.wait()
+	await docker_stop_all_apps()
+	await docker_shutdown_all_apps()
 
 
-def _render_traefik_config(id_: Identity):
+def _copy_traefik_static_config():
+	source = Path.cwd() / 'data' / 'traefik.yml'
 	root = Path(gconf.get('path_root'))
-	source = root / 'core/traefik.template.yml'
-	target = root / 'core/traefik.yml'
-	if target.exists() and target.is_dir():
-		log.info('traefik.yml is a directory, deleting it')
-		target.rmdir()
-
-	if not source.exists():
-		raise FileNotFoundError(source.absolute())
-
-	prefix_length = gconf.get('dns.prefix length')
-
-	template = jinja2.Template(
-		source.read_text(),
-		variable_start_string='%%',
-		variable_end_string='%%',
-	)
-	with open(target, 'w') as f_traefik:
-		f_traefik.write(template.render(identity=id_.id[:prefix_length]))
-
-	log.info('created traefik config')
+	target = root / 'core' / 'traefik.yml'
+	shutil.copy(source, target)
 
 
 async def _log_request_and_response(request: Request, response: Response):

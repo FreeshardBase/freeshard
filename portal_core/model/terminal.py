@@ -42,7 +42,7 @@ class InputTerminal(BaseModel):
 
 
 @on_terminal_auth.connect
-def update_terminal_last_connection(terminal: Terminal):
+async def update_terminal_last_connection(terminal: Terminal):
 	with terminals_table() as terminals:  # type: Table
 		existing_terminal = Terminal(**(terminals.get(Query().id == terminal.id)))
 		existing_terminal.last_connection = datetime.utcnow()

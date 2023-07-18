@@ -7,7 +7,7 @@ from portal_core.database.database import terminals_table, identities_table
 from portal_core.model.identity import Identity
 from portal_core.model.terminal import Terminal, InputTerminal
 from portal_core.service import pairing
-from portal_core.util.signals import on_first_terminal_add
+from portal_core.util.signals import on_first_terminal_add, on_terminals_update, on_terminal_add
 
 log = logging.getLogger(__name__)
 
@@ -17,7 +17,7 @@ router = APIRouter(
 
 
 @router.post('/terminal', status_code=status.HTTP_201_CREATED)
-def add_terminal(code: str, terminal: InputTerminal, response: Response):
+async def add_terminal(code: str, terminal: InputTerminal, response: Response):
 	try:
 		pairing.redeem_pairing_code(code)
 	except (KeyError, pairing.InvalidPairingCode, pairing.PairingCodeExpired) as e:
@@ -28,8 +28,6 @@ def add_terminal(code: str, terminal: InputTerminal, response: Response):
 	with terminals_table() as terminals:  # type: Table
 		terminals.insert(new_terminal.dict())
 		is_first_terminal = terminals.count(Query().noop()) == 1
-	if is_first_terminal:
-		on_first_terminal_add.send(new_terminal)
 
 	with identities_table() as identities:  # type: Table
 		default_identity = Identity(**identities.get(Query().is_default == True))  # noqa: E712
@@ -38,4 +36,10 @@ def add_terminal(code: str, terminal: InputTerminal, response: Response):
 	response.set_cookie('authorization', jwt,
 		domain=default_identity.domain,
 		secure=True, httponly=True, expires=60 * 60 * 24 * 356 * 10)
+
+	await on_terminals_update.send_async()
+	await on_terminal_add.send_async(new_terminal)
+	if is_first_terminal:
+		await on_first_terminal_add.send_async(new_terminal)
+
 	log.info(f'added {new_terminal}')
