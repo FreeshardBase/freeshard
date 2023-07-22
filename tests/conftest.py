@@ -161,7 +161,7 @@ def mock_app_store(mocker):
 		mock_download_azure_blob_directory
 	)
 
-	async def mock_app_exists(name: str, branch: str = 'feature-docker-compose') -> bool:
+	async def mock_app_exists(name: str, branch: str = 'master') -> bool:
 		mock_app_store_dir = Path(__file__).parent / 'mock_app_store'
 		return (mock_app_store_dir / name).exists()
 
