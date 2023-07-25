@@ -38,7 +38,7 @@ class AppStoreStatus(BaseModel):
 async def install_store_app(
 		name: str,
 		installation_reason: InstallationReason = InstallationReason.STORE,
-		store_branch: Optional[str] = 'feature-docker-compose',  # todo: change back to master
+		store_branch: Optional[str] = 'master',
 ):
 	if not await _app_exists(name, store_branch):
 		raise AppDoesNotExist(name)
@@ -58,13 +58,13 @@ async def install_store_app(
 	task = asyncio.create_task(_install_app_task(installed_app))
 	installation_tasks[name] = task
 	await signals.on_apps_update.send_async()
-	log.info(f'created installation task for {name}')
+	log.info(f'created installation task for {name} from branch {store_branch}')
 	log.debug(f'installation tasks: {installation_tasks.keys()}')
 
 
 async def _install_app_task(installed_app: InstalledApp):
 	async with install_lock:
-		log.info(f'starting installation of {installed_app.name}')
+		log.info(f'starting installation of {installed_app.name} from branch {installed_app.from_branch}')
 		with installed_apps_table() as installed_apps:
 			installed_apps.update({'status': Status.INSTALLING}, Query().name == installed_app.name)
 		await signals.on_apps_update.send_async()
@@ -147,7 +147,7 @@ class AppNotInstalled(Exception):
 	pass
 
 
-async def _app_exists(name: str, branch: str = 'feature-docker-compose') -> bool:
+async def _app_exists(name: str, branch: str = 'master') -> bool:
 	async with ContainerClient(
 			account_url=gconf.get('apps.app_store.base_url'),
 			container_name=gconf.get('apps.app_store.container_name'),
