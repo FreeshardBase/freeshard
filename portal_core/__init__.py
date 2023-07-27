@@ -68,7 +68,7 @@ def configure_logging():
 
 @asynccontextmanager
 async def lifespan(_):
-	with profile():
+	with profile('lifespan_start'):
 		await app_installation.login_docker_registries()
 
 		await migration.migrate()

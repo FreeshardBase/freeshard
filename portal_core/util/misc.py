@@ -1,6 +1,7 @@
 import inspect
 import time
 from contextlib import contextmanager
+from pathlib import Path
 
 import gconf
 import yappi
@@ -29,8 +30,8 @@ def throttle(min_duration: float):
 
 
 @contextmanager
-def profile():
-	if gconf.get('log.profiling', default=False):
+def profile(filename: str):
+	if gconf.get('log.profiling.enabled', default=False):
 		yappi.set_clock_type('wall')
 		yappi.clear_stats()
 		yappi.start()
@@ -39,7 +40,8 @@ def profile():
 		stats = yappi.get_func_stats(
 			filter_callback=lambda x: 'portal_core' in x.module
 		)
-		stats.save('profile.pstat', type='pstat')
+		path = Path(gconf.get('log.profiling.path')) / filename
+		stats.save(str(path.absolute()), type='pstat')
 		yappi.clear_stats()
 	else:
 		yield

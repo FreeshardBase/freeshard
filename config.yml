@@ -40,4 +40,6 @@ log:
     portal_core: info
     gunicorn: warning
     'portal_core.database': debug
-  profiling: true
+  profiling:
+    enabled: false
+    path: core/
