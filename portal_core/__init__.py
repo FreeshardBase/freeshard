@@ -15,6 +15,7 @@ from .service import app_installation, identity, app_lifecycle, peer, app_usage_
 from .service.app_installation import cancel_all_installations
 from .service.app_tools import docker_stop_all_apps, docker_shutdown_all_apps
 from .util.async_util import Periodic, BackgroundTask
+from .util.misc import profile
 from .web import internal, public, protected, management
 
 log = logging.getLogger(__name__)
@@ -67,29 +68,30 @@ def configure_logging():
 
 @asynccontextmanager
 async def lifespan(_):
-	await app_installation.login_docker_registries()
+	with profile():
+		await app_installation.login_docker_registries()
 
-	await migration.migrate()
+		await migration.migrate()
 
-	await app_installation.refresh_init_apps()
-	log.debug('refreshed initial apps')
+		await app_installation.refresh_init_apps()
+		log.debug('refreshed initial apps')
 
-	background_tasks: List[BackgroundTask] = [
-		Periodic(
-			app_lifecycle.control_apps,
-			delay=gconf.get('apps.lifecycle.refresh_interval')),
-		Periodic(
-			peer.update_all_peer_pubkeys, delay=60),
-		Periodic(
-			app_usage_reporting.track_currently_installed_apps,
-			cron=gconf.get('apps.usage_reporting.tracking_schedule')),
-		Periodic(
-			app_usage_reporting.report_app_usage,
-			cron=gconf.get('apps.usage_reporting.reporting_schedule')),
-		websocket.ws_worker,
-	]
-	for t in background_tasks:
-		t.start()
+		background_tasks: List[BackgroundTask] = [
+			Periodic(
+				app_lifecycle.control_apps,
+				delay=gconf.get('apps.lifecycle.refresh_interval')),
+			Periodic(
+				peer.update_all_peer_pubkeys, delay=60),
+			Periodic(
+				app_usage_reporting.track_currently_installed_apps,
+				cron=gconf.get('apps.usage_reporting.tracking_schedule')),
+			Periodic(
+				app_usage_reporting.report_app_usage,
+				cron=gconf.get('apps.usage_reporting.reporting_schedule')),
+			websocket.ws_worker,
+		]
+		for t in background_tasks:
+			t.start()
 
 	yield  # === run app ===
 

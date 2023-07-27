@@ -1,5 +1,9 @@
 import inspect
 import time
+from contextlib import contextmanager
+
+import gconf
+import yappi
 
 
 def throttle(min_duration: float):
@@ -22,3 +26,20 @@ def throttle(min_duration: float):
 		return wrapper_throttle
 
 	return decorator_throttle
+
+
+@contextmanager
+def profile():
+	if gconf.get('log.profiling', default=False):
+		yappi.set_clock_type('wall')
+		yappi.clear_stats()
+		yappi.start()
+		yield
+		yappi.stop()
+		stats = yappi.get_func_stats(
+			filter_callback=lambda x: 'portal_core' in x.module
+		)
+		stats.save('profile.pstat', type='pstat')
+		yappi.clear_stats()
+	else:
+		yield
