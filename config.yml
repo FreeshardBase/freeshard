@@ -42,4 +42,4 @@ log:
     'portal_core.database': debug
   profiling:
     enabled: false
-    path: core/
+    path: core/profiling/

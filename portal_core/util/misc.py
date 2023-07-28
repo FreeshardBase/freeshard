@@ -40,7 +40,8 @@ def profile(filename: str):
 		stats = yappi.get_func_stats(
 			filter_callback=lambda x: 'portal_core' in x.module
 		)
-		path = Path(gconf.get('log.profiling.path')) / filename
+		path = Path(gconf.get('log.profiling.path')) / f'{filename}.pstat'
+		path.parent.mkdir(exist_ok=True, parents=True)
 		stats.save(str(path.absolute()), type='pstat')
 		yappi.clear_stats()
 	else:
