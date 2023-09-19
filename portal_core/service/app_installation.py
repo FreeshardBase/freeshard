@@ -202,6 +202,7 @@ async def refresh_init_apps():
 
 	for app_name in configured_init_apps - installed_apps:
 		await install_store_app(app_name, InstallationReason.CONFIG)
+	log.debug('refreshed initial apps')
 
 
 def _write_traefik_dyn_config():
