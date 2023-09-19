@@ -13,7 +13,7 @@ from fastapi import FastAPI, Request, Response
 from .database import database
 from .service import app_installation, identity, app_lifecycle, peer, app_usage_reporting, websocket, migration
 from .service.app_installation import cancel_all_installations
-from .service.app_tools import docker_stop_all_apps, docker_shutdown_all_apps
+from .service.app_tools import docker_stop_all_apps, docker_shutdown_all_apps, docker_prune_images
 from .util.async_util import PeriodicTask, BackgroundTask, CronTask
 from .util.misc import profile
 from .web import internal, public, protected, management
@@ -73,21 +73,7 @@ async def lifespan(_):
 		await migration.migrate()
 		await app_installation.refresh_init_apps()
 
-		background_tasks: List[BackgroundTask] = [
-			PeriodicTask(
-				app_lifecycle.control_apps, gconf.get('apps.lifecycle.refresh_interval')
-			),
-			PeriodicTask(peer.update_all_peer_pubkeys, 60),
-			CronTask(
-				app_usage_reporting.track_currently_installed_apps,
-				gconf.get('apps.usage_reporting.tracking_schedule'),
-			),
-			CronTask(
-				app_usage_reporting.report_app_usage,
-				gconf.get('apps.usage_reporting.reporting_schedule'),
-			),
-			websocket.ws_worker,
-		]
+		background_tasks = make_background_tasks()
 		for t in background_tasks:
 			t.start()
 
@@ -100,6 +86,28 @@ async def lifespan(_):
 		await t.wait()
 	await docker_stop_all_apps()
 	await docker_shutdown_all_apps()
+
+
+def make_background_tasks() -> List[BackgroundTask]:
+	return [
+		PeriodicTask(
+			app_lifecycle.control_apps, gconf.get('apps.lifecycle.refresh_interval')
+		),
+		PeriodicTask(peer.update_all_peer_pubkeys, 60),
+		CronTask(
+			app_usage_reporting.track_currently_installed_apps,
+			gconf.get('apps.usage_reporting.tracking_schedule'),
+		),
+		CronTask(
+			app_usage_reporting.report_app_usage,
+			gconf.get('apps.usage_reporting.reporting_schedule'),
+		),
+		CronTask(
+			docker_prune_images,
+			gconf.get('apps.pruning.schedule'),
+		),
+		websocket.ws_worker,
+	]
 
 
 def _copy_traefik_static_config():

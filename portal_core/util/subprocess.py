@@ -19,6 +19,8 @@ async def subprocess(*args, cwd=None):
 			f'[stdout]\n{stdout.decode()}' +
 			f'[stderr]\n{stderr.decode()}'
 		)
+	else:
+		return stdout.decode()
 
 
 class SubprocessError(Exception):

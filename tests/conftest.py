@@ -1,12 +1,15 @@
 import asyncio
 import importlib
 import json
+import logging
 import re
 import shutil
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from logging import LogRecord
 from pathlib import Path
+from typing import List
 
 import gconf
 import pytest
@@ -183,3 +186,21 @@ def profile_with_yappi():
 class PeerMockRequests:
 	identity: Identity
 	mock: RequestsMock
+
+
+class MemoryLogHandler(logging.Handler):
+	def __init__(self):
+		super().__init__()
+		self.records: List[LogRecord] = []
+
+	def emit(self, record):
+		self.records.append(record)
+
+
+@pytest.fixture
+def memory_logger():
+	memory_handler = MemoryLogHandler()
+	root_logger = logging.getLogger()
+	root_logger.addHandler(memory_handler)
+	yield memory_handler
+	root_logger.removeHandler(memory_handler)
