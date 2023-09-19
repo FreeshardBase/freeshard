@@ -47,11 +47,15 @@ def config_override(tmp_path, request):
 	}
 
 	# Detects the variable named *config_override* of a test module
-	additional_override = getattr(request.module, 'config_override', {})
+	module_override = getattr(request.module, 'config_override', {})
 
-	with gconf.override_conf(tempfile_override):
-		with gconf.override_conf(additional_override):
-			yield
+	# Detects the annotation named @pytest.mark.config_override of a test function
+	function_override_mark = request.node.get_closest_marker('config_override')
+	function_override = function_override_mark.args[0] if function_override_mark else {}
+
+	with gconf.override_conf(tempfile_override), gconf.override_conf(module_override), gconf.override_conf(
+			function_override):
+		yield
 
 
 @pytest_asyncio.fixture
