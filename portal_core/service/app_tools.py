@@ -112,6 +112,7 @@ async def docker_prune_images(apply_filter=True):
 		return
 	lines = stdout.splitlines()
 	log.info(f'docker images pruned, {lines[-1]}')
+	return lines[-1]
 
 
 class MetadataNotFound(Exception):

@@ -11,9 +11,10 @@ router = APIRouter(
 )
 
 
-@router.post('/prune-images', status_code=status.HTTP_204_NO_CONTENT)
+@router.post('/prune-images', status_code=status.HTTP_200_OK)
 async def prune_images():
 	"""
 	Prune all unused docker images.
 	"""
-	await docker_prune_images(apply_filter=False)
+	result = await docker_prune_images(apply_filter=False)
+	return {'message': result}

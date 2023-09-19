@@ -10,7 +10,7 @@ async def subprocess(*args, cwd=None):
 		cwd=cwd,
 		stdout=asyncio.subprocess.PIPE,
 		stderr=asyncio.subprocess.PIPE)
-	log.debug(f'[{" ".join(args)}] started at {cwd}')
+	log.debug(f'[{" ".join(args)}] started' + ('' if not cwd else f' in {cwd}'))
 	stdout, stderr = await process.communicate()
 
 	if process.returncode != 0:
