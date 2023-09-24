@@ -2,8 +2,9 @@ import io
 import logging
 import mimetypes
 from typing import List
+import aiofiles
 
-from fastapi import APIRouter, status, HTTPException
+from fastapi import APIRouter, status, HTTPException, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from tinydb import Query
 
@@ -26,6 +27,22 @@ def list_all_apps():
 	with installed_apps_table() as installed_apps:
 		apps = [InstalledApp.parse_obj(app) for app in installed_apps.all()]
 	return [enrich_installed_app_with_meta(app) for app in apps]
+
+
+@router.post('', status_code=status.HTTP_201_CREATED)
+async def install_custom_app(file: UploadFile):
+	if not file.filename.endswith(".zip"):
+		raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Only zip files are supported")
+
+	file_path = get_installed_apps_path() / file.filename[:-4] / file.filename
+	file_path.parent.mkdir(parents=True, exist_ok=True)
+
+	# Save the uploaded zip file to the server
+	async with aiofiles.open(file_path, "wb") as f:
+		while chunk := await file.read(1024):
+			await f.write(chunk)
+
+	# todo: Install the app
 
 
 @router.get('/{name}', response_model=InstalledAppWithMeta)

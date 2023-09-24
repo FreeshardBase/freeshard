@@ -15,11 +15,8 @@ from portal_core.util.subprocess import subprocess, SubprocessError
 log = logging.getLogger(__name__)
 
 
-async def docker_create_app(name: str):
+async def docker_create_app_containers(name: str):
 	await subprocess('docker-compose', 'up', '--no-start', cwd=get_installed_apps_path() / name)
-	with installed_apps_table() as installed_apps:
-		installed_apps.update({'status': Status.STOPPED}, Query().name == name)
-	await signals.on_apps_update.send_async()
 
 
 @throttle(5)
