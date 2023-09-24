@@ -171,7 +171,7 @@ async def test_authorization_deleted_terminal(api_client: AsyncClient):
 	assert response.status_code == 401
 
 
-async def test_last_connection(api_client: AsyncClient, mock_app_store):
+async def test_last_connection(api_client: AsyncClient):
 	t_name = 'T1'
 	await pair_new_terminal(api_client, t_name)
 	last_connection_0 = Terminal(

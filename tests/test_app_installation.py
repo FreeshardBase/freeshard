@@ -16,7 +16,7 @@ async def test_get_initial_apps(api_client: AsyncClient):
 	assert response[0]['name'] == 'filebrowser'
 
 
-async def test_install_app(api_client: AsyncClient, mock_app_store):
+async def test_install_app(api_client: AsyncClient):
 	docker_client = docker.from_env()
 
 	await install_app_and_wait(api_client, 'mock_app')
@@ -27,7 +27,7 @@ async def test_install_app(api_client: AsyncClient, mock_app_store):
 	assert len(response) == 2
 
 
-async def test_install_app_twice(api_client: AsyncClient, mock_app_store):
+async def test_install_app_twice(api_client: AsyncClient):
 	await install_app_and_wait(api_client, 'mock_app')
 
 	response = await api_client.post('protected/apps/mock_app')
@@ -48,7 +48,7 @@ async def test_uninstall_app(api_client: AsyncClient):
 		docker_client.containers.get('filebrowser')
 
 
-async def test_uninstall_running_app(api_client: AsyncClient, mock_app_store):
+async def test_uninstall_running_app(api_client: AsyncClient):
 	docker_client = docker.from_env()
 	await install_app_and_wait(api_client, 'mock_app')
 

@@ -4,7 +4,7 @@ from httpx import AsyncClient
 from tests.util import pair_new_terminal, install_app_and_wait
 
 
-async def test_default(api_client: AsyncClient, mock_app_store):
+async def test_default(api_client: AsyncClient):
 	await install_app_and_wait(api_client, 'mock_app')
 
 	assert (await api_client.get('internal/auth', headers={
@@ -24,7 +24,7 @@ async def test_default(api_client: AsyncClient, mock_app_store):
 	})).status_code == status.HTTP_200_OK
 
 
-async def test_headers(api_client: AsyncClient, mock_app_store):
+async def test_headers(api_client: AsyncClient):
 	await api_client.post('protected/apps/mock_app')
 
 	default_identity = (await api_client.get('protected/identities/default')).json()

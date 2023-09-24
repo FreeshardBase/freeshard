@@ -44,7 +44,7 @@ def test_call_peer_from_app_post(peer_mock_requests, api_client):
 
 
 @pytest.mark.asyncio
-async def test_peer_auth_basic(peer_mock_requests, api_client: AsyncClient, mock_app_store):
+async def test_peer_auth_basic(peer_mock_requests, api_client: AsyncClient):
 	response = await api_client.post('protected/apps/mock_app')
 	response.raise_for_status()
 

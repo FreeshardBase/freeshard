@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import logging
 import shutil
+import traceback
 import zipfile
 from contextlib import suppress
 from pathlib import Path
@@ -9,10 +10,10 @@ from typing import Optional, Dict
 
 import aiofiles
 import gconf
+import httpx
 import jinja2
 import pydantic
 import yaml
-from azure.storage.blob.aio import ContainerClient
 from pydantic import BaseModel
 from tinydb import Query
 
@@ -72,20 +73,8 @@ async def _install_store_app_task(installed_app: InstalledApp):
 		await signals.on_apps_update.send_async()
 		try:
 			log.debug(f'downloading app {installed_app.name} from store')
-			await _download_azure_blob_directory(
-				f'{installed_app.from_branch}/all_apps/{installed_app.name}',
-				get_installed_apps_path() / installed_app.name,
-			)
-
-			log.debug('updating traefik dynamic config')
-			await _write_traefik_dyn_config()
-
-			log.debug(f'creating docker-compose.yml for app {installed_app.name}')
-			await _render_docker_compose_template(installed_app)
-
-			log.debug(f'creating containers for app {installed_app.name}')
-			await docker_create_app_containers(installed_app.name)
-
+			zip_file = await _download_app_zip(installed_app.name, installed_app.from_branch)
+			await _install_app_from_zip(installed_app, zip_file)
 			log.info(f'finished installation of {installed_app.name}')
 			with installed_apps_table() as installed_apps:
 				installed_apps.update({'status': Status.STOPPED}, Query().name == installed_app.name)
@@ -106,21 +95,8 @@ async def _install_custom_app_task(installed_app: InstalledApp):
 			installed_apps.update({'status': Status.INSTALLING}, Query().name == installed_app.name)
 		await signals.on_apps_update.send_async()
 		try:
-			log.debug(f'unzipping app {installed_app.name}')
 			zip_file = get_installed_apps_path() / installed_app.name / f'{installed_app.name}.zip'
-			with zipfile.ZipFile(zip_file, "r") as zip_ref:
-				zip_ref.extractall(zip_file.parent)
-			zip_file.unlink()
-
-			log.debug('updating traefik dynamic config')
-			await _write_traefik_dyn_config()
-
-			log.debug(f'creating docker-compose.yml for app {installed_app.name}')
-			await _render_docker_compose_template(installed_app)
-
-			log.debug(f'creating containers for app {installed_app.name}')
-			await docker_create_app_containers(installed_app.name)
-
+			await _install_app_from_zip(installed_app, zip_file)
 			log.info(f'finished installation of {installed_app.name}')
 			with installed_apps_table() as installed_apps:
 				installed_apps.update({'status': Status.STOPPED}, Query().name == installed_app.name)
@@ -132,6 +108,21 @@ async def _install_custom_app_task(installed_app: InstalledApp):
 		finally:
 			del installation_tasks[installed_app.name]
 			await signals.on_apps_update.send_async()
+
+
+async def _install_app_from_zip(installed_app, zip_file):
+	with zipfile.ZipFile(zip_file, "r") as zip_ref:
+		zip_ref.extractall(zip_file.parent)
+	zip_file.unlink()
+
+	log.debug('updating traefik dynamic config')
+	await _write_traefik_dyn_config()
+
+	log.debug(f'creating docker-compose.yml for app {installed_app.name}')
+	await _render_docker_compose_template(installed_app)
+
+	log.debug(f'creating containers for app {installed_app.name}')
+	await docker_create_app_containers(installed_app.name)
 
 
 async def cancel_all_installations(wait=False):
@@ -190,33 +181,26 @@ class AppNotInstalled(Exception):
 
 
 async def _app_exists(name: str, branch: str = 'master') -> bool:
-	async with ContainerClient(
-			account_url=gconf.get('apps.app_store.base_url'),
-			container_name=gconf.get('apps.app_store.container_name'),
-	) as container_client:
-		directory_name = f'{branch}/all_apps/{name}/'
-		pages = container_client.list_blob_names(name_starts_with=directory_name)
-		async for page in pages.by_page():
-			async for _ in page:
-				return True
-		return False
+	app_store = gconf.get('apps.app_store')
+	url = f'{app_store["base_url"]}/{app_store["container_name"]}/{branch}/all_apps/{name}/{name}.zip'
+	async with httpx.AsyncClient() as client:
+		response = await client.get(url)
+		return response.status_code == 200
 
 
-async def _download_azure_blob_directory(directory_name: str, target_dir: Path):
-	async with ContainerClient(
-			account_url=gconf.get('apps.app_store.base_url'),
-			container_name=gconf.get('apps.app_store.container_name'),
-	) as container_client:
-
-		directory_name = directory_name.rstrip('/')
-		async for blob in container_client.list_blobs(name_starts_with=directory_name):
-			if blob.name.endswith('/'):
-				continue
-			target_file = target_dir / blob.name[len(directory_name) + 1:]
-			target_file.parent.mkdir(exist_ok=True, parents=True)
-			with open(target_file, 'wb') as f:
-				download_blob = await container_client.download_blob(blob)
-				f.write(await download_blob.readall())
+async def _download_app_zip(name: str, branch: str = 'master') -> Path:
+	app_store = gconf.get('apps.app_store')
+	url = f'{app_store["base_url"]}/{app_store["container_name"]}/{branch}/all_apps/{name}/{name}.zip'
+	async with httpx.AsyncClient() as client:
+		response = await client.get(url)
+		if response.status_code != 200:
+			raise AppDoesNotExist(name)
+		zip_file = get_installed_apps_path() / name / f'{name}.zip'
+		zip_file.parent.mkdir(parents=True, exist_ok=True)
+		with open(zip_file, 'wb') as f:
+			f.write(response.content)
+	log.debug(f'downloaded {name} to {zip_file}')
+	return zip_file
 
 
 async def _render_docker_compose_template(app: InstalledApp):
