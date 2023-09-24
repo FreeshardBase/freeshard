@@ -1,12 +1,15 @@
 import asyncio
 import importlib
 import json
+import logging
 import re
 import shutil
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from logging import LogRecord
 from pathlib import Path
+from typing import List
 
 import gconf
 import pytest
@@ -44,11 +47,15 @@ def config_override(tmp_path, request):
 	}
 
 	# Detects the variable named *config_override* of a test module
-	additional_override = getattr(request.module, 'config_override', {})
+	module_override = getattr(request.module, 'config_override', {})
 
-	with gconf.override_conf(tempfile_override):
-		with gconf.override_conf(additional_override):
-			yield
+	# Detects the annotation named @pytest.mark.config_override of a test function
+	function_override_mark = request.node.get_closest_marker('config_override')
+	function_override = function_override_mark.args[0] if function_override_mark else {}
+
+	with gconf.override_conf(tempfile_override), gconf.override_conf(module_override), gconf.override_conf(
+			function_override):
+		yield
 
 
 @pytest_asyncio.fixture
@@ -183,3 +190,21 @@ def profile_with_yappi():
 class PeerMockRequests:
 	identity: Identity
 	mock: RequestsMock
+
+
+class MemoryLogHandler(logging.Handler):
+	def __init__(self):
+		super().__init__()
+		self.records: List[LogRecord] = []
+
+	def emit(self, record):
+		self.records.append(record)
+
+
+@pytest.fixture
+def memory_logger():
+	memory_handler = MemoryLogHandler()
+	root_logger = logging.getLogger()
+	root_logger.addHandler(memory_handler)
+	yield memory_handler
+	root_logger.removeHandler(memory_handler)

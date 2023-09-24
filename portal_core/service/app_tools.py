@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from pathlib import Path
 
 import gconf
@@ -9,7 +10,9 @@ from portal_core.database.database import installed_apps_table
 from portal_core.model.app_meta import Status, AppMeta, InstalledApp, InstalledAppWithMeta
 from portal_core.util import signals
 from portal_core.util.misc import throttle
-from portal_core.util.subprocess import subprocess
+from portal_core.util.subprocess import subprocess, SubprocessError
+
+log = logging.getLogger(__name__)
 
 
 async def docker_create_app(name: str):
@@ -96,6 +99,20 @@ def enrich_installed_app_with_meta(installed_app: InstalledApp) -> InstalledAppW
 		**installed_app.dict(),
 		meta=metadata
 	)
+
+
+async def docker_prune_images(apply_filter=True):
+	command = ['docker', 'image', 'prune', '-fa']
+	if apply_filter:
+		command.extend(['--filter', f'until={gconf.get("apps.pruning.max_age")}h'])
+	try:
+		stdout = await subprocess(*command)
+	except SubprocessError as e:
+		log.error(f'failed to prune docker images: {e}')
+		return
+	lines = stdout.splitlines()
+	log.info(f'docker images pruned, {lines[-1]}')
+	return lines[-1]
 
 
 class MetadataNotFound(Exception):
