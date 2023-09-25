@@ -1,55 +1,64 @@
 import docker
+from fastapi import status
 
 from portal_core.model.app_meta import InstalledApp, Status
-from tests.util import install_app_and_wait, retry_async
+from tests.util import retry_async, wait_until_app_installed
 
 
 async def test_app_starts_and_stops(api_client):
 	docker_client = docker.from_env()
+	app_name = 'quick_stop'
 
-	await install_app_and_wait(api_client, 'quick_stop')
+	response = await api_client.post(f'protected/apps/{app_name}')
+	assert response.status_code == status.HTTP_201_CREATED
 
-	assert docker_client.containers.get('quick_stop').status == 'created'
-	assert InstalledApp.parse_obj((await api_client.get('protected/apps/quick_stop')).json()).status == Status.STOPPED
+	await wait_until_app_installed(api_client, app_name)
+
+	assert docker_client.containers.get(app_name).status == 'created'
+	assert InstalledApp.parse_obj((await api_client.get(f'protected/apps/{app_name}')).json()).status == Status.STOPPED
 
 	response = await api_client.get('internal/auth', headers={
-		'X-Forwarded-Host': 'quick_stop.myportal.org',
+		'X-Forwarded-Host': f'{app_name}.myportal.org',
 		'X-Forwarded-Uri': '/pub'
 	})
 	response.raise_for_status()
 
 	async def assert_app_running():
-		assert docker_client.containers.get('quick_stop').status == 'running'
+		assert docker_client.containers.get(app_name).status == 'running'
 		assert InstalledApp.parse_obj(
-			(await api_client.get('protected/apps/quick_stop')).json()).status == Status.RUNNING
+			(await api_client.get(f'protected/apps/{app_name}')).json()).status == Status.RUNNING
 
 	async def assert_app_exited():
-		assert docker_client.containers.get('quick_stop').status == 'exited'
+		assert docker_client.containers.get(app_name).status == 'exited'
 		assert InstalledApp.parse_obj(
-			(await api_client.get('protected/apps/quick_stop')).json()).status == Status.STOPPED
+			(await api_client.get(f'protected/apps/{app_name}')).json()).status == Status.STOPPED
 
 	await retry_async(assert_app_running, timeout=10, retry_errors=[AssertionError])
 	await retry_async(assert_app_exited, timeout=15, retry_errors=[AssertionError])
 
 	response = await api_client.get('internal/auth', headers={
-		'X-Forwarded-Host': 'quick_stop.myportal.org',
+		'X-Forwarded-Host': f'{app_name}.myportal.org',
 		'X-Forwarded-Uri': '/pub'
 	})
 	response.raise_for_status()
 
 	await retry_async(assert_app_running, timeout=10, retry_errors=[AssertionError])
-	assert InstalledApp.parse_obj((await api_client.get('protected/apps/quick_stop')).json()).status == Status.RUNNING
+	assert InstalledApp.parse_obj((await api_client.get(f'protected/apps/{app_name}')).json()).status == Status.RUNNING
 	await retry_async(assert_app_exited, timeout=10, retry_errors=[AssertionError])
-	assert InstalledApp.parse_obj((await api_client.get('protected/apps/quick_stop')).json()).status == Status.STOPPED
+	assert InstalledApp.parse_obj((await api_client.get(f'protected/apps/{app_name}')).json()).status == Status.STOPPED
 
 
 async def test_always_on_app_starts(api_client):
 	docker_client = docker.from_env()
+	app_name = 'always_on'
 
-	await install_app_and_wait(api_client, 'always_on')
+	response = await api_client.post(f'protected/apps/{app_name}')
+	assert response.status_code == status.HTTP_201_CREATED
+
+	await wait_until_app_installed(api_client, app_name)
 
 	async def assert_app_running():
-		assert docker_client.containers.get('always_on').status == 'running'
+		assert docker_client.containers.get(app_name).status == 'running'
 
 	await retry_async(assert_app_running, timeout=30, retry_errors=[AssertionError])
-	assert InstalledApp.parse_obj((await api_client.get('protected/apps/always_on')).json()).status == Status.RUNNING
+	assert InstalledApp.parse_obj((await api_client.get(f'protected/apps/{app_name}')).json()).status == Status.RUNNING

@@ -2,7 +2,6 @@ import asyncio
 import datetime
 import logging
 import shutil
-import traceback
 import zipfile
 from contextlib import suppress
 from pathlib import Path
@@ -38,12 +37,12 @@ class AppStoreStatus(BaseModel):
 	last_update: Optional[datetime.datetime]
 
 
-async def install_store_app(
+async def install_app_from_store(
 		name: str,
 		installation_reason: InstallationReason = InstallationReason.STORE,
 		store_branch: Optional[str] = 'master',
 ):
-	if not await _app_exists(name, store_branch):
+	if not await _app_exists_in_store(name, store_branch):
 		raise AppDoesNotExist(name)
 
 	with installed_apps_table() as installed_apps:
@@ -58,14 +57,14 @@ async def install_store_app(
 		)
 		installed_apps.insert(installed_app.dict())
 
-	task = asyncio.create_task(_install_store_app_task(installed_app))
+	task = asyncio.create_task(_install_app_from_store_task(installed_app))
 	installation_tasks[name] = task
 	await signals.on_apps_update.send_async()
 	log.info(f'created installation task for {name} from branch {store_branch}')
 	log.debug(f'installation tasks: {installation_tasks.keys()}')
 
 
-async def _install_store_app_task(installed_app: InstalledApp):
+async def _install_app_from_store_task(installed_app: InstalledApp):
 	async with install_lock:
 		log.info(f'starting installation of {installed_app.name} from branch {installed_app.from_branch}')
 		with installed_apps_table() as installed_apps:
@@ -74,7 +73,9 @@ async def _install_store_app_task(installed_app: InstalledApp):
 		try:
 			log.debug(f'downloading app {installed_app.name} from store')
 			zip_file = await _download_app_zip(installed_app.name, installed_app.from_branch)
+
 			await _install_app_from_zip(installed_app, zip_file)
+
 			log.info(f'finished installation of {installed_app.name}')
 			with installed_apps_table() as installed_apps:
 				installed_apps.update({'status': Status.STOPPED}, Query().name == installed_app.name)
@@ -88,7 +89,29 @@ async def _install_store_app_task(installed_app: InstalledApp):
 			await signals.on_apps_update.send_async()
 
 
-async def _install_custom_app_task(installed_app: InstalledApp):
+async def install_app_from_existing_zip(
+		name: str,
+		installation_reason: InstallationReason = InstallationReason.CUSTOM
+):
+	with installed_apps_table() as installed_apps:
+		if installed_apps.contains(Query().name == name):
+			raise AppAlreadyInstalled(name)
+
+		installed_app = InstalledApp(
+			name=name,
+			installation_reason=installation_reason,
+			status=Status.INSTALLATION_QUEUED,
+		)
+		installed_apps.insert(installed_app.dict())
+
+	task = asyncio.create_task(_install_app_from_existing_zip_task(installed_app))
+	installation_tasks[name] = task
+	await signals.on_apps_update.send_async()
+	log.info(f'created installation task for {name} - custom install')
+	log.debug(f'installation tasks: {installation_tasks.keys()}')
+
+
+async def _install_app_from_existing_zip_task(installed_app: InstalledApp):
 	async with install_lock:
 		log.info(f'starting installation of {installed_app.name} from branch {installed_app.from_branch}')
 		with installed_apps_table() as installed_apps:
@@ -96,7 +119,9 @@ async def _install_custom_app_task(installed_app: InstalledApp):
 		await signals.on_apps_update.send_async()
 		try:
 			zip_file = get_installed_apps_path() / installed_app.name / f'{installed_app.name}.zip'
+
 			await _install_app_from_zip(installed_app, zip_file)
+
 			log.info(f'finished installation of {installed_app.name}')
 			with installed_apps_table() as installed_apps:
 				installed_apps.update({'status': Status.STOPPED}, Query().name == installed_app.name)
@@ -180,7 +205,7 @@ class AppNotInstalled(Exception):
 	pass
 
 
-async def _app_exists(name: str, branch: str = 'master') -> bool:
+async def _app_exists_in_store(name: str, branch: str = 'master') -> bool:
 	app_store = gconf.get('apps.app_store')
 	url = f'{app_store["base_url"]}/{app_store["container_name"]}/{branch}/all_apps/{name}/{name}.zip'
 	async with httpx.AsyncClient() as client:
@@ -227,7 +252,7 @@ async def refresh_init_apps():
 		installed_apps = {app['name'] for app in apps.all()}
 
 	for app_name in configured_init_apps - installed_apps:
-		await install_store_app(app_name, InstallationReason.CONFIG)
+		await install_app_from_store(app_name, InstallationReason.CONFIG)
 	log.debug('refreshed initial apps')
 
 

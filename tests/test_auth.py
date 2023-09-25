@@ -1,25 +1,30 @@
-from starlette import status
 from httpx import AsyncClient
+from starlette import status
 
-from tests.util import pair_new_terminal, install_app_and_wait
+from tests.util import pair_new_terminal, wait_until_app_installed
 
 
 async def test_default(api_client: AsyncClient):
-	await install_app_and_wait(api_client, 'mock_app')
+	app_name = 'mock_app'
+
+	response = await api_client.post(f'protected/apps/{app_name}')
+	assert response.status_code == status.HTTP_201_CREATED
+
+	await wait_until_app_installed(api_client, app_name)
 
 	assert (await api_client.get('internal/auth', headers={
-		'X-Forwarded-Host': 'mock_app.myportal.org',
+		'X-Forwarded-Host': f'{app_name}.myportal.org',
 		'X-Forwarded-Uri': '/pub'
 	})).status_code == status.HTTP_200_OK
 	assert (await api_client.get('internal/auth', headers={
-		'X-Forwarded-Host': 'mock_app.myportal.org',
+		'X-Forwarded-Host': f'{app_name}.myportal.org',
 		'X-Forwarded-Uri': '/private1'
 	})).status_code == status.HTTP_401_UNAUTHORIZED
 
 	await pair_new_terminal(api_client)
 
 	assert (await api_client.get('internal/auth', headers={
-		'X-Forwarded-Host': 'mock_app.myportal.org',
+		'X-Forwarded-Host': f'{app_name}.myportal.org',
 		'X-Forwarded-Uri': '/private1'
 	})).status_code == status.HTTP_200_OK
 

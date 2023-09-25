@@ -28,7 +28,7 @@ from portal_core.service import websocket
 from portal_core.service.app_installation import login_docker_registries
 from portal_core.service.app_tools import get_installed_apps_path
 from portal_core.web.internal.call_peer import _get_app_for_ip_address
-from tests.util import docker_network_portal, wait_until_all_apps_installed
+from tests.util import docker_network_portal, wait_until_all_apps_installed, mock_app_store_path
 
 pytest_plugins = ('pytest_asyncio',)
 
@@ -161,7 +161,7 @@ def peer_mock_requests(mocker):
 def mock_app_store(mocker):
 
 	async def mock_download_app_zip(name: str, _) -> Path:
-		source_zip = Path(__file__).parent / 'mock_app_store' / name / f'{name}.zip'
+		source_zip = mock_app_store_path() / name / f'{name}.zip'
 		target_zip = get_installed_apps_path() / name / f'{name}.zip'
 		target_zip.parent.mkdir(parents=True, exist_ok=True)
 		shutil.copy(source_zip, target_zip.parent)
@@ -173,13 +173,13 @@ def mock_app_store(mocker):
 		mock_download_app_zip
 	)
 
-	async def mock_app_exists(name: str, _) -> bool:
-		source_zip = Path(__file__).parent / 'mock_app_store' / name / f'{name}.zip'
+	async def mock_app_exists_in_store(name: str, _) -> bool:
+		source_zip = mock_app_store_path() / name / f'{name}.zip'
 		return source_zip.exists()
 
 	mocker.patch(
-		'portal_core.service.app_installation._app_exists',
-		mock_app_exists
+		'portal_core.service.app_installation._app_exists_in_store',
+		mock_app_exists_in_store
 	)
 
 
