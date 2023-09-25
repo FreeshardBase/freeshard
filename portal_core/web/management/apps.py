@@ -15,6 +15,6 @@ router = APIRouter(
 @router.post('/{name}', status_code=status.HTTP_201_CREATED)
 async def install_app(name: str, branch: str = 'master'):
 	try:
-		await app_installation.install_store_app(name, store_branch=branch)
+		await app_installation.install_app_from_store(name, store_branch=branch)
 	except AppAlreadyInstalled:
 		raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f'App {name} is already installed')

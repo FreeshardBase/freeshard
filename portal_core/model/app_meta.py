@@ -108,11 +108,12 @@ class AppMeta(BaseModel):
 
 
 class InstalledApp(BaseModel):
+	# database model
 	name: str
 	installation_reason: InstallationReason = InstallationReason.UNKNOWN
 	status: str = Status.UNKNOWN
 	last_access: Optional[datetime.datetime] = None
-	from_branch: str
+	from_branch: str | None = None
 
 
 class InstalledAppWithMeta(InstalledApp):

@@ -5,7 +5,7 @@
       "installation_reason": "config"
     },
     "2": {
-      "name": "overleaf",
+      "name": "mock_app",
       "installation_reason": "store"
     }
   }

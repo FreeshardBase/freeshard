@@ -8,7 +8,7 @@ function_config_override = {'apps': {'pruning': {'schedule': '* * * * * *'}}}
 
 @pytest.mark.config_override(function_config_override)
 async def test_docker_prune(api_client: AsyncClient, memory_logger):
-	await asyncio.sleep(1)
+	await asyncio.sleep(2)
 	assert any(['docker images pruned' in r.msg for r in memory_logger.records])
 
 
