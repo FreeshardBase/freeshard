@@ -6,7 +6,7 @@ from typing import Callable
 from urllib.parse import urlparse
 
 from common_py.crypto import PublicKey
-from fastapi import Response, status
+from fastapi import Response
 from http_message_signatures import HTTPSignatureKeyResolver, algorithms, VerifyResult
 from httpx import AsyncClient
 from httpx import URL, Request
