@@ -8,7 +8,7 @@ pytest_plugins = ('pytest_asyncio',)
 
 
 @pytest.mark.asyncio
-async def test_template_is_written(api_client, mock_app_store):
+async def test_template_is_written(api_client):
 	with open(Path(gconf.get('path_root')) / 'core' / 'traefik_dyn' / 'traefik_dyn.yml', 'r') as f:
 		output = yaml.safe_load(f)
 		out_middlewares: dict = output['http']['middlewares']

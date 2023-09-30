@@ -1,12 +1,15 @@
 import asyncio
 import importlib
 import json
+import logging
 import re
 import shutil
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from logging import LogRecord
 from pathlib import Path
+from typing import List
 
 import gconf
 import pytest
@@ -23,8 +26,9 @@ from portal_core.model.identity import OutputIdentity, Identity
 from portal_core.model.profile import Profile
 from portal_core.service import websocket
 from portal_core.service.app_installation import login_docker_registries
+from portal_core.service.app_tools import get_installed_apps_path
 from portal_core.web.internal.call_peer import _get_app_for_ip_address
-from tests.util import docker_network_portal, wait_until_all_apps_installed
+from tests.util import docker_network_portal, wait_until_all_apps_installed, mock_app_store_path
 
 pytest_plugins = ('pytest_asyncio',)
 
@@ -44,15 +48,19 @@ def config_override(tmp_path, request):
 	}
 
 	# Detects the variable named *config_override* of a test module
-	additional_override = getattr(request.module, 'config_override', {})
+	module_override = getattr(request.module, 'config_override', {})
 
-	with gconf.override_conf(tempfile_override):
-		with gconf.override_conf(additional_override):
-			yield
+	# Detects the annotation named @pytest.mark.config_override of a test function
+	function_override_mark = request.node.get_closest_marker('config_override')
+	function_override = function_override_mark.args[0] if function_override_mark else {}
+
+	with gconf.override_conf(tempfile_override), gconf.override_conf(module_override), gconf.override_conf(
+			function_override):
+		yield
 
 
 @pytest_asyncio.fixture
-async def api_client(mocker, event_loop) -> AsyncClient:
+async def api_client(mocker, event_loop, mock_app_store) -> AsyncClient:
 	# Modules that define some global state need to be reloaded
 	importlib.reload(websocket)
 
@@ -151,23 +159,27 @@ def peer_mock_requests(mocker):
 
 @pytest.fixture
 def mock_app_store(mocker):
-	async def mock_download_azure_blob_directory(directory_name: str, target_dir: Path):
-		last_elem = directory_name.split('/')[-1]
-		source_dir = Path(__file__).parent / 'mock_app_store' / last_elem
-		shutil.copytree(source_dir, target_dir)
+
+	async def mock_download_app_zip(name: str, _) -> Path:
+		source_zip = mock_app_store_path() / name / f'{name}.zip'
+		target_zip = get_installed_apps_path() / name / f'{name}.zip'
+		target_zip.parent.mkdir(parents=True, exist_ok=True)
+		shutil.copy(source_zip, target_zip.parent)
+		print(f'downloaded {name} to {target_zip}')
+		return target_zip
 
 	mocker.patch(
-		'portal_core.service.app_installation._download_azure_blob_directory',
-		mock_download_azure_blob_directory
+		'portal_core.service.app_installation._download_app_zip',
+		mock_download_app_zip
 	)
 
-	async def mock_app_exists(name: str, branch: str = 'master') -> bool:
-		mock_app_store_dir = Path(__file__).parent / 'mock_app_store'
-		return (mock_app_store_dir / name).exists()
+	async def mock_app_exists_in_store(name: str, _) -> bool:
+		source_zip = mock_app_store_path() / name / f'{name}.zip'
+		return source_zip.exists()
 
 	mocker.patch(
-		'portal_core.service.app_installation._app_exists',
-		mock_app_exists
+		'portal_core.service.app_installation._app_exists_in_store',
+		mock_app_exists_in_store
 	)
 
 
@@ -183,3 +195,21 @@ def profile_with_yappi():
 class PeerMockRequests:
 	identity: Identity
 	mock: RequestsMock
+
+
+class MemoryLogHandler(logging.Handler):
+	def __init__(self):
+		super().__init__()
+		self.records: List[LogRecord] = []
+
+	def emit(self, record):
+		self.records.append(record)
+
+
+@pytest.fixture
+def memory_logger():
+	memory_handler = MemoryLogHandler()
+	root_logger = logging.getLogger()
+	root_logger.addHandler(memory_handler)
+	yield memory_handler
+	root_logger.removeHandler(memory_handler)

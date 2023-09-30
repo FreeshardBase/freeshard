@@ -7,7 +7,7 @@ from tests.util import wait_until_all_apps_installed
 init_app_conf = {'apps': {'initial_apps': ['filebrowser', 'mock_app']}}
 
 
-async def test_add_init_app(api_client: AsyncClient, mock_app_store):
+async def test_add_init_app(api_client: AsyncClient):
 	response = await api_client.get('/protected/apps')
 	response.raise_for_status()
 	assert {j['name'] for j in response.json()} == {'filebrowser'}

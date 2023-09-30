@@ -21,7 +21,7 @@ async def test_migration(init_db_file, api_client, tmp_path):
 	response = (await api_client.get('protected/apps')).json()
 	assert len(response) == 2
 	assert any(app['name'] == 'filebrowser' for app in response)
-	assert any(app['name'] == 'overleaf' for app in response)
+	assert any(app['name'] == 'mock_app' for app in response)
 
 	async def assert_status_down():
 		assert all(app['status'] == Status.STOPPED for app in response)

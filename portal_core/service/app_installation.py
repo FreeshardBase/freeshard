@@ -2,22 +2,24 @@ import asyncio
 import datetime
 import logging
 import shutil
+import zipfile
 from contextlib import suppress
 from pathlib import Path
 from typing import Optional, Dict
 
+import aiofiles
 import gconf
+import httpx
 import jinja2
 import pydantic
 import yaml
-from azure.storage.blob.aio import ContainerClient
 from pydantic import BaseModel
 from tinydb import Query
 
 from portal_core.database.database import installed_apps_table, identities_table
 from portal_core.model.app_meta import InstalledApp, InstallationReason, Status
 from portal_core.model.identity import SafeIdentity, Identity
-from portal_core.service.app_tools import docker_create_app, get_installed_apps_path, get_app_metadata, \
+from portal_core.service.app_tools import docker_create_app_containers, get_installed_apps_path, get_app_metadata, \
 	docker_shutdown_app, docker_stop_app
 from portal_core.service.traefik_dynamic_config import compile_config, AppInfo
 from portal_core.util import signals
@@ -35,12 +37,12 @@ class AppStoreStatus(BaseModel):
 	last_update: Optional[datetime.datetime]
 
 
-async def install_store_app(
+async def install_app_from_store(
 		name: str,
 		installation_reason: InstallationReason = InstallationReason.STORE,
 		store_branch: Optional[str] = 'master',
 ):
-	if not await _app_exists(name, store_branch):
+	if not await _app_exists_in_store(name, store_branch):
 		raise AppDoesNotExist(name)
 
 	with installed_apps_table() as installed_apps:
@@ -55,14 +57,14 @@ async def install_store_app(
 		)
 		installed_apps.insert(installed_app.dict())
 
-	task = asyncio.create_task(_install_app_task(installed_app))
+	task = asyncio.create_task(_install_app_from_store_task(installed_app))
 	installation_tasks[name] = task
 	await signals.on_apps_update.send_async()
 	log.info(f'created installation task for {name} from branch {store_branch}')
 	log.debug(f'installation tasks: {installation_tasks.keys()}')
 
 
-async def _install_app_task(installed_app: InstalledApp):
+async def _install_app_from_store_task(installed_app: InstalledApp):
 	async with install_lock:
 		log.info(f'starting installation of {installed_app.name} from branch {installed_app.from_branch}')
 		with installed_apps_table() as installed_apps:
@@ -70,26 +72,82 @@ async def _install_app_task(installed_app: InstalledApp):
 		await signals.on_apps_update.send_async()
 		try:
 			log.debug(f'downloading app {installed_app.name} from store')
-			await _download_azure_blob_directory(
-				f'{installed_app.from_branch}/all_apps/{installed_app.name}',
-				get_installed_apps_path() / installed_app.name,
-			)
-			await signals.on_apps_update.send_async()
-			log.debug('updating traefik dynamic config')
-			_write_traefik_dyn_config()
-			log.debug(f'creating docker-compose.yml for app {installed_app.name}')
-			await _render_docker_compose_template(installed_app)
-			log.debug(f'creating containers for app {installed_app.name}')
-			await docker_create_app(installed_app.name)
+			zip_file = await _download_app_zip(installed_app.name, installed_app.from_branch)
+
+			await _install_app_from_zip(installed_app, zip_file)
+
 			log.info(f'finished installation of {installed_app.name}')
+			with installed_apps_table() as installed_apps:
+				installed_apps.update({'status': Status.STOPPED}, Query().name == installed_app.name)
 		except Exception as e:
 			log.error(f'Error while installing app {installed_app.name}: {e!r}')
 			with installed_apps_table() as installed_apps:
 				installed_apps.update({'status': Status.ERROR}, Query().name == installed_app.name)
-			await signals.on_apps_update.send_async()
 			await signals.on_app_install_error.send_async(e, name=installed_app.name)
 		finally:
 			del installation_tasks[installed_app.name]
+			await signals.on_apps_update.send_async()
+
+
+async def install_app_from_existing_zip(
+		name: str,
+		installation_reason: InstallationReason = InstallationReason.CUSTOM
+):
+	with installed_apps_table() as installed_apps:
+		if installed_apps.contains(Query().name == name):
+			raise AppAlreadyInstalled(name)
+
+		installed_app = InstalledApp(
+			name=name,
+			installation_reason=installation_reason,
+			status=Status.INSTALLATION_QUEUED,
+		)
+		installed_apps.insert(installed_app.dict())
+
+	task = asyncio.create_task(_install_app_from_existing_zip_task(installed_app))
+	installation_tasks[name] = task
+	await signals.on_apps_update.send_async()
+	log.info(f'created installation task for {name} - custom install')
+	log.debug(f'installation tasks: {installation_tasks.keys()}')
+
+
+async def _install_app_from_existing_zip_task(installed_app: InstalledApp):
+	async with install_lock:
+		log.info(f'starting installation of {installed_app.name} from branch {installed_app.from_branch}')
+		with installed_apps_table() as installed_apps:
+			installed_apps.update({'status': Status.INSTALLING}, Query().name == installed_app.name)
+		await signals.on_apps_update.send_async()
+		try:
+			zip_file = get_installed_apps_path() / installed_app.name / f'{installed_app.name}.zip'
+
+			await _install_app_from_zip(installed_app, zip_file)
+
+			log.info(f'finished installation of {installed_app.name}')
+			with installed_apps_table() as installed_apps:
+				installed_apps.update({'status': Status.STOPPED}, Query().name == installed_app.name)
+		except Exception as e:
+			log.error(f'Error while installing app {installed_app.name}: {e!r}')
+			with installed_apps_table() as installed_apps:
+				installed_apps.update({'status': Status.ERROR}, Query().name == installed_app.name)
+			await signals.on_app_install_error.send_async(e, name=installed_app.name)
+		finally:
+			del installation_tasks[installed_app.name]
+			await signals.on_apps_update.send_async()
+
+
+async def _install_app_from_zip(installed_app, zip_file):
+	with zipfile.ZipFile(zip_file, "r") as zip_ref:
+		zip_ref.extractall(zip_file.parent)
+	zip_file.unlink()
+
+	log.debug('updating traefik dynamic config')
+	await _write_traefik_dyn_config()
+
+	log.debug(f'creating docker-compose.yml for app {installed_app.name}')
+	await _render_docker_compose_template(installed_app)
+
+	log.debug(f'creating containers for app {installed_app.name}')
+	await docker_create_app_containers(installed_app.name)
 
 
 async def cancel_all_installations(wait=False):
@@ -130,7 +188,7 @@ async def uninstall_app(name: str):
 		with installed_apps_table() as installed_apps:
 			installed_apps.remove(Query().name == name)
 		log.debug('updating traefik dynamic config')
-		_write_traefik_dyn_config()
+		await _write_traefik_dyn_config()
 		await signals.on_apps_update.send_async()
 		log.debug(f'finished uninstallation of {name}')
 
@@ -147,34 +205,27 @@ class AppNotInstalled(Exception):
 	pass
 
 
-async def _app_exists(name: str, branch: str = 'master') -> bool:
-	async with ContainerClient(
-			account_url=gconf.get('apps.app_store.base_url'),
-			container_name=gconf.get('apps.app_store.container_name'),
-	) as container_client:
-		directory_name = f'{branch}/all_apps/{name}/'
-		pages = container_client.list_blob_names(name_starts_with=directory_name)
-		async for page in pages.by_page():
-			async for _ in page:
-				return True
-		return False
+async def _app_exists_in_store(name: str, branch: str = 'master') -> bool:
+	app_store = gconf.get('apps.app_store')
+	url = f'{app_store["base_url"]}/{app_store["container_name"]}/{branch}/all_apps/{name}/{name}.zip'
+	async with httpx.AsyncClient() as client:
+		response = await client.get(url)
+		return response.status_code == 200
 
 
-async def _download_azure_blob_directory(directory_name: str, target_dir: Path):
-	async with ContainerClient(
-			account_url=gconf.get('apps.app_store.base_url'),
-			container_name=gconf.get('apps.app_store.container_name'),
-	) as container_client:
-
-		directory_name = directory_name.rstrip('/')
-		async for blob in container_client.list_blobs(name_starts_with=directory_name):
-			if blob.name.endswith('/'):
-				continue
-			target_file = target_dir / blob.name[len(directory_name) + 1:]
-			target_file.parent.mkdir(exist_ok=True, parents=True)
-			with open(target_file, 'wb') as f:
-				download_blob = await container_client.download_blob(blob)
-				f.write(await download_blob.readall())
+async def _download_app_zip(name: str, branch: str = 'master') -> Path:
+	app_store = gconf.get('apps.app_store')
+	url = f'{app_store["base_url"]}/{app_store["container_name"]}/{branch}/all_apps/{name}/{name}.zip'
+	async with httpx.AsyncClient() as client:
+		response = await client.get(url)
+		if response.status_code != 200:
+			raise AppDoesNotExist(name)
+		zip_file = get_installed_apps_path() / name / f'{name}.zip'
+		zip_file.parent.mkdir(parents=True, exist_ok=True)
+		with open(zip_file, 'wb') as f:
+			f.write(response.content)
+	log.debug(f'downloaded {name} to {zip_file}')
+	return zip_file
 
 
 async def _render_docker_compose_template(app: InstalledApp):
@@ -201,10 +252,11 @@ async def refresh_init_apps():
 		installed_apps = {app['name'] for app in apps.all()}
 
 	for app_name in configured_init_apps - installed_apps:
-		await install_store_app(app_name, InstallationReason.CONFIG)
+		await install_app_from_store(app_name, InstallationReason.CONFIG)
+	log.debug('refreshed initial apps')
 
 
-def _write_traefik_dyn_config():
+async def _write_traefik_dyn_config():
 	with installed_apps_table() as installed_apps:
 		installed_apps = [InstalledApp(**a) for a in installed_apps.all() if a['status'] != Status.INSTALLATION_QUEUED]
 	app_infos = [AppInfo(get_app_metadata(a.name), installed_app=a) for a in installed_apps]
@@ -214,14 +266,14 @@ def _write_traefik_dyn_config():
 	portal = SafeIdentity.from_identity(default_identity)
 
 	traefik_dyn_filename = Path(gconf.get('path_root')) / 'core' / 'traefik_dyn' / 'traefik_dyn.yml'
-	_write_to_yaml(compile_config(app_infos, portal), traefik_dyn_filename)
+	await _write_to_yaml(compile_config(app_infos, portal), traefik_dyn_filename)
 
 
-def _write_to_yaml(spec: pydantic.BaseModel, output_path: Path):
+async def _write_to_yaml(spec: pydantic.BaseModel, output_path: Path):
 	output_path.parent.mkdir(exist_ok=True, parents=True)
-	with open(output_path, 'w') as f:
-		f.write('# == DO NOT MODIFY ==\n# this file is auto-generated\n\n')
-		f.write(yaml.dump(spec.dict(exclude_none=True)))
+	async with aiofiles.open(output_path, 'w') as f:
+		await f.write('# == DO NOT MODIFY ==\n# this file is auto-generated\n\n')
+		await f.write(yaml.dump(spec.dict(exclude_none=True)))
 
 
 async def login_docker_registries():

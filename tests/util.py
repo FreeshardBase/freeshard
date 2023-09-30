@@ -1,11 +1,12 @@
 import asyncio
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Callable
 from urllib.parse import urlparse
 
 from common_py.crypto import PublicKey
-from fastapi import Response, status
+from fastapi import Response
 from http_message_signatures import HTTPSignatureKeyResolver, algorithms, VerifyResult
 from httpx import AsyncClient
 from httpx import URL, Request
@@ -39,10 +40,7 @@ async def add_terminal(api_client, pairing_code, t_name):
 		json={'name': t_name})
 
 
-async def install_app_and_wait(api_client: AsyncClient, app_name):
-	response = await api_client.post(f'protected/apps/{app_name}')
-	assert response.status_code == status.HTTP_201_CREATED
-
+async def wait_until_app_installed(api_client: AsyncClient, app_name):
 	while True:
 		app = InstalledApp.parse_obj((await api_client.get(f'protected/apps/{app_name}')).json())
 		if app.status in (Status.INSTALLING, Status.INSTALLATION_QUEUED):
@@ -60,6 +58,10 @@ async def wait_until_all_apps_installed(async_client: AsyncClient):
 			await asyncio.sleep(2)
 		else:
 			return
+
+
+def mock_app_store_path():
+	return Path(__file__).parent / 'mock_app_store'
 
 
 def verify_signature_auth(request: PreparedRequest, pubkey: PublicKey) -> VerifyResult:

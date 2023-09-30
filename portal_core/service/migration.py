@@ -1,7 +1,7 @@
 import logging
 
 from portal_core.database.database import get_db
-from portal_core.service.app_installation import install_store_app, AppDoesNotExist
+from portal_core.service.app_installation import install_app_from_store, AppDoesNotExist
 
 log = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ async def migrate():
 
 	for app in previously_installed_apps:
 		try:
-			await install_store_app(app['name'], app['installation_reason'])
+			await install_app_from_store(app['name'], app['installation_reason'])
 		except AppDoesNotExist:
 			log.warning(f'app {app["name"]} does not exist in store, skipping')
 
