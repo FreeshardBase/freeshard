@@ -158,8 +158,18 @@ def peer_mock_requests(mocker):
 
 
 @pytest.fixture
-def mock_app_store(mocker):
+def backend_mock_requests() -> RequestsMock:
+	base_url = gconf.get('portal_backend.base_url')
 
+	with (responses.RequestsMock(assert_all_requests_are_fired=False) as rsps):
+		rsps.get(re.compile(base_url + '/.*'))
+		rsps.post(re.compile(base_url + '/.*'))
+		rsps.add_passthru('')
+		yield rsps
+
+
+@pytest.fixture
+def mock_app_store(mocker):
 	async def mock_download_app_zip(name: str, _) -> Path:
 		source_zip = mock_app_store_path() / name / f'{name}.zip'
 		target_zip = get_installed_apps_path() / name / f'{name}.zip'
