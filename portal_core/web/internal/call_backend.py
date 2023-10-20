@@ -13,11 +13,13 @@ router = APIRouter()
 
 
 @router.api_route('/call_backend/{rest:path}', methods=ALL_HTTP_METHODS)
-async def call_peer(rest: str, request: Request):
+async def call_backend(rest: str, request: Request):
 	base_url = gconf.get('portal_backend.base_url')
 	url = f'{base_url}/{rest}'
-	log.debug(f'call backend: {url}')
 
 	body = await request.body()
 	response = await signed_request(request.method, url, data=body)
+
+	log.debug(f'called backend: {url} -> {response.status_code}')
+
 	return StreamingResponse(status_code=response.status_code, content=response.iter_content())
