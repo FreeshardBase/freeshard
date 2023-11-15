@@ -10,13 +10,14 @@ from portal_core.model.identity import OutputIdentity
 from tests.util import verify_signature_auth, modify_request_like_traefik_forward_auth
 
 
-@pytest.mark.skip(reason='fails sometimes with missing signature, especially on CI build')
-def test_call_peer_from_app_basic(peer_mock_requests, api_client):
-	portal_identity = OutputIdentity(**api_client.get('public/meta/whoareyou').json())
+#@pytest.mark.skip(reason='fails sometimes with missing signature, especially on CI build')
+async def test_call_peer_from_app_basic(peer_mock_requests, api_client):
+	whoareyou = await api_client.get('public/meta/whoareyou')
+	portal_identity = OutputIdentity(**whoareyou.json())
 	pubkey = PublicKey(portal_identity.public_key_pem)
 
 	path = '/foo/bar'
-	response = api_client.get(f'internal/call_peer/{peer_mock_requests.identity.short_id}{path}')
+	response = await api_client.get(f'internal/call_peer/{peer_mock_requests.identity.short_id}{path}')
 	assert response.status_code == 200
 
 	received_request = peer_mock_requests.mock.calls[0].request
@@ -25,13 +26,14 @@ def test_call_peer_from_app_basic(peer_mock_requests, api_client):
 	assert received_request.path_url == path
 
 
-@pytest.mark.skip(reason='fails sometimes with missing signature, especially on CI build')
-def test_call_peer_from_app_post(peer_mock_requests, api_client):
-	portal_identity = OutputIdentity(**api_client.get('public/meta/whoareyou').json())
+#@pytest.mark.skip(reason='fails sometimes with missing signature, especially on CI build')
+async def test_call_peer_from_app_post(peer_mock_requests, api_client):
+	wouareyou = await api_client.get('public/meta/whoareyou')
+	portal_identity = OutputIdentity(**wouareyou.json())
 	pubkey = PublicKey(portal_identity.public_key_pem)
 
 	path = '/foo/bar'
-	response = api_client.post(
+	response = await api_client.post(
 		f'internal/call_peer/{peer_mock_requests.identity.short_id}{path}',
 		data=b'foo data bar')
 	assert response.status_code == 200
