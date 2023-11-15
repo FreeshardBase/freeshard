@@ -15,7 +15,7 @@ from .service import app_installation, identity, app_lifecycle, peer, app_usage_
 from .service.app_installation import cancel_all_installations
 from .service.app_tools import docker_stop_all_apps, docker_shutdown_all_apps, docker_prune_images
 from .util.async_util import PeriodicTask, BackgroundTask, CronTask
-from .util.misc import profile
+from .util.misc import profile, log_request_and_response
 from .web import internal, public, protected, management
 
 log = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ def create_app():
 		@app.middleware('http')
 		async def log_http(request: Request, call_next):
 			response: Response = await call_next(request)
-			await _log_request_and_response(request, response)
+			log_request_and_response(request, response, log)
 			return response
 
 	return app
@@ -115,18 +115,3 @@ def _copy_traefik_static_config():
 	root = Path(gconf.get('path_root'))
 	target = root / 'core' / 'traefik.yml'
 	shutil.copy(source, target)
-
-
-async def _log_request_and_response(request: Request, response: Response):
-	entry = [
-		'### HTTP ###',
-		'>' * 10,
-		f'{request.method} {request.url}',
-		'-' * 10,
-		*[f'{k}: {v}' for k, v in request.headers.items()],
-		'=' * 10,
-		str(response.status_code),
-		*[f'{k}: {v}' for k, v in response.headers.items()],
-		'<' * 10,
-	]
-	log.info('\n'.join(entry))
