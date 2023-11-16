@@ -45,10 +45,10 @@ async def docker_stop_app(name: str, set_status: bool = True):
 	await signals.on_apps_update.send_async()
 
 
-async def docker_shutdown_app(name: str, set_status: bool = True):
+async def docker_shutdown_app(name: str, set_status: bool = True, force: bool = False):
 	with installed_apps_table() as installed_apps:
 		# todo: think more about how to handle different states
-		if installed_apps.get(Query().name == name)['status'] \
+		if not force and installed_apps.get(Query().name == name)['status'] \
 				not in [Status.STOPPED, Status.UNINSTALLING]:
 			return
 	await subprocess('docker-compose', 'down', cwd=get_installed_apps_path() / name)
@@ -65,10 +65,10 @@ async def docker_stop_all_apps():
 	await asyncio.gather(*tasks)
 
 
-async def docker_shutdown_all_apps():
+async def docker_shutdown_all_apps(force: bool = False):
 	with installed_apps_table() as installed_apps:
 		apps = [InstalledApp.parse_obj(a) for a in installed_apps.all()]
-	tasks = [docker_shutdown_app(app.name) for app in apps]
+	tasks = [docker_shutdown_app(app.name, force=force) for app in apps]
 	await asyncio.gather(*tasks)
 
 
