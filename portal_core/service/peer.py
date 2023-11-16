@@ -1,3 +1,7 @@
+import asyncio
+import logging
+
+import httpx
 import requests
 from common_py.crypto import PublicKey
 from fastapi.requests import Request
@@ -9,6 +13,8 @@ from portal_core.database.database import peers_table
 from portal_core.model.identity import OutputIdentity
 from portal_core.model.peer import Peer
 from portal_core.util import signals
+
+log = logging.getLogger(__name__)
 
 
 def get_peer_by_id(id: str):
@@ -22,14 +28,32 @@ def get_peer_by_id(id: str):
 async def update_all_peer_pubkeys():
 	with peers_table() as peers:  # type: Table
 		peers_without_pubkey = peers.search(Query().public_bytes_b64.exists())
-	for peer in peers_without_pubkey:
-		update_peer_meta(Peer(**peer))
+	await asyncio.gather(*[update_peer_meta(Peer(**peer)) for peer in peers_without_pubkey])
 
 
-def update_peer_meta(peer: Peer):
-	# todo: this should be done async
+async def update_peer_meta(peer: Peer):
 	url = f'https://{peer.short_id}.p.getportal.org/core/public/meta/whoareyou'
-	peer_identity = OutputIdentity(**requests.get(url).json())
+
+	def do_request():
+		return requests.get(url=url)
+
+	try:
+		response = await asyncio.get_running_loop().run_in_executor(None, do_request)
+	except requests.ConnectionError as e:
+		log.debug(f'Could not find peer {peer.short_id}: {e}')
+		with peers_table() as peers:
+			peers.update({'is_reachable': False}, Query().id == peer.id)
+		return
+
+	try:
+		response.raise_for_status()
+	except httpx.HTTPStatusError as e:
+		log.debug(f'Could not update peer meta for {peer.short_id}: {e}')
+		with peers_table() as peers:  # type: Table
+			peers.update({'is_reachable': False}, Query().id == peer.id)
+		return
+
+	peer_identity = OutputIdentity(**response.json())
 
 	if not peer_identity.id.startswith(peer.id):
 		raise KeyError(f'Portal {peer.short_id} responded with wrong identity {peer_identity.id}')
@@ -83,4 +107,4 @@ class _KR(HTTPSignatureKeyResolver):
 
 @signals.on_peer_write.connect
 async def _on_peer_write(peer: Peer):
-	update_peer_meta(peer)
+	await update_peer_meta(peer)

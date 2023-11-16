@@ -85,7 +85,7 @@ async def lifespan(_):
 	for t in background_tasks:
 		await t.wait()
 	await docker_stop_all_apps()
-	await docker_shutdown_all_apps()
+	await docker_shutdown_all_apps(force=True)
 
 
 def make_background_tasks() -> List[BackgroundTask]:

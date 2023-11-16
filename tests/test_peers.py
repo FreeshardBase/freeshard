@@ -56,3 +56,14 @@ async def test_update_with_real_name(peer_mock_requests, api_client: AsyncClient
 	response = await api_client.get('protected/peers')
 	assert len(response.json()) == 1
 	assert response.json()[0]['name'] == 'mock peer'
+
+
+async def test_is_unreachable(api_client: AsyncClient):
+	response = await api_client.put('protected/peers', json={
+		'id': 'foobar',
+	})
+	assert response.status_code == status.HTTP_200_OK
+
+	response = await api_client.get('protected/peers')
+	assert len(response.json()) == 1
+	assert response.json()[0]['is_reachable'] is False
