@@ -49,6 +49,9 @@ def get_splash_behaviour(request: Request):
 	if status_code == 401:
 		behaviour.display_status = 'Access Denied'
 		behaviour.do_reload = False
+	elif status_code == 500:
+		behaviour.display_status = 'Error'
+		behaviour.do_reload = False
 	elif container_status == 'running':
 		behaviour.display_status = 'Starting...'
 	elif container_status == 'unknown':

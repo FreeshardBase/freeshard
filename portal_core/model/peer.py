@@ -8,6 +8,7 @@ class Peer(BaseModel):
 	id: str
 	name: Optional[str]
 	public_bytes_b64: Optional[str]
+	is_reachable: Optional[bool] = True
 
 	@validator('id')
 	def must_be_long_enough(cls, v):
