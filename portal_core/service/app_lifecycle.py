@@ -5,7 +5,7 @@ from typing import Dict
 
 from portal_core.database.database import installed_apps_table
 from portal_core.model.app_meta import InstalledApp, Status
-from portal_core.service.app_tools import docker_start_app, docker_stop_app, get_app_metadata
+from portal_core.service.app_tools import docker_start_app, docker_stop_app, get_app_metadata, size_is_compatible
 from portal_core.util import signals
 
 log = logging.getLogger(__name__)
@@ -15,9 +15,11 @@ last_access_dict: Dict[str, float] = dict()
 
 @signals.on_request_to_app.connect
 async def ensure_app_is_running(app: InstalledApp):
-	global last_access_dict
-	last_access_dict[app.name] = time.time()
-	await docker_start_app(app.name)
+	app_meta = get_app_metadata(app.name)
+	if size_is_compatible(app_meta.minimum_portal_size):
+		global last_access_dict
+		last_access_dict[app.name] = time.time()
+		await docker_start_app(app.name)
 
 
 async def control_apps():
@@ -32,14 +34,16 @@ async def control_apps():
 
 async def control_app(name: str):
 	global last_access_dict
-	meta = get_app_metadata(name)
-	if meta.lifecycle.always_on:
-		await docker_start_app(meta.name)
+	app_meta = get_app_metadata(name)
+
+	if app_meta.lifecycle.always_on:
+		if size_is_compatible(app_meta.minimum_portal_size):
+			await docker_start_app(app_meta.name)
 	else:
-		last_access = last_access_dict.get(meta.name, 0.0)
-		idle_time_for_shutdown = meta.lifecycle.idle_time_for_shutdown
+		last_access = last_access_dict.get(app_meta.name, 0.0)
+		idle_time_for_shutdown = app_meta.lifecycle.idle_time_for_shutdown
 		if last_access < time.time() - idle_time_for_shutdown:
-			await docker_stop_app(meta.name)
+			await docker_stop_app(app_meta.name)
 
 
 class AppNotStarted(Exception):

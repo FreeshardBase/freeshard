@@ -50,7 +50,10 @@ class PeriodicTask(BackgroundTask):
 
 	async def _run_delay(self):
 		while True:
-			await self.func()
+			try:
+				await self.func()
+			except Exception as e:
+				log.error(f'error in periodic task {self.name}: {e}')
 			await asyncio.sleep(self.delay)
 
 

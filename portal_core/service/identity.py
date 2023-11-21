@@ -6,8 +6,7 @@ from tinydb import Query
 
 from portal_core.database.database import identities_table
 from portal_core.model.identity import Identity
-from portal_core.model.profile import Profile
-from portal_core.service.signed_call import signed_request
+from portal_core.service.management import refresh_profile
 from portal_core.util.signals import on_first_terminal_add
 
 log = logging.getLogger(__name__)
@@ -49,15 +48,11 @@ def get_default_identity() -> Identity:
 
 @on_first_terminal_add.connect
 async def enrich_identity_from_profile(_):
-	api_url = gconf.get('management.api_url')
-	url = f'{api_url}/profile'
-	response = await signed_request('GET', url)
 	try:
-		response.raise_for_status()
+		profile = await refresh_profile()
 	except HTTPError as e:
 		log.error(f'Could not enrich default identity from profile because profile could not be obtained: {e}')
 		return
-	profile = Profile(**response.json())
 
 	with identities_table() as identities:  # type: Table
 		if profile.owner:

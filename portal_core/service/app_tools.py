@@ -6,6 +6,7 @@ from pathlib import Path
 import gconf
 from tinydb import Query
 
+import portal_core.model.profile
 from portal_core.database.database import installed_apps_table
 from portal_core.model.app_meta import Status, AppMeta, InstalledApp, InstalledAppWithMeta
 from portal_core.util import signals
@@ -80,9 +81,17 @@ def get_app_metadata(app_name: str) -> AppMeta:
 		raise MetadataNotFound(app_name)
 	try:
 		with open(app_path / 'app_meta.json') as f:
-			return AppMeta(**json.load(f))
+			return AppMeta.parse_obj(json.load(f))
 	except (FileNotFoundError, json.JSONDecodeError):
 		raise MetadataNotFound(app_name)
+
+
+def size_is_compatible(app_size) -> bool:
+	try:
+		portal_size = portal_core.model.profile.get_profile().portal_size
+	except KeyError:
+		return False
+	return portal_size >= app_size
 
 
 def enrich_installed_app_with_meta(installed_app: InstalledApp) -> InstalledAppWithMeta:
