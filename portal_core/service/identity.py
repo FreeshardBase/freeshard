@@ -1,6 +1,5 @@
 import logging
 
-import gconf
 from requests import HTTPError
 from tinydb import Query
 

@@ -2,7 +2,7 @@ import docker
 from fastapi import status
 
 from portal_core.model.app_meta import InstalledApp, Status
-from tests.util import retry_async, wait_until_app_installed
+from tests.util import retry_async, wait_until_app_installed, install_app
 
 
 async def test_app_starts_and_stops(management_api_mock, api_client):
@@ -66,16 +66,12 @@ async def test_always_on_app_starts(management_api_mock, api_client):
 
 async def test_large_app_does_not_start(management_api_mock, api_client):
 	app_name = 'large_app'
-
-	response = await api_client.post(f'protected/apps/{app_name}')
-	assert response.status_code == status.HTTP_201_CREATED
-
-	await wait_until_app_installed(api_client, app_name)
+	await install_app(api_client, app_name)
 
 	response = await api_client.get(
 		'internal/app_error/502',
-		headers={'X-Forwarded-Host': f'{app_name}.myportal.org', 'X-Forwarded-Uri': '/pub'})
-	assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+		headers={'host': f'{app_name}.myportal.org', 'X-Forwarded-Uri': '/pub'})
+	assert response.status_code == status.HTTP_502_BAD_GATEWAY
 	assert 'Portal too small' in response.text
 
 # todo: test app with size comparison
