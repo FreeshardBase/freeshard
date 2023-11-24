@@ -1,0 +1,19 @@
+version: '3.5'
+
+networks:
+    portal:
+        external: true
+
+services:
+    large_app:
+        restart: always
+        image: nginx:alpine
+        container_name: large_app
+        ports:
+        - 80:80
+        volumes:
+        - "{{ fs.app_data }}:/data"
+        - "{{ fs.shared }}:/data/shared"
+        - "/var/run/docker.sock:/var/run/docker.sock:ro"
+        networks:
+        - portal

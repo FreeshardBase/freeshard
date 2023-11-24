@@ -62,3 +62,20 @@ async def test_always_on_app_starts(management_api_mock, api_client):
 
 	await retry_async(assert_app_running, timeout=30, retry_errors=[AssertionError])
 	assert InstalledApp.parse_obj((await api_client.get(f'protected/apps/{app_name}')).json()).status == Status.RUNNING
+
+
+async def test_large_app_does_not_start(management_api_mock, api_client):
+	app_name = 'large_app'
+
+	response = await api_client.post(f'protected/apps/{app_name}')
+	assert response.status_code == status.HTTP_201_CREATED
+
+	await wait_until_app_installed(api_client, app_name)
+
+	response = await api_client.get(
+		'internal/app_error/502',
+		headers={'X-Forwarded-Host': f'{app_name}.myportal.org', 'X-Forwarded-Uri': '/pub'})
+	assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+	assert 'Portal too small' in response.text
+
+# todo: test app with size comparison

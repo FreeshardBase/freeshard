@@ -10,7 +10,8 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from portal_core.service.app_tools import get_app_metadata, MetadataNotFound, get_installed_apps_path
+from portal_core.service.app_tools import get_app_metadata, MetadataNotFound, get_installed_apps_path, \
+	size_is_compatible
 
 log = logging.getLogger(__name__)
 
@@ -34,8 +35,10 @@ class SplashBehaviour(BaseModel):
 
 
 def get_splash_behaviour(request: Request):
+	# todo: add special splash screen for app that is not size compatible
 	status_code = int(request.path_params['status'])
 	app_name = get_app_name(request)
+	app_meta = get_app_metadata(app_name)
 	container_status = get_container_status(app_name)
 
 	behaviour = SplashBehaviour(
@@ -46,12 +49,15 @@ def get_splash_behaviour(request: Request):
 		display_status='Unknown Status...',
 		do_reload=True,
 	)
+	if not size_is_compatible(app_meta.minimum_portal_size):
+		display_size = app_meta.minimum_portal_size.value.upper()
+		behaviour.display_status = f'Portal too small, need at least {display_size}'
+		behaviour.do_reload = False
 	if status_code == 401:
 		behaviour.display_status = 'Access Denied'
 		behaviour.do_reload = False
 	elif status_code == 500:
 		behaviour.display_status = 'Error'
-		behaviour.do_reload = False
 	elif container_status == 'running':
 		behaviour.display_status = 'Starting...'
 	elif container_status == 'unknown':
