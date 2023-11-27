@@ -15,6 +15,7 @@ from requests_http_signature import HTTPSignatureAuth
 
 from portal_core.model.app_meta import InstalledApp, Status
 from portal_core.util.subprocess import subprocess
+from fastapi import status
 
 WAITING_DOCKER_IMAGE = 'nginx:alpine'
 
@@ -58,6 +59,12 @@ async def wait_until_all_apps_installed(async_client: AsyncClient):
 			await asyncio.sleep(2)
 		else:
 			return
+
+
+async def install_app(async_client: AsyncClient, app_name: str):
+	response = await async_client.post(f'protected/apps/{app_name}')
+	assert response.status_code == status.HTTP_201_CREATED
+	await wait_until_app_installed(async_client, app_name)
 
 
 def mock_app_store_path():

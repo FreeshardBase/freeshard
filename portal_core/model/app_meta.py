@@ -50,6 +50,21 @@ class PortalSize(str, Enum):
 	L = 'l'
 	XL = 'xl'
 
+	def _index(self):
+		return list(self.__class__.__members__.values()).index(self)
+
+	def __gt__(self, other):
+		return self._index() > other._index()
+
+	def __ge__(self, other):
+		return self._index() >= other._index()
+
+	def __lt__(self, other):
+		return self._index() < other._index()
+
+	def __le__(self, other):
+		return self._index() <= other._index()
+
 
 class StoreInfo(BaseModel):
 	description_short: Optional[str]

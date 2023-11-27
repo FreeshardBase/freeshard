@@ -1,6 +1,6 @@
 import pytest
 
-from portal_core.model.app_meta import Lifecycle
+from portal_core.model.app_meta import Lifecycle, PortalSize
 from portal_core.model.util import PropertyBaseModel
 
 
@@ -36,3 +36,16 @@ def test_lifecycle():
 		Lifecycle()
 	with pytest.raises(ValueError):
 		Lifecycle(always_on=True, idle_time_for_shutdown=10)
+
+
+def test_portal_size():
+	assert PortalSize.XS < PortalSize.S
+	assert PortalSize.S < PortalSize.M
+	assert PortalSize.M < PortalSize.L
+	assert PortalSize.L < PortalSize.XL
+
+	assert PortalSize.L == PortalSize.L
+	assert PortalSize.L >= PortalSize.L
+	assert PortalSize.L <= PortalSize.L
+	assert PortalSize.L > PortalSize.S
+	assert PortalSize.L >= PortalSize.S
