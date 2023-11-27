@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import os
 import shutil
@@ -6,6 +7,7 @@ from contextlib import asynccontextmanager
 from importlib.metadata import metadata
 from pathlib import Path
 from typing import List
+from requests import HTTPError
 
 import gconf
 from fastapi import FastAPI, Request, Response
@@ -17,6 +19,7 @@ from .service.app_tools import docker_stop_all_apps, docker_shutdown_all_apps, d
 from .util.async_util import PeriodicTask, BackgroundTask, CronTask
 from .util.misc import profile, log_request_and_response
 from .web import internal, public, protected, management
+from .service import management as management_service
 
 log = logging.getLogger(__name__)
 
@@ -72,6 +75,8 @@ async def lifespan(_):
 		await app_installation.login_docker_registries()
 		await migration.migrate()
 		await app_installation.refresh_init_apps()
+		with contextlib.suppress(HTTPError):
+			await management_service.refresh_profile()
 
 		background_tasks = make_background_tasks()
 		for t in background_tasks:

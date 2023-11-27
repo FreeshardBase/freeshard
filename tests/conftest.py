@@ -22,6 +22,7 @@ from requests import PreparedRequest
 from responses import RequestsMock
 
 import portal_core
+from portal_core.model.app_meta import PortalSize
 from portal_core.model.identity import OutputIdentity, Identity
 from portal_core.model.profile import Profile
 from portal_core.service import websocket
@@ -72,7 +73,8 @@ async def api_client(mocker, event_loop, mock_app_store) -> AsyncClient:
 	async with docker_network_portal():
 		app = portal_core.create_app()
 		# for the LifeSpanManager, see: https://github.com/encode/httpx/issues/1024
-		async with LifespanManager(app), AsyncClient(app=app, base_url='https://init') as client:
+		async with LifespanManager(app, startup_timeout=20), \
+				AsyncClient(app=app, base_url='https://init', timeout=20) as client:
 			whoareyou = (await client.get('/public/meta/whoareyou')).json()
 			# Cookies are scoped for the domain,
 			# so we have to configure the TestClient with the correct domain.
@@ -88,8 +90,8 @@ mock_profile = Profile(
 	owner_email='testowner@foobar.com',
 	time_created=datetime.now() - timedelta(days=2),
 	time_assigned=datetime.now() - timedelta(days=1),
-	portal_size='xs',
-	max_portal_size='m',
+	portal_size=PortalSize.XS,
+	max_portal_size=PortalSize.M,
 )
 
 

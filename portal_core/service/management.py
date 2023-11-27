@@ -2,7 +2,9 @@ import logging
 
 import gconf
 
+import portal_core.model.profile
 from portal_core.database import database
+from portal_core.model.profile import Profile
 from portal_core.service.signed_call import signed_request
 
 log = logging.getLogger(__name__)
@@ -15,6 +17,16 @@ async def call_management(path: str, method: str = 'GET', body: bytes = None):
 	url = f'{api_url}/{path}'
 	log.debug(f'call to {method} {url}')
 	return await signed_request(method, url, data=body)
+
+
+async def refresh_profile() -> Profile:
+	api_url = gconf.get('management.api_url')
+	url = f'{api_url}/profile'
+	response = await signed_request('GET', url)
+	response.raise_for_status()
+	profile = Profile(**response.json())
+	portal_core.model.profile.set_profile(profile)
+	return profile
 
 
 async def refresh_shared_secret():

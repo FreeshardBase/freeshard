@@ -2,10 +2,10 @@ import docker
 from fastapi import status
 
 from portal_core.model.app_meta import InstalledApp, Status
-from tests.util import retry_async, wait_until_app_installed
+from tests.util import retry_async, wait_until_app_installed, install_app
 
 
-async def test_app_starts_and_stops(api_client):
+async def test_app_starts_and_stops(management_api_mock, api_client):
 	docker_client = docker.from_env()
 	app_name = 'quick_stop'
 
@@ -48,7 +48,7 @@ async def test_app_starts_and_stops(api_client):
 	assert InstalledApp.parse_obj((await api_client.get(f'protected/apps/{app_name}')).json()).status == Status.STOPPED
 
 
-async def test_always_on_app_starts(api_client):
+async def test_always_on_app_starts(management_api_mock, api_client):
 	docker_client = docker.from_env()
 	app_name = 'always_on'
 
@@ -62,3 +62,16 @@ async def test_always_on_app_starts(api_client):
 
 	await retry_async(assert_app_running, timeout=30, retry_errors=[AssertionError])
 	assert InstalledApp.parse_obj((await api_client.get(f'protected/apps/{app_name}')).json()).status == Status.RUNNING
+
+
+async def test_large_app_does_not_start(management_api_mock, api_client):
+	app_name = 'large_app'
+	await install_app(api_client, app_name)
+
+	response = await api_client.get(
+		'internal/app_error/502',
+		headers={'host': f'{app_name}.myportal.org', 'X-Forwarded-Uri': '/pub'})
+	assert response.status_code == status.HTTP_502_BAD_GATEWAY
+	assert 'Portal too small' in response.text
+
+# todo: test app with size comparison

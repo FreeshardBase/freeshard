@@ -6,7 +6,7 @@ log = logging.getLogger(__name__)
 
 setup(
 	name='portal_core',
-	version='0.24.1',
+	version='0.25.0',
 	packages=find_packages(),
 	url='https://gitlab.com/ptl/portal_core',
 	author='Max von Tettenborn',

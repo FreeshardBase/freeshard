@@ -1,0 +1,59 @@
+{
+  "v": "1.0",
+  "app_version": "0.1.0",
+  "name": "large_app",
+  "icon": "icon.svg",
+  "entrypoints": [
+    {
+      "container_name": "large_app",
+      "container_port": 80,
+      "entrypoint_port": "http"
+    },
+    {
+      "container_name": "large_app",
+      "container_port": 1883,
+      "entrypoint_port": "mqtt"
+    }
+  ],
+  "paths": {
+    "": {
+      "access": "private",
+      "headers": {
+        "X-Ptl-Client-Id": "{{ auth.client_id }}",
+        "X-Ptl-Client-Name": "{{ auth.client_name }}",
+        "X-Ptl-Client-Type": "{{ auth.client_type }}",
+        "X-Ptl-ID": "{{ portal.id }}",
+        "X-Ptl-Foo": "bar"
+      }
+    },
+    "/pub": {
+      "access": "public",
+      "headers": {
+        "X-Ptl-Client-Id": "{{ auth.client_id }}",
+        "X-Ptl-Client-Name": "{{ auth.client_name }}",
+        "X-Ptl-Client-Type": "{{ auth.client_type }}",
+        "X-Ptl-ID": "{{ portal.id }}",
+        "X-Ptl-Foo": "baz"
+      }
+    },
+    "/peer": {
+      "access": "peer",
+      "headers": {
+        "X-Ptl-Client-Id": "{{ auth.client_id }}",
+        "X-Ptl-Client-Name": "{{ auth.client_name }}",
+        "X-Ptl-Client-Type": "{{ auth.client_type }}",
+        "X-Ptl-ID": "{{ portal.id }}",
+        "X-Ptl-Foo": "foo"
+      }
+    }
+  },
+  "minimum_portal_size": "m",
+  "lifecycle": {
+    "always_on": false,
+    "idle_time_for_shutdown": 3600
+  },
+  "store_info": {
+    "description_short": "an app for mocking",
+    "is_featured": true
+  }
+}
