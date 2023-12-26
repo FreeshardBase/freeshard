@@ -1,4 +1,3 @@
-import contextlib
 import logging
 import os
 import shutil
@@ -7,19 +6,19 @@ from contextlib import asynccontextmanager
 from importlib.metadata import metadata
 from pathlib import Path
 from typing import List
-from requests import HTTPError
+from requests import ConnectionError, HTTPError
 
 import gconf
 from fastapi import FastAPI, Request, Response
 
 from .database import database
-from .service import app_installation, identity, app_lifecycle, peer, app_usage_reporting, websocket, migration
+from .service import app_installation, identity, app_lifecycle, peer, \
+	app_usage_reporting, websocket, migration, portal_controller
 from .service.app_installation import cancel_all_installations
 from .service.app_tools import docker_stop_all_apps, docker_shutdown_all_apps, docker_prune_images
 from .util.async_util import PeriodicTask, BackgroundTask, CronTask
 from .util.misc import profile, log_request_and_response
 from .web import internal, public, protected, management
-from .service import management as management_service
 
 log = logging.getLogger(__name__)
 
@@ -75,8 +74,10 @@ async def lifespan(_):
 		await app_installation.login_docker_registries()
 		await migration.migrate()
 		await app_installation.refresh_init_apps()
-		with contextlib.suppress(HTTPError):
-			await management_service.refresh_profile()
+		try:
+			await portal_controller.refresh_profile()
+		except (ConnectionError, HTTPError) as e:
+			log.error(f'could not refresh profile: {e}')
 
 		background_tasks = make_background_tasks()
 		for t in background_tasks:

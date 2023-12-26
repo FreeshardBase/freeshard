@@ -23,13 +23,15 @@ from responses import RequestsMock
 
 import portal_core
 from portal_core.model.app_meta import PortalSize
+from portal_core.model.backend.portal_meta import PortalMetaExt, Size
 from portal_core.model.identity import OutputIdentity, Identity
 from portal_core.model.profile import Profile
 from portal_core.service import websocket
 from portal_core.service.app_installation import login_docker_registries
 from portal_core.service.app_tools import get_installed_apps_path
 from portal_core.web.internal.call_peer import _get_app_for_ip_address
-from tests.util import docker_network_portal, wait_until_all_apps_installed, mock_app_store_path
+from tests.util import docker_network_portal, wait_until_all_apps_installed, \
+	mock_app_store_path
 
 pytest_plugins = ('pytest_asyncio',)
 
@@ -55,8 +57,9 @@ def config_override(tmp_path, request):
 	function_override_mark = request.node.get_closest_marker('config_override')
 	function_override = function_override_mark.args[0] if function_override_mark else {}
 
-	with gconf.override_conf(tempfile_override), gconf.override_conf(module_override), gconf.override_conf(
-			function_override):
+	with gconf.override_conf(tempfile_override), gconf.override_conf(
+			module_override), gconf.override_conf(
+		function_override):
 		yield
 
 
@@ -94,13 +97,33 @@ mock_profile = Profile(
 	max_portal_size=PortalSize.M,
 )
 
+mock_meta = PortalMetaExt(
+	id='portal_foobar',
+	owner='test owner',
+	owner_email='testowner@foobar.com',
+	time_created=datetime.now() - timedelta(days=2),
+	time_assigned=datetime.now() - timedelta(days=1),
+	size=Size.XS,
+	max_size=Size.M,
+	from_image='mock_image',
+	status='assigned',
+)
+
 
 @contextmanager
-def management_api_mock_context(profile: Profile = None):
+def requests_mock_context(*, meta: PortalMetaExt = None, profile: Profile = None):
 	management_api = 'https://management-mock'
-	config_override = {'management': {'api_url': management_api}}
+	controller_base_url = 'https://portal-controller-mock'
+
+	config_override = {
+		'management': {'api_url': management_api},
+		'portal_controller': {'base_url': controller_base_url}
+	}
 	management_shared_secret = 'constantSharedSecret'
-	with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps, gconf.override_conf(config_override):
+	with (
+		responses.RequestsMock(assert_all_requests_are_fired=False) as rsps,
+		gconf.override_conf(config_override)
+	):
 		rsps.get(
 			f'{management_api}/profile',
 			body=(profile or mock_profile).json(),
@@ -108,7 +131,7 @@ def management_api_mock_context(profile: Profile = None):
 		rsps.add_callback(
 			responses.PUT,
 			f'{management_api}/resize',
-			callback=management_api_mock_resize,
+			callback=requests_mock_resize,
 		)
 		rsps.post(
 			f'{management_api}/app_usage',
@@ -117,11 +140,15 @@ def management_api_mock_context(profile: Profile = None):
 			f'{management_api}/sharedSecret',
 			body=json.dumps({'shared_secret': management_shared_secret}),
 		)
+		rsps.get(
+			f'{controller_base_url}/api/portals/self',
+			body=(meta or mock_meta).json(),
+		)
 		rsps.add_passthru('')
 		yield rsps
 
 
-def management_api_mock_resize(request: PreparedRequest):
+def requests_mock_resize(request: PreparedRequest):
 	data = json.loads(request.body)
 	if data['size'] in ['l', 'xl']:
 		return 409, {}, ''
@@ -130,14 +157,15 @@ def management_api_mock_resize(request: PreparedRequest):
 
 
 @pytest.fixture
-def management_api_mock():
-	with management_api_mock_context() as c:
+def requests_mock():
+	with requests_mock_context() as c:
 		yield c
 
 
 @pytest.fixture
 def peer_mock_requests(mocker):
-	mocker.patch('portal_core.web.internal.call_peer._get_app_for_ip_address', lambda x: 'mock_app')
+	mocker.patch('portal_core.web.internal.call_peer._get_app_for_ip_address',
+				 lambda x: 'mock_app')
 	_get_app_for_ip_address.cache_clear()
 	peer_identity = Identity.create('mock peer')
 	print(f'mocking peer {peer_identity.short_id}')
@@ -145,7 +173,8 @@ def peer_mock_requests(mocker):
 	app_url = f'https://mock_app.{peer_identity.domain}'
 
 	with (responses.RequestsMock(assert_all_requests_are_fired=False) as rsps):
-		rsps.get(base_url + '/public/meta/whoareyou', json=OutputIdentity(**peer_identity.dict()).dict())
+		rsps.get(base_url + '/public/meta/whoareyou',
+				 json=OutputIdentity(**peer_identity.dict()).dict())
 		rsps.get(re.compile(app_url + '/.*'))
 		rsps.post(re.compile(app_url + '/.*'))
 
@@ -157,17 +186,6 @@ def peer_mock_requests(mocker):
 		)
 
 	_get_app_for_ip_address.cache_clear()
-
-
-@pytest.fixture
-def backend_mock_requests() -> RequestsMock:
-	base_url = gconf.get('portal_backend.base_url')
-
-	with (responses.RequestsMock(assert_all_requests_are_fired=False) as rsps):
-		rsps.get(re.compile(base_url + '/.*'))
-		rsps.post(re.compile(base_url + '/.*'))
-		rsps.add_passthru('')
-		yield rsps
 
 
 @pytest.fixture

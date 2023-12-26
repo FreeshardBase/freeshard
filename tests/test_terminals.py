@@ -1,4 +1,3 @@
-from datetime import datetime, timedelta
 from time import sleep
 
 from httpx import AsyncClient
@@ -6,9 +5,9 @@ from starlette import status
 from tinydb.operations import delete
 
 from portal_core.database.database import terminals_table
-from portal_core.model.profile import Profile
+from portal_core.model.backend.portal_meta import PortalMetaExt
 from portal_core.model.terminal import Terminal, Icon
-from tests.conftest import management_api_mock_context
+from tests.conftest import requests_mock_context, mock_meta
 from tests.util import get_pairing_code, add_terminal, pair_new_terminal
 
 
@@ -52,7 +51,7 @@ async def test_edit(api_client: AsyncClient):
 	assert Terminal(**response.json()).icon == response_terminal.icon
 
 
-async def test_pairing_happy(api_client: AsyncClient, management_api_mock):
+async def test_pairing_happy(api_client: AsyncClient, requests_mock):
 	t_name = 'T1'
 	await pair_new_terminal(api_client, t_name)
 
@@ -77,7 +76,7 @@ async def test_pairing_happy(api_client: AsyncClient, management_api_mock):
 	assert response.json()['name'] == t_name
 
 	# has the default identity been update from the profile?
-	assert len(management_api_mock.calls) == 1
+	assert len(requests_mock.calls) == 1
 	response = await api_client.get('protected/identities/default')
 	assert response.status_code == status.HTTP_200_OK
 	assert response.json()['name'] == 'test owner'
@@ -214,15 +213,10 @@ async def test_last_connection(api_client: AsyncClient):
 	assert last_connection_0 < last_connection_1 == last_connection_2 < last_connection_3
 
 
-async def test_pairing_with_profile_missing_owner(api_client: AsyncClient):
-	mock_profile = Profile(
-		vm_id='portal_foobar',
-		owner_email='testowner@foobar.com',
-		portal_size='xs',
-		time_created=datetime.now() - timedelta(days=2),
-		time_assigned=datetime.now() - timedelta(days=1),
-	)
-	with management_api_mock_context(mock_profile):
+async def test_pairing_with_profile_missing_owner(
+		requests_mock, api_client: AsyncClient):
+	meta_without_owner = PortalMetaExt.parse_obj(mock_meta.dict(exclude={'owner'}))
+	with requests_mock_context(meta=meta_without_owner):
 		t_name = 'T1'
 		await pair_new_terminal(api_client, t_name)
 
@@ -232,15 +226,10 @@ async def test_pairing_with_profile_missing_owner(api_client: AsyncClient):
 		assert response.json()['email'] == 'testowner@foobar.com'
 
 
-async def test_pairing_with_profile_missing_email(api_client: AsyncClient):
-	mock_profile = Profile(
-		vm_id='portal_foobar',
-		owner='test owner',
-		portal_size='xs',
-		time_created=datetime.now() - timedelta(days=2),
-		time_assigned=datetime.now() - timedelta(days=1),
-	)
-	with management_api_mock_context(mock_profile):
+async def test_pairing_with_profile_missing_email(
+		requests_mock, api_client: AsyncClient):
+	meta_without_email = PortalMetaExt.parse_obj(mock_meta.dict(exclude={'owner_email'}))
+	with requests_mock_context(meta=meta_without_email):
 		t_name = 'T1'
 		await pair_new_terminal(api_client, t_name)
 

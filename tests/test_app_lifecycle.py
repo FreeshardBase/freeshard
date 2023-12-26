@@ -5,7 +5,7 @@ from portal_core.model.app_meta import InstalledApp, Status
 from tests.util import retry_async, wait_until_app_installed, install_app
 
 
-async def test_app_starts_and_stops(management_api_mock, api_client):
+async def test_app_starts_and_stops(requests_mock, api_client):
 	docker_client = docker.from_env()
 	app_name = 'quick_stop'
 
@@ -48,7 +48,7 @@ async def test_app_starts_and_stops(management_api_mock, api_client):
 	assert InstalledApp.parse_obj((await api_client.get(f'protected/apps/{app_name}')).json()).status == Status.STOPPED
 
 
-async def test_always_on_app_starts(management_api_mock, api_client):
+async def test_always_on_app_starts(requests_mock, api_client):
 	docker_client = docker.from_env()
 	app_name = 'always_on'
 
@@ -64,7 +64,7 @@ async def test_always_on_app_starts(management_api_mock, api_client):
 	assert InstalledApp.parse_obj((await api_client.get(f'protected/apps/{app_name}')).json()).status == Status.RUNNING
 
 
-async def test_large_app_does_not_start(management_api_mock, api_client):
+async def test_large_app_does_not_start(api_client):
 	app_name = 'large_app'
 	await install_app(api_client, app_name)
 
