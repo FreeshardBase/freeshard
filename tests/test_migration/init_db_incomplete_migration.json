@@ -8,7 +8,8 @@
   "installed_apps": {
     "1": {
       "name": "filebrowser",
-      "installation_reason": "config"
+      "installation_reason": "config",
+      "status": "stopped"
     }
   }
 }

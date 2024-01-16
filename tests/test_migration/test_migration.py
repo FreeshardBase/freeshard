@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from portal_core.model.app_meta import Status
+from portal_core.service.migration import migrate
 from tests.util import retry_async
 
 
@@ -68,7 +69,8 @@ def init_db_file_incomplete_migration(tmp_path):
 
 
 async def test_migration_incomplete_migration(
-		init_db_file_incomplete_migration, api_client, tmp_path):
+		init_db_file_incomplete_migration, tmp_path):
+	await migrate()
 	with open(tmp_path / 'path_root' / 'core' / 'portal_core_db.json') as f:
 		db = json.load(f)
 	assert 'apps' not in db
