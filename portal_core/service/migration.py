@@ -12,6 +12,12 @@ async def migrate():
 			log.debug('no migration needed')
 			return
 
+		if 'apps' in db.tables() and 'installed_apps' in db.tables():
+			log.warning(
+				'incomplete migration detected, dropping apps table and skipping migration')
+			db.drop_table('apps')
+			return
+
 		previously_installed_apps = db.table('apps').all()
 
 	log.info(f'found apps to migrate: {[a["name"] for a in previously_installed_apps]}')

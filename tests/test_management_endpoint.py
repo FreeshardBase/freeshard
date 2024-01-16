@@ -1,5 +1,7 @@
 from httpx import AsyncClient
 
+from tests.util import wait_until_app_installed
+
 
 async def test_install_app(api_client: AsyncClient, management_api_mock):
 	installed_apps = (await api_client.get('protected/apps')).json()
@@ -10,6 +12,8 @@ async def test_install_app(api_client: AsyncClient, management_api_mock):
 		headers={'authorization': 'constantSharedSecret'}
 	)
 	response.raise_for_status()
+
+	await wait_until_app_installed(api_client, 'mock_app')
 
 	installed_apps = (await api_client.get('protected/apps')).json()
 	assert any(a['name'] == 'mock_app' for a in installed_apps)
