@@ -1,0 +1,14 @@
+{
+  "apps": {
+    "1": {
+      "name": "filebrowser",
+      "installation_reason": "config"
+    }
+  },
+  "installed_apps": {
+    "1": {
+      "name": "filebrowser",
+      "installation_reason": "config"
+    }
+  }
+}
