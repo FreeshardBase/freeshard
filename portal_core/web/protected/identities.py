@@ -46,6 +46,12 @@ def get_identity_by_id(id):
 			raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
 
+@router.get('/default/avatar')
+def get_default_avatar():
+	default_id = get_default_identity()
+	return get_avatar_by_identity(default_id['id'])
+
+
 @router.get('/{id}/avatar')
 def get_avatar_by_identity(id):
 	i = OutputIdentity.parse_obj(get_identity_by_id(id))
@@ -76,6 +82,12 @@ def put_identity(i: InputIdentity):
 			return new_identity
 
 
+@router.put('/default/avatar')
+async def put_default_avatar(file: UploadFile):
+	default_id = get_default_identity()
+	await put_avatar(default_id['id'], file)
+
+
 @router.put('/{id}/avatar', status_code=status.HTTP_201_CREATED)
 async def put_avatar(id: str, file: UploadFile):
 	if not guess_type(file.filename)[0].startswith('image/'):
@@ -95,6 +107,12 @@ async def put_avatar(id: str, file: UploadFile):
 	file_extension = file.filename.split('.')[-1]
 	file_path = Path('avatars') / f'{i.id}.{file_extension}'
 	put_asset(await file.read(), file_path, overwrite=True)
+
+
+@router.delete('/default/avatar', status_code=status.HTTP_200_OK)
+async def delete_default_avatar():
+	default_id = get_default_identity()
+	await delete_avatar(default_id['id'])
 
 
 @router.delete('/{id}/avatar', status_code=status.HTTP_200_OK)

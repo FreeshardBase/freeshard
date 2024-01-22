@@ -132,3 +132,39 @@ async def test_delete_missing_avatar(api_client: AsyncClient):
 
 	response = await api_client.delete(f'protected/identities/{default_id.id}/avatar')
 	response.raise_for_status()
+
+
+async def test_put_and_get_default_avatar_happy(api_client: AsyncClient):
+	sent_bytes = b'some bytes'
+	response = await api_client.put(
+		'protected/identities/default/avatar',
+		files={'file': ('filename.png', sent_bytes)}
+	)
+	response.raise_for_status()
+
+	response = await api_client.get('protected/identities/default/avatar')
+	response.raise_for_status()
+
+	response_bytes = response.read()
+	assert response_bytes == sent_bytes
+	assert response.headers['content-type'] == 'image/png'
+
+
+async def test_get_missing_default_avatar(api_client: AsyncClient):
+	response = await api_client.get('protected/identities/default/avatar')
+	assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+async def test_delete_default_avatar(api_client: AsyncClient):
+	sent_bytes = b'some bytes'
+	response = await api_client.put(
+		'protected/identities/default/avatar',
+		files={'file': ('filename.png', sent_bytes)}
+	)
+	response.raise_for_status()
+
+	response = await api_client.delete('protected/identities/default/avatar')
+	response.raise_for_status()
+
+	response = await api_client.get('protected/identities/default/avatar')
+	assert response.status_code == status.HTTP_404_NOT_FOUND
