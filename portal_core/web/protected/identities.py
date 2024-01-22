@@ -1,13 +1,17 @@
 import logging
+from mimetypes import guess_type
+from pathlib import Path
 from typing import List
 
 from fastapi import APIRouter, HTTPException, status
+from fastapi.datastructures import UploadFile
 from fastapi.responses import Response
 from tinydb import Query
 
 from portal_core.database.database import identities_table
 from portal_core.model.identity import Identity, OutputIdentity, InputIdentity
 from portal_core.service import identity as identity_service
+from portal_core.util.assets import put_asset
 
 log = logging.getLogger(__name__)
 
@@ -54,6 +58,20 @@ def put_identity(i: InputIdentity):
 			identities.insert(new_identity.dict())
 			log.info(f'added {new_identity}')
 			return new_identity
+
+
+@router.put('/{id}/avatar', status_code=status.HTTP_201_CREATED)
+async def put_avatar(id: str, file: UploadFile):
+	if not guess_type(file.filename)[0].startswith('image/'):
+		raise HTTPException(
+			status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+			detail='Avatar must be an image'
+		)
+
+	i = OutputIdentity.parse_obj(get_identity_by_id(id))
+	file_extension = file.filename.split('.')[-1]
+	file_path = Path('avatars') / f'{i.id}.{file_extension}'
+	await put_asset(await file.read(), file_path, overwrite=True)
 
 
 @router.post('/{id}/make-default', status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
