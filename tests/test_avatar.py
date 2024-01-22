@@ -82,7 +82,7 @@ async def test_put_and_get_happy(api_client: AsyncClient):
 	assert response.headers['content-type'] == 'image/png'
 
 
-async def test_get_missing_identity(api_client: AsyncClient):
+async def test_get_from_missing_identity(api_client: AsyncClient):
 	i = await api_client.get('protected/identities/default')
 	default_id = OutputIdentity.parse_obj(i.json())
 	wrong_hash_id = 'foobar' + default_id.id[6:]
@@ -97,3 +97,38 @@ async def test_get_missing_avatar(api_client: AsyncClient):
 
 	response = await api_client.get(f'protected/identities/{default_id.id}/avatar')
 	assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+async def test_delete_avatar_happy(api_client: AsyncClient):
+	i = await api_client.get('protected/identities/default')
+	default_id = OutputIdentity.parse_obj(i.json())
+
+	sent_bytes = b'some bytes'
+	response = await api_client.put(
+		f'protected/identities/{default_id.id}/avatar',
+		files={'file': ('filename.png', sent_bytes)}
+	)
+	response.raise_for_status()
+
+	response = await api_client.delete(f'protected/identities/{default_id.id}/avatar')
+	response.raise_for_status()
+
+	response = await api_client.get(f'protected/identities/{default_id.id}/avatar')
+	assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+async def test_delete_from_missing_identity(api_client: AsyncClient):
+	i = await api_client.get('protected/identities/default')
+	default_id = OutputIdentity.parse_obj(i.json())
+	wrong_hash_id = 'foobar' + default_id.id[6:]
+
+	response = await api_client.delete(f'protected/identities/{wrong_hash_id}/avatar')
+	assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+async def test_delete_missing_avatar(api_client: AsyncClient):
+	i = await api_client.get('protected/identities/default')
+	default_id = OutputIdentity.parse_obj(i.json())
+
+	response = await api_client.delete(f'protected/identities/{default_id.id}/avatar')
+	response.raise_for_status()

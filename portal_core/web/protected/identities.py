@@ -97,6 +97,18 @@ async def put_avatar(id: str, file: UploadFile):
 	put_asset(await file.read(), file_path, overwrite=True)
 
 
+@router.delete('/{id}/avatar', status_code=status.HTTP_200_OK)
+async def delete_avatar(id: str):
+	i = OutputIdentity.parse_obj(get_identity_by_id(id))
+
+	try:
+		avatar_file = find_avatar_file(i.id)
+	except FileNotFoundError:
+		return
+
+	avatar_file.unlink()
+
+
 @router.post('/{id}/make-default', status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def make_identity_default(id):
 	try:
