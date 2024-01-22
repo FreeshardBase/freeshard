@@ -1,17 +1,19 @@
+import io
 import logging
+import mimetypes
 from mimetypes import guess_type
 from pathlib import Path
 from typing import List
 
 from fastapi import APIRouter, HTTPException, status
 from fastapi.datastructures import UploadFile
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from tinydb import Query
 
 from portal_core.database.database import identities_table
 from portal_core.model.identity import Identity, OutputIdentity, InputIdentity
 from portal_core.service import identity as identity_service
-from portal_core.util.assets import put_asset
+from portal_core.service.assets import avatars_path, put_asset
 
 log = logging.getLogger(__name__)
 
@@ -44,6 +46,20 @@ def get_identity_by_id(id):
 			raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
 
+@router.get('/{id}/avatar')
+def get_avatar_by_identity(id):
+	i = OutputIdentity.parse_obj(get_identity_by_id(id))
+
+	try:
+		avatar_file = find_avatar_file(i.id)
+	except FileNotFoundError:
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+	with open(avatar_file, 'rb') as icon_file:
+		buffer = io.BytesIO(icon_file.read())
+	return StreamingResponse(buffer, media_type=mimetypes.guess_type(avatar_file)[0])
+
+
 @router.put('', response_model=OutputIdentity, status_code=status.HTTP_201_CREATED)
 def put_identity(i: InputIdentity):
 	with identities_table() as identities:  # type: Table
@@ -68,10 +84,17 @@ async def put_avatar(id: str, file: UploadFile):
 			detail='Avatar must be an image'
 		)
 
+	try:
+		existing_file = find_avatar_file(id)
+	except FileNotFoundError:
+		pass
+	else:
+		existing_file.unlink()
+
 	i = OutputIdentity.parse_obj(get_identity_by_id(id))
 	file_extension = file.filename.split('.')[-1]
 	file_path = Path('avatars') / f'{i.id}.{file_extension}'
-	await put_asset(await file.read(), file_path, overwrite=True)
+	put_asset(await file.read(), file_path, overwrite=True)
 
 
 @router.post('/{id}/make-default', status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
@@ -80,3 +103,13 @@ def make_identity_default(id):
 		identity_service.make_default(id)
 	except KeyError:
 		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+
+def find_avatar_file(hash_id: str) -> Path:
+	found_files = list(avatars_path().glob(f'{hash_id}*'))
+	if len(found_files) > 1:
+		log.warning(f'There are {len(found_files)} avatar images for identity {hash_id[:6]}. Should be 0 or 1.')
+	if len(found_files) == 1:
+		return found_files[0]
+	else:
+		raise FileNotFoundError(hash_id)

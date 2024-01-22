@@ -4,7 +4,15 @@ from typing import BinaryIO
 import gconf
 
 
-async def put_asset(file: bytes, path: Path, overwrite: bool = False):
+def assets_path() -> Path:
+	return Path(gconf.get('path_root')) / 'core' / 'assets'
+
+
+def avatars_path() -> Path:
+	return assets_path() / 'avatars'
+
+
+def put_asset(file: bytes, path: Path, overwrite: bool = False):
 	if path.is_absolute():
 		raise ValueError('path must be relative')
 	effective_path = assets_path() / path
@@ -15,7 +23,7 @@ async def put_asset(file: bytes, path: Path, overwrite: bool = False):
 		f.write(file)
 
 
-async def get_asset(path: Path) -> BinaryIO:
+def get_asset(path: Path) -> BinaryIO:
 	if path.is_absolute():
 		raise ValueError('path must be relative')
 	effective_path = assets_path() / path
@@ -24,14 +32,10 @@ async def get_asset(path: Path) -> BinaryIO:
 	return open(effective_path, 'rb')
 
 
-async def delete_asset(path: Path):
+def delete_asset(path: Path):
 	if path.is_absolute():
 		raise ValueError('path must be relative')
 	effective_path = assets_path() / path
 	if not effective_path.exists():
 		raise FileNotFoundError()
 	effective_path.unlink()
-
-
-def assets_path() -> Path:
-	return Path(gconf.get('path_root')) / 'core' / 'assets'
