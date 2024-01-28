@@ -12,8 +12,9 @@ from tinydb import Query
 
 from portal_core.database.database import identities_table
 from portal_core.model.identity import Identity, OutputIdentity, InputIdentity
-from portal_core.service import identity as identity_service
-from portal_core.service.assets import avatars_path, put_asset
+from portal_core.service import identity as identity_service, identity
+from portal_core.service.assets import put_asset
+from portal_core.service.avatar import find_avatar_file
 
 log = logging.getLogger(__name__)
 
@@ -33,8 +34,7 @@ def list_all_identities(name: str = None):
 
 @router.get('/default', response_model=OutputIdentity)
 def get_default_identity():
-	with identities_table() as identities:
-		return identities.get(Query().is_default == True)  # noqa: E712
+	return identity.get_default_identity()
 
 
 @router.get('/{id}', response_model=OutputIdentity)
@@ -48,8 +48,8 @@ def get_identity_by_id(id):
 
 @router.get('/default/avatar')
 def get_default_avatar():
-	default_id = get_default_identity()
-	return get_avatar_by_identity(default_id['id'])
+	default_id = identity.get_default_identity()
+	return get_avatar_by_identity(default_id.id)
 
 
 @router.get('/{id}/avatar')
@@ -84,8 +84,8 @@ def put_identity(i: InputIdentity):
 
 @router.put('/default/avatar')
 async def put_default_avatar(file: UploadFile):
-	default_id = get_default_identity()
-	await put_avatar(default_id['id'], file)
+	default_id = identity.get_default_identity()
+	await put_avatar(default_id.id, file)
 
 
 @router.put('/{id}/avatar', status_code=status.HTTP_201_CREATED)
@@ -111,8 +111,8 @@ async def put_avatar(id: str, file: UploadFile):
 
 @router.delete('/default/avatar', status_code=status.HTTP_200_OK)
 async def delete_default_avatar():
-	default_id = get_default_identity()
-	await delete_avatar(default_id['id'])
+	default_id = identity.get_default_identity()
+	await delete_avatar(default_id.id)
 
 
 @router.delete('/{id}/avatar', status_code=status.HTTP_200_OK)
@@ -133,13 +133,3 @@ def make_identity_default(id):
 		identity_service.make_default(id)
 	except KeyError:
 		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-
-
-def find_avatar_file(hash_id: str) -> Path:
-	found_files = list(avatars_path().glob(f'{hash_id}*'))
-	if len(found_files) > 1:
-		log.warning(f'There are {len(found_files)} avatar images for identity {hash_id[:6]}. Should be 0 or 1.')
-	if len(found_files) == 1:
-		return found_files[0]
-	else:
-		raise FileNotFoundError(hash_id)

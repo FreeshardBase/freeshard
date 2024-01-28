@@ -81,6 +81,12 @@ async def test_put_and_get_happy(api_client: AsyncClient):
 	assert response_bytes == sent_bytes
 	assert response.headers['content-type'] == 'image/png'
 
+	response = await api_client.get('public/meta/avatar')
+	response.raise_for_status()
+	response_bytes = response.read()
+	assert response_bytes == sent_bytes
+	assert response.headers['content-type'] == 'image/png'
+
 
 async def test_get_from_missing_identity(api_client: AsyncClient):
 	i = await api_client.get('protected/identities/default')
