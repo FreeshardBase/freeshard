@@ -1,11 +1,15 @@
+import io
 import logging
+import mimetypes
 
-from fastapi import APIRouter, Cookie
+from fastapi import APIRouter, HTTPException, status
+from fastapi import Cookie
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from portal_core.model.auth import AuthState
 from portal_core.model.identity import OutputIdentity
-from portal_core.service import pairing, identity
+from portal_core.service import pairing, identity, avatar
 
 log = logging.getLogger(__name__)
 
@@ -16,8 +20,21 @@ router = APIRouter(
 
 @router.get('/whoareyou', response_model=OutputIdentity)
 def who_are_you():
-	default_identity = identity.get_default_identity()
-	return OutputIdentity(**default_identity.dict())
+	return identity.get_default_identity()
+
+
+@router.get('/avatar')
+def get_default_avatar():
+	default_id = identity.get_default_identity()
+
+	try:
+		avatar_file = avatar.find_avatar_file(default_id.id)
+	except FileNotFoundError:
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+	with open(avatar_file, 'rb') as icon_file:
+		buffer = io.BytesIO(icon_file.read())
+	return StreamingResponse(buffer, media_type=mimetypes.guess_type(avatar_file)[0])
 
 
 class OutputWhoAmI(BaseModel):
