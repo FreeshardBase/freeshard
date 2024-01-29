@@ -11,7 +11,7 @@ from portal_core.database.database import installed_apps_table
 from portal_core.model import app_meta_migration
 from portal_core.util import signals
 
-CURRENT_VERSION = '1.0'
+CURRENT_VERSION = '1.1'
 
 
 class InstallationReason(str, Enum):
@@ -107,6 +107,7 @@ class AppMeta(BaseModel):
 	v: str
 	app_version: str
 	name: str
+	pretty_name: str
 	icon: str
 	entrypoints: List[Entrypoint]
 	paths: Dict[str, Path]

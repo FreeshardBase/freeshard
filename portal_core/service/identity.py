@@ -5,7 +5,7 @@ from tinydb import Query
 
 from portal_core.database.database import identities_table
 from portal_core.model.identity import Identity
-from portal_core.service.management import refresh_profile
+from portal_core.service.portal_controller import refresh_profile
 from portal_core.util.signals import on_first_terminal_add
 
 log = logging.getLogger(__name__)
@@ -23,13 +23,15 @@ def init_default_identity():
 			)
 			log.info(f'created initial default identity {default_identity.id}')
 		else:
-			default_identity = Identity(**identities.get(Query().is_default == True))  # noqa: E712
+			default_identity = Identity(
+				**identities.get(Query().is_default == True))  # noqa: E712
 		return default_identity
 
 
 def make_default(id):
 	with identities_table() as identities:  # type: Table
-		last_default = Identity(**identities.get(Query().is_default == True))  # noqa: E712
+		last_default = Identity(
+			**identities.get(Query().is_default == True))  # noqa: E712
 		if new_default := Identity(**identities.get(Query().id == id)):
 			last_default.is_default = False
 			new_default.is_default = True
@@ -62,4 +64,3 @@ async def enrich_identity_from_profile(_):
 			identities.update({
 				'email': profile.owner_email,
 			}, Query().is_default == True)  # noqa: E712
-

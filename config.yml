@@ -38,7 +38,7 @@ apps:
 management:
   api_url: https://ptlfunctionapp.azurewebsites.net/api/management
 
-portal_backend:
+portal_controller:
   base_url: https://portal-aca.purplemoss-96f7db40.westeurope.azurecontainerapps.io
 
 log:

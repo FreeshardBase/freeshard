@@ -14,7 +14,7 @@ router = APIRouter()
 
 @router.api_route('/call_backend/{rest:path}', methods=ALL_HTTP_METHODS)
 async def call_backend(rest: str, request: Request):
-	base_url = gconf.get('portal_backend.base_url')
+	base_url = gconf.get('portal_controller.base_url')
 	url = f'{base_url}/{rest}'
 
 	body = await request.body()

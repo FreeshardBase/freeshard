@@ -11,7 +11,7 @@ pytest_plugins = ('pytest_asyncio',)
 
 
 @pytest.mark.asyncio
-async def test_app_reporting(api_client, management_api_mock: responses.RequestsMock):
+async def test_app_reporting(api_client, requests_mock: responses.RequestsMock):
 	first_day_of_current_month = date.today().replace(day=1)
 	first_day_of_last_month = (first_day_of_current_month - timedelta(days=1)).replace(day=1)
 	track_timestamp = datetime.combine(first_day_of_last_month, time(hour=1))
@@ -41,8 +41,8 @@ async def test_app_reporting(api_client, management_api_mock: responses.Requests
 		tracks.insert(excluded_track_late.dict())
 
 	await asyncio.sleep(3.5)  # to trigger reporting
-	assert len(management_api_mock.calls) >= 1
-	report = AppUsageReport.parse_raw(management_api_mock.calls[0].request.body)
+	assert len(requests_mock.calls) >= 1
+	report = AppUsageReport.parse_raw(requests_mock.calls[0].request.body)
 
 	assert report.year == track_timestamp.year
 	assert report.month == track_timestamp.month

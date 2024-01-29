@@ -9,22 +9,22 @@ from tests import conftest
 from tests.util import verify_signature_auth
 
 
-async def test_call_management_api_verified(management_api_mock, api_client: AsyncClient):
+async def test_call_management_api_verified(requests_mock, api_client: AsyncClient):
 	portal_identity = OutputIdentity(**(await api_client.get('public/meta/whoareyou')).json())
 	pubkey = PublicKey(portal_identity.public_key_pem)
 	profile_response = await api_client.get('protected/management/profile')
 	profile_response.raise_for_status()
 	assert Profile.parse_obj(profile_response.json()) == conftest.mock_profile
 
-	v = verify_signature_auth(management_api_mock.calls[0].request, pubkey)
+	v = verify_signature_auth(requests_mock.calls[0].request, pubkey)
 	assert portal_identity.id.startswith(v.parameters['keyid'])
 
 
-async def test_call_management_api_fail_verify(management_api_mock, api_client: AsyncClient):
+async def test_call_management_api_fail_verify(requests_mock, api_client: AsyncClient):
 	profile_response = await api_client.get('protected/management/profile')
 	profile_response.raise_for_status()
 	assert Profile.parse_obj(profile_response.json()) == conftest.mock_profile
 
 	invalid_identity = Identity.create('invalid')
 	with pytest.raises(InvalidSignature):
-		verify_signature_auth(management_api_mock.calls[0].request, invalid_identity.public_key)
+		verify_signature_auth(requests_mock.calls[0].request, invalid_identity.public_key)

@@ -3,7 +3,7 @@ from httpx import AsyncClient
 from tests.util import wait_until_app_installed
 
 
-async def test_install_app(api_client: AsyncClient, management_api_mock):
+async def test_install_app(api_client: AsyncClient, requests_mock):
 	installed_apps = (await api_client.get('protected/apps')).json()
 	assert not any(a['name'] == 'mock_app' for a in installed_apps)
 

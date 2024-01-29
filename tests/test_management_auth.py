@@ -6,7 +6,7 @@ from portal_core.service import management
 from portal_core.service.management import STORE_KEY_MANAGEMENT_SHARED_KEY
 
 
-async def test_refresh_shared_secret(api_client: AsyncClient, management_api_mock):
+async def test_refresh_shared_secret(api_client: AsyncClient, requests_mock):
 	with pytest.raises(KeyError):
 		database.get_value(STORE_KEY_MANAGEMENT_SHARED_KEY)
 
@@ -15,7 +15,8 @@ async def test_refresh_shared_secret(api_client: AsyncClient, management_api_moc
 	assert database.get_value(STORE_KEY_MANAGEMENT_SHARED_KEY)
 
 
-async def test_auth_call_success_with_empty_shared_secret(api_client: AsyncClient, management_api_mock):
+async def test_auth_call_success_with_empty_shared_secret(api_client: AsyncClient,
+														  requests_mock):
 	response = await api_client.get(
 		'internal/authenticate_management',
 		headers={'authorization': 'constantSharedSecret'}
@@ -23,7 +24,8 @@ async def test_auth_call_success_with_empty_shared_secret(api_client: AsyncClien
 	response.raise_for_status()
 
 
-async def test_auth_call_success_with_wrong_shared_secret(api_client: AsyncClient, management_api_mock):
+async def test_auth_call_success_with_wrong_shared_secret(api_client: AsyncClient,
+														  requests_mock):
 	database.set_value(STORE_KEY_MANAGEMENT_SHARED_KEY, 'wrongSecret')
 	response = await api_client.get(
 		'internal/authenticate_management',
@@ -32,7 +34,8 @@ async def test_auth_call_success_with_wrong_shared_secret(api_client: AsyncClien
 	response.raise_for_status()
 
 
-async def test_auth_call_fail_with_empty_shared_secret(api_client: AsyncClient, management_api_mock):
+async def test_auth_call_fail_with_empty_shared_secret(api_client: AsyncClient,
+													   requests_mock):
 	response = await api_client.get(
 		'internal/authenticate_management',
 		headers={'authorization': 'failingSecret'}
@@ -40,7 +43,8 @@ async def test_auth_call_fail_with_empty_shared_secret(api_client: AsyncClient, 
 	assert response.status_code == 401
 
 
-async def test_auth_call_fail_with_wrong_shared_secret(api_client: AsyncClient, management_api_mock):
+async def test_auth_call_fail_with_wrong_shared_secret(api_client: AsyncClient,
+													   requests_mock):
 	database.set_value(STORE_KEY_MANAGEMENT_SHARED_KEY, 'wrongSecret')
 	response = await api_client.get(
 		'internal/authenticate_management',
