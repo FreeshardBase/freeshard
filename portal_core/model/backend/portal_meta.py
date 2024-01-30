@@ -1,10 +1,12 @@
 # DO NOT MODIFY - copied from portal_controller
 
 from datetime import datetime
-from enum import Enum, StrEnum, auto
-from typing import Set, List
+from enum import Enum
+from typing import List
 
 from pydantic import BaseModel
+
+from .permissions import PermissionHolder
 
 
 class Size(str, Enum):
@@ -15,12 +17,6 @@ class Size(str, Enum):
 	XL = 'xl'
 
 
-class Permission(StrEnum):
-	PORTAL_ADMIN = auto()
-	LIST_PORTALS = auto()
-	READ_PORTAL = auto()
-
-
 class AppUsageReport(BaseModel):
 	id: str
 	portal_id: str
@@ -29,7 +25,7 @@ class AppUsageReport(BaseModel):
 	usage: dict[str, int]
 
 
-class PortalMetaBase(BaseModel):
+class PortalMetaBase(PermissionHolder, BaseModel):
 	id: str
 	hash_id: str | None = None
 	domain: str | None = None
@@ -47,7 +43,6 @@ class PortalMetaBase(BaseModel):
 	expiration_warning_1h_sent: datetime | None = None
 	delete_after: datetime | None = None
 	context: dict | None = None
-	permissions: Set[Permission] | None = None
 
 
 class PortalMetaExt(PortalMetaBase):
@@ -61,6 +56,7 @@ class PortalMetaDb(PortalMetaExt):
 class PortalMetaListItem(BaseModel):
 	machine_id: str
 	hash_id: str | None
+	domain: str | None
 	status: str
 	owner_name: str | None
 	owner_email: str | None
