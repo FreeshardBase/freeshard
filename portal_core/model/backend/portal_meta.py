@@ -23,6 +23,11 @@ class AppUsageReport(BaseModel):
 	year: int
 	month: int
 	usage: dict[str, int]
+	assigned_amount: int | None = None
+
+
+class AppUsageReportUpdate(BaseModel):
+	assigned_amount: int | None = None
 
 
 class PortalMetaBase(PermissionHolder, BaseModel):

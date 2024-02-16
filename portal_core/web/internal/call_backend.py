@@ -22,4 +22,7 @@ async def call_backend(rest: str, request: Request):
 
 	log.debug(f'called backend: {url} -> {response.status_code}')
 
-	return StreamingResponse(status_code=response.status_code, content=response.iter_content())
+	return StreamingResponse(
+		status_code=response.status_code,
+		headers=response.headers,
+		content=response.iter_content())

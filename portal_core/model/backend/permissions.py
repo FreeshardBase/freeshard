@@ -11,6 +11,8 @@ class Permission(StrEnum):
 	READ_PORTAL = auto()
 	MODIFY_PORTAL = auto()
 	DELETE_PORTAL = auto()
+	READ_REVENUE_SHARE = auto()
+	MODIFY_REVENUE_SHARE = auto()
 
 
 class PermissionHolder(BaseModel):
