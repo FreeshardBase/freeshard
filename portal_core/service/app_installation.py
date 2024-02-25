@@ -170,14 +170,20 @@ async def cancel_installation(name: str):
 
 
 async def uninstall_app(name: str):
-	log.info(f'starting uninstallation of {name}')
 	with installed_apps_table() as installed_apps:
 		if not installed_apps.contains(Query().name == name):
 			raise AppNotInstalled(name)
 		installed_apps.update({'status': Status.UNINSTALLING}, Query().name == name)
 	await signals.on_apps_update.send_async()
 
+	asyncio.create_task(_uninstall_app_task(name))
+	log.info(f'created uninstallation task for {name}')
+
+
+async def _uninstall_app_task(name: str):
 	async with install_lock:
+		log.info(f'starting uninstallation of {name}')
+
 		log.debug(f'shutting down docker container for app {name}')
 		await docker_stop_app(name, set_status=False)
 		await docker_shutdown_app(name, set_status=False)

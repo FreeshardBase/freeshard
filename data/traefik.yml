@@ -21,7 +21,7 @@ providers:
 certificatesResolvers:
   letsencrypt:
     acme:
-      email: "contact@getportal.net"
+      email: "contact@getportal.org"
       storage: "acme.json"
       caServer: "https://acme-v02.api.letsencrypt.org/directory"
       dnsChallenge:

@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 
 from common_py.crypto import PublicKey
 from fastapi import Response
+from fastapi import status
 from http_message_signatures import HTTPSignatureKeyResolver, algorithms, VerifyResult
 from httpx import AsyncClient
 from httpx import URL, Request
@@ -15,7 +16,6 @@ from requests_http_signature import HTTPSignatureAuth
 
 from portal_core.model.app_meta import InstalledApp, Status
 from portal_core.util.subprocess import subprocess
-from fastapi import status
 
 WAITING_DOCKER_IMAGE = 'nginx:alpine'
 
@@ -50,6 +50,14 @@ async def wait_until_app_installed(api_client: AsyncClient, app_name):
 			return app
 		else:
 			raise AssertionError(f'Unexpected app status: {app.status}')
+
+
+async def wait_until_app_uninstalled(api_client: AsyncClient, app_name):
+	while True:
+		response = await api_client.get(f'protected/apps/{app_name}')
+		if response.status_code == status.HTTP_404_NOT_FOUND:
+			return
+		await asyncio.sleep(2)
 
 
 async def wait_until_all_apps_installed(async_client: AsyncClient):
