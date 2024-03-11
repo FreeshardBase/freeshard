@@ -44,7 +44,7 @@ async def add_terminal(api_client, pairing_code, t_name):
 async def wait_until_app_installed(api_client: AsyncClient, app_name):
 	while True:
 		app = InstalledApp.parse_obj((await api_client.get(f'protected/apps/{app_name}')).json())
-		if app.status in (Status.INSTALLING, Status.INSTALLATION_QUEUED):
+		if app.status in (Status.INSTALLING, Status.INSTALLATION_QUEUED, Status.UNINSTALLING):
 			await asyncio.sleep(2)
 		elif app.status in (Status.STOPPED, Status.RUNNING):
 			return app

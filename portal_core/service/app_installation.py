@@ -199,6 +199,35 @@ async def _uninstall_app_task(name: str):
 		log.debug(f'finished uninstallation of {name}')
 
 
+async def reinstall_app(name: str):
+	with installed_apps_table() as installed_apps:
+		if not installed_apps.contains(Query().name == name):
+			raise AppNotInstalled(name)
+		installed_app = InstalledApp.parse_obj(installed_apps.get(Query().name == name))
+		installed_apps.update({'status': Status.UNINSTALLING}, Query().name == name)
+	await signals.on_apps_update.send_async()
+
+	task = asyncio.create_task(_reinstall_app_task(installed_app))
+	installation_tasks[name] = task
+	log.info(f'created reinstallation task for {name}')
+
+
+async def _reinstall_app_task(installed_app: InstalledApp):
+	async with install_lock:
+		log.info(f'starting reinstallation of {installed_app.name}')
+
+		log.debug(f'shutting down docker container for app {installed_app.name}')
+		await docker_stop_app(installed_app.name, set_status=False)
+		await docker_shutdown_app(installed_app.name, set_status=False)
+
+		log.debug(f'deleting app data for {installed_app.name}')
+		shutil.rmtree(Path(get_installed_apps_path() / installed_app.name))
+
+		await signals.on_apps_update.send_async()
+
+		await _install_app_from_store_task(installed_app)
+
+
 class AppAlreadyInstalled(Exception):
 	pass
 

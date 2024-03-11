@@ -67,6 +67,14 @@ async def install_app(name: str, branch: str = 'master'):
 		raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f'App {name} is already installed')
 
 
+@router.post('/{name}/reinstall', status_code=status.HTTP_201_CREATED)
+async def reinstall_app(name: str):
+	try:
+		await app_installation.reinstall_app(name)
+	except AppNotInstalled:
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'App {name} is not installed')
+
+
 @router.post('', status_code=status.HTTP_201_CREATED)
 async def install_custom_app(file: UploadFile):
 	if not file.filename.endswith(".zip"):

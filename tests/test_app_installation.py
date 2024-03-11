@@ -31,6 +31,24 @@ async def test_install_app(api_client: AsyncClient):
 	assert len(response) == 2
 
 
+async def test_reinstall_app(api_client: AsyncClient):
+	app_name = 'mock_app'
+
+	response = await api_client.post(f'protected/apps/{app_name}')
+	assert response.status_code == status.HTTP_201_CREATED
+
+	await wait_until_app_installed(api_client, app_name)
+	response = (await api_client.get('protected/apps')).json()
+	assert len(response) == 2
+
+	response = await api_client.post(f'protected/apps/{app_name}/reinstall')
+	assert response.status_code == status.HTTP_201_CREATED
+
+	await wait_until_app_installed(api_client, app_name)
+	response = (await api_client.get('protected/apps')).json()
+	assert len(response) == 2
+
+
 async def test_install_app_twice(api_client: AsyncClient):
 	app_name = 'mock_app'
 
