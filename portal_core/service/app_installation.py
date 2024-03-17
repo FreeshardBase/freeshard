@@ -222,10 +222,7 @@ async def _reinstall_app_task(installed_app: InstalledApp):
 
 		log.debug(f'deleting app data for {installed_app.name}')
 		shutil.rmtree(Path(get_installed_apps_path() / installed_app.name))
-
-		await signals.on_apps_update.send_async()
-
-		await _install_app_from_store_task(installed_app)
+	await _install_app_from_store_task(installed_app)
 
 
 class AppAlreadyInstalled(Exception):
