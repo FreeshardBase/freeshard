@@ -84,6 +84,7 @@ async def _install_app_from_store_task(installed_app: InstalledApp):
 			with installed_apps_table() as installed_apps:
 				installed_apps.update({'status': Status.ERROR}, Query().name == installed_app.name)
 			await signals.on_app_install_error.send_async(e, name=installed_app.name)
+			raise
 		finally:
 			del installation_tasks[installed_app.name]
 			await signals.on_apps_update.send_async()
@@ -174,9 +175,9 @@ async def uninstall_app(name: str):
 		if not installed_apps.contains(Query().name == name):
 			raise AppNotInstalled(name)
 		installed_apps.update({'status': Status.UNINSTALLING}, Query().name == name)
-	await signals.on_apps_update.send_async()
 
 	asyncio.create_task(_uninstall_app_task(name))
+	await signals.on_apps_update.send_async()
 	log.info(f'created uninstallation task for {name}')
 
 
@@ -185,11 +186,14 @@ async def _uninstall_app_task(name: str):
 		log.info(f'starting uninstallation of {name}')
 
 		log.debug(f'shutting down docker container for app {name}')
-		await docker_stop_app(name, set_status=False)
-		await docker_shutdown_app(name, set_status=False)
+		try:
+			await docker_stop_app(name, set_status=False)
+			await docker_shutdown_app(name, set_status=False)
+		except FileNotFoundError as e:
+			log.error(f'Error while shutting down app {name}: {e}')
 
 		log.debug(f'deleting app data for {name}')
-		shutil.rmtree(Path(get_installed_apps_path() / name))
+		shutil.rmtree(Path(get_installed_apps_path() / name), ignore_errors=True)
 		log.debug(f'removing app {name} from database')
 		with installed_apps_table() as installed_apps:
 			installed_apps.remove(Query().name == name)
@@ -222,7 +226,28 @@ async def _reinstall_app_task(installed_app: InstalledApp):
 
 		log.debug(f'deleting app data for {installed_app.name}')
 		shutil.rmtree(Path(get_installed_apps_path() / installed_app.name))
-	await _install_app_from_store_task(installed_app)
+
+		try:
+			log.debug(f'downloading app {installed_app.name} from store')
+			zip_file = await _download_app_zip(installed_app.name, installed_app.from_branch)
+
+			await _install_app_from_zip(installed_app, zip_file)
+
+			log.info(f'finished installation of {installed_app.name}')
+			_update_app_status(installed_app.name, Status.STOPPED)
+		except Exception as e:
+			log.error(f'Error while installing app {installed_app.name}: {e!r}')
+			_update_app_status(installed_app.name, Status.ERROR)
+			await signals.on_app_install_error.send_async(e, name=installed_app.name)
+			raise
+		finally:
+			del installation_tasks[installed_app.name]
+			await signals.on_apps_update.send_async()
+
+
+def _update_app_status(app_name: str, status: Status):
+	with installed_apps_table() as installed_apps:
+		installed_apps.update({'status': status}, Query().name == app_name)
 
 
 class AppAlreadyInstalled(Exception):
@@ -245,13 +270,13 @@ async def _app_exists_in_store(name: str, branch: str = 'master') -> bool:
 		return response.status_code == 200
 
 
-async def _download_app_zip(name: str, branch: str = 'master') -> Path:
+async def _download_app_zip(name: str, branch: str = None) -> Path:
 	app_store = gconf.get('apps.app_store')
-	url = f'{app_store["base_url"]}/{app_store["container_name"]}/{branch}/all_apps/{name}/{name}.zip'
+	url = f'{app_store["base_url"]}/{app_store["container_name"]}/{branch or "master"}/all_apps/{name}/{name}.zip'
 	async with httpx.AsyncClient() as client:
 		response = await client.get(url)
 		if response.status_code != 200:
-			raise AppDoesNotExist(name)
+			raise AppDoesNotExist(url)
 		zip_file = get_installed_apps_path() / name / f'{name}.zip'
 		zip_file.parent.mkdir(parents=True, exist_ok=True)
 		with open(zip_file, 'wb') as f:

@@ -4,12 +4,3 @@ log:
   levels:
     portal_core: debug
     'portal_core.service.app_usage_reporting': error
-    'portal_core.service.websocket': info
-
-apps:
-  usage_reporting:
-    tracking_schedule: '* * * * * */30'
-    reporting_schedule: '* * * * * 0'
-
-management:
-  api_url: http://localhost:8090

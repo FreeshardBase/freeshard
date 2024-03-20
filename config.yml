@@ -7,8 +7,7 @@ dns:
 services:
   backup:
     included_globs:
-      - core/portal_core_config.yml
-      - core/portal_core_db.json
+      - core/**/*
       - user_data/**/*
 
 apps:

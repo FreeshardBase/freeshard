@@ -4,7 +4,7 @@ from docker.errors import NotFound
 from fastapi import status
 from httpx import AsyncClient
 
-from tests.util import wait_until_app_installed, mock_app_store_path, retry_async, wait_until_app_uninstalled
+from tests.util import wait_until_app_installed, mock_app_store_path, wait_until_app_uninstalled
 
 pytest_plugins = ('pytest_asyncio',)
 pytestmark = pytest.mark.asyncio
