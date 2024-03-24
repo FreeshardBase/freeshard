@@ -53,7 +53,7 @@ class PeriodicTask(BackgroundTask):
 			try:
 				await self.func()
 			except Exception as e:
-				log.error(f'error in periodic task {self.name}: {e}')
+				log.error(f'error in periodic task {self.name}: {type(e).__name__}({e})')
 			await asyncio.sleep(self.delay)
 
 

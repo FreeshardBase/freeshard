@@ -4,7 +4,7 @@ from docker.errors import NotFound
 from fastapi import status
 from httpx import AsyncClient
 
-from tests.util import wait_until_app_installed, mock_app_store_path
+from tests.util import wait_until_app_installed, mock_app_store_path, wait_until_app_uninstalled
 
 pytest_plugins = ('pytest_asyncio',)
 pytestmark = pytest.mark.asyncio
@@ -31,6 +31,24 @@ async def test_install_app(api_client: AsyncClient):
 	assert len(response) == 2
 
 
+async def test_reinstall_app(api_client: AsyncClient):
+	app_name = 'mock_app'
+
+	response = await api_client.post(f'protected/apps/{app_name}')
+	assert response.status_code == status.HTTP_201_CREATED
+
+	await wait_until_app_installed(api_client, app_name)
+	response = (await api_client.get('protected/apps')).json()
+	assert len(response) == 2
+
+	response = await api_client.post(f'protected/apps/{app_name}/reinstall')
+	assert response.status_code == status.HTTP_201_CREATED
+
+	await wait_until_app_installed(api_client, app_name)
+	response = (await api_client.get('protected/apps')).json()
+	assert len(response) == 2
+
+
 async def test_install_app_twice(api_client: AsyncClient):
 	app_name = 'mock_app'
 
@@ -49,6 +67,8 @@ async def test_uninstall_app(api_client: AsyncClient):
 
 	response = await api_client.delete('protected/apps/filebrowser')
 	assert response.status_code == status.HTTP_204_NO_CONTENT
+
+	await wait_until_app_uninstalled(api_client, 'filebrowser')
 
 	response = (await api_client.get('protected/apps')).json()
 	assert len(response) == 0
@@ -75,6 +95,8 @@ async def test_uninstall_running_app(api_client: AsyncClient):
 
 	response = await api_client.delete(f'protected/apps/{app_name}')
 	assert response.status_code == status.HTTP_204_NO_CONTENT
+
+	await wait_until_app_uninstalled(api_client, app_name)
 
 	response = (await api_client.get('protected/apps')).json()
 	assert len(response) == 1  # Filebrowser is still installed

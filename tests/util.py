@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 
 from common_py.crypto import PublicKey
 from fastapi import Response
+from fastapi import status
 from http_message_signatures import HTTPSignatureKeyResolver, algorithms, VerifyResult
 from httpx import AsyncClient
 from httpx import URL, Request
@@ -15,7 +16,6 @@ from requests_http_signature import HTTPSignatureAuth
 
 from portal_core.model.app_meta import InstalledApp, Status
 from portal_core.util.subprocess import subprocess
-from fastapi import status
 
 WAITING_DOCKER_IMAGE = 'nginx:alpine'
 
@@ -41,15 +41,29 @@ async def add_terminal(api_client, pairing_code, t_name):
 		json={'name': t_name})
 
 
-async def wait_until_app_installed(api_client: AsyncClient, app_name):
+async def wait_until_app_installed(api_client: AsyncClient, app_name, timeout=10):
+	end = time.time() + timeout
 	while True:
+		if time.time() > end:
+			raise TimeoutError(f'App {app_name} was not installed in time')
 		app = InstalledApp.parse_obj((await api_client.get(f'protected/apps/{app_name}')).json())
-		if app.status in (Status.INSTALLING, Status.INSTALLATION_QUEUED):
+		if app.status in (Status.INSTALLING, Status.INSTALLATION_QUEUED, Status.UNINSTALLING):
 			await asyncio.sleep(2)
 		elif app.status in (Status.STOPPED, Status.RUNNING):
 			return app
 		else:
 			raise AssertionError(f'Unexpected app status: {app.status}')
+
+
+async def wait_until_app_uninstalled(api_client: AsyncClient, app_name, timeout=10):
+	end = time.time() + timeout
+	while True:
+		if time.time() > end:
+			raise TimeoutError(f'App {app_name} was not uninstalled in time')
+		response = await api_client.get(f'protected/apps/{app_name}')
+		if response.status_code == status.HTTP_404_NOT_FOUND:
+			return
+		await asyncio.sleep(2)
 
 
 async def wait_until_all_apps_installed(async_client: AsyncClient):
