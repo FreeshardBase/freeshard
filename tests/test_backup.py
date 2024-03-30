@@ -9,6 +9,10 @@ async def test_backup(api_client: AsyncClient, tmp_path):
 	backup_ = tmp_path / 'backup'
 	file_not_included = Path('not included')
 	(root_ / file_not_included).touch()
+	user_data_path = 'user_data/app_data/user_data.json'
+	user_data_file = root_ / user_data_path
+	user_data_file.parent.mkdir(parents=True)
+	user_data_file.write_text('{"foo": "bar"}')
 
 	zip_path = tmp_path / 'backup.zip'
 
@@ -26,3 +30,10 @@ async def test_backup(api_client: AsyncClient, tmp_path):
 	assert file_not_included in files_in_root - files_in_backup
 	assert Path('core/portal_core_db.json') in files_in_backup
 	assert files_in_backup - files_in_root == set()
+
+	db_from_backup = (Path(backup_) / 'core' / 'portal_core_db.json').read_text()
+	db_from_root = (Path(root_) / 'core' / 'portal_core_db.json').read_text()
+	assert db_from_backup == db_from_root
+	user_data_from_backup = (Path(backup_) / user_data_path).read_text()
+	user_data_from_root = (Path(root_) / user_data_path).read_text()
+	assert user_data_from_backup == user_data_from_root
