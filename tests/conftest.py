@@ -124,10 +124,6 @@ def requests_mock_context(*, meta: PortalMetaExt = None, profile: Profile = None
 		responses.RequestsMock(assert_all_requests_are_fired=False) as rsps,
 		gconf.override_conf(config_override)
 	):
-		rsps.get(
-			f'{management_api}/profile',
-			body=(profile or mock_profile).json(),
-		)
 		rsps.add_callback(
 			responses.PUT,
 			f'{management_api}/resize',
