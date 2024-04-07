@@ -229,7 +229,9 @@ async def _reinstall_app_task(installed_app: InstalledApp):
 
 		try:
 			log.debug(f'downloading app {installed_app.name} from store')
-			zip_file = await _download_app_zip(installed_app.name, installed_app.from_branch)
+			# to avoid incompatibilities,
+			# we download from master branch and ignore the branch from which the app was installed before
+			zip_file = await _download_app_zip(installed_app.name)
 
 			await _install_app_from_zip(installed_app, zip_file)
 
@@ -316,7 +318,7 @@ async def refresh_init_apps():
 async def _write_traefik_dyn_config():
 	with installed_apps_table() as installed_apps:
 		installed_apps = [InstalledApp(**a) for a in installed_apps.all() if a['status'] != Status.INSTALLATION_QUEUED]
-	app_infos = [AppInfo(get_app_metadata(a.name), installed_app=a) for a in installed_apps]
+	app_infos = [AppInfo(get_app_metadata(a.name), installed_app=a) for a in installed_apps if a.status != Status.ERROR]
 
 	with identities_table() as identities:
 		default_identity = Identity(**identities.get(Query().is_default == True))  # noqa: E712
