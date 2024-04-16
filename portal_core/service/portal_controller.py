@@ -2,8 +2,9 @@ import logging
 
 import gconf
 
-from portal_core.model.backend.portal_meta import PortalMetaExt
 from portal_core.model import profile
+from portal_core.model.backend.portal_backup import SasUrlResponse
+from portal_core.model.backend.portal_meta import PortalMetaExt
 from portal_core.service.signed_call import signed_request
 
 log = logging.getLogger(__name__)
@@ -24,3 +25,9 @@ async def refresh_profile() -> profile.Profile:
 	profile.set_profile(profile_)
 	log.debug('refreshed profile')
 	return profile_
+
+
+async def get_backup_sas_url() -> SasUrlResponse:
+	response = await call_portal_controller('portal_backup/sas_token')
+	response.raise_for_status()
+	return SasUrlResponse.parse_obj(response.json())
