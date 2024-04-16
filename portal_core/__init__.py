@@ -13,7 +13,7 @@ from fastapi import FastAPI, Request, Response
 
 from .database import database
 from .service import app_installation, identity, app_lifecycle, peer, \
-	app_usage_reporting, websocket, migration, portal_controller
+	app_usage_reporting, websocket, migration, portal_controller, backup
 from .service.app_installation import cancel_all_installations
 from .service.app_tools import docker_stop_all_apps, docker_shutdown_all_apps, docker_prune_images
 from .util.async_util import PeriodicTask, BackgroundTask, CronTask
@@ -74,6 +74,7 @@ async def lifespan(_):
 		await app_installation.login_docker_registries()
 		await migration.migrate()
 		await app_installation.refresh_init_apps()
+		backup.ensure_packup_passphrase()
 		try:
 			await portal_controller.refresh_profile()
 		except (ConnectionError, HTTPError) as e:

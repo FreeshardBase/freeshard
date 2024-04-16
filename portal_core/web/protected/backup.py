@@ -30,10 +30,8 @@ async def sync_backup():
 		raise HTTPException(status_code=e.response.status_code, detail=f'Failed to get SAS token: {upstream_error}')
 	try:
 		directories = [Path.cwd() / 'run']
-		log.debug(f'syncing directories: {directories} using sas url {sas_url_response.sas_url}')
-		# todo: add password
 		task = asyncio.create_task(
-			sync_directories(directories, sas_url_response.container_name, sas_url_response.sas_url, 'foobar'))
+			sync_directories(directories, sas_url_response.container_name, sas_url_response.sas_url))
 
 		def on_task_done(task):
 			if task.exception():

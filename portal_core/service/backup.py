@@ -6,10 +6,14 @@ import subprocess
 from pathlib import Path
 from typing import List
 
+from portal_core import database
 from portal_core.database.database import backups_table
 from portal_core.model.backup import BackupReport, BackupStats
+from portal_core.util import passphrase as passphrase_util
 
 log = logging.getLogger(__name__)
+
+STORE_KEY_BACKUP_PASSPHRASE = 'backup_passphrase'
 
 COMMAND_TEMPLATE = '''
 rclone 
@@ -28,9 +32,10 @@ sync {directory} :azureblob:{container_name}/{directory}
 '''
 
 
-async def sync_directories(directories: List[Path], container_name: str, sas_token: str, password: str):
-	obscured_password = subprocess.run(
-		['rclone', 'obscure', password], capture_output=True, text=True).stdout.strip()
+async def sync_directories(directories: List[Path], container_name: str, sas_token: str):
+	passphrase = database.get_value(STORE_KEY_BACKUP_PASSPHRASE)
+	obscured_passphrase = subprocess.run(
+		['rclone', 'obscure', passphrase], capture_output=True, text=True).stdout.strip()
 	report = BackupReport(directories=[])
 
 	log.info(f'Syncing directories {directories} to container {container_name}')
@@ -40,10 +45,11 @@ async def sync_directories(directories: List[Path], container_name: str, sas_tok
 		rel_directory = directory.relative_to(Path.cwd())
 		command = COMMAND_TEMPLATE.format(
 			sas_token=sas_token,
-			obscured_password=obscured_password,
+			obscured_password=obscured_passphrase,
 			container_name=container_name,
 			directory=rel_directory
 		)
+		# todo: use subprocess util
 		process = await asyncio.create_subprocess_exec(
 			*command.split(),
 			stdout=asyncio.subprocess.PIPE,
@@ -62,3 +68,15 @@ async def sync_directories(directories: List[Path], container_name: str, sas_tok
 	with backups_table() as table:
 		table.insert(report.dict())
 	log.info('Sync done')
+
+
+def ensure_packup_passphrase():
+	try:
+		database.get_value(STORE_KEY_BACKUP_PASSPHRASE)
+	except KeyError:
+		passphrase_numbers = passphrase_util.generate_passphrase_numbers(10)
+		passphrase = passphrase_util.get_passphrase(passphrase_numbers)
+		database.set_value(STORE_KEY_BACKUP_PASSPHRASE, passphrase)
+		log.info('Generated new backup passphrase')
+	else:
+		log.info('Backup passphrase already exists')
