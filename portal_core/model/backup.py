@@ -31,3 +31,20 @@ class BackupStats(BaseModel):
 
 class BackupReport(BaseModel):
 	directories: List[BackupStats]
+	startTime: datetime.datetime
+	endTime: datetime.datetime
+
+
+class BackupPassphraseResponse(BaseModel):
+	passphrase: str
+
+
+class BackupPassphraseLastAccessInfo(BaseModel):
+	time: datetime.datetime
+	ip: str
+	terminal_id: str
+
+
+class BackupInfoResponse(BaseModel):
+	last_report: BackupReport | None
+	last_passphrase_access_info: BackupPassphraseLastAccessInfo | None
