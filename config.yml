@@ -6,6 +6,9 @@ dns:
 
 services:
   backup:
+    directories:
+      - core
+      - user_data
     included_globs:
       - core/**/*
       - user_data/**/*

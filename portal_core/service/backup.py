@@ -6,6 +6,8 @@ import subprocess
 from pathlib import Path
 from typing import List
 
+import gconf
+
 from portal_core import database
 from portal_core.database.database import backups_table
 from portal_core.model.backup import BackupReport, BackupStats, BackupPassphraseLastAccessInfo
@@ -41,26 +43,37 @@ async def sync_directories(directories: List[Path], container_name: str, sas_tok
 	dir_stats = []
 	overall_start_time = datetime.datetime.now(datetime.timezone.utc)
 
-	log.info(f'Syncing directories {directories} to container {container_name}')
+	log.info(f'Syncing directories {[str(d) for d in directories]} to container {container_name}')
 	for directory in directories:
+		if not directory.is_dir():
+			log.error(f'Directory {directory} does not exist')
+			continue
+
 		start_time = datetime.datetime.now(datetime.timezone.utc)
 
-		rel_directory = directory.relative_to(Path.cwd())
+		path_root = Path(gconf.get('path_root'))
+		rel_directory = directory.relative_to(path_root)
 		command = COMMAND_TEMPLATE.format(
 			sas_token=sas_token,
 			obscured_password=obscured_passphrase,
 			container_name=container_name,
 			directory=rel_directory
 		)
-		# todo: use subprocess util
 		process = await asyncio.create_subprocess_exec(
 			*command.split(),
+			cwd=path_root,
 			stdout=asyncio.subprocess.PIPE,
 			stderr=asyncio.subprocess.PIPE)
 		stdout, stderr = await process.communicate()
 
 		end_time = datetime.datetime.now(datetime.timezone.utc)
-		rclone_stats = json.loads(stderr.decode())['stats']
+		try:
+			rclone_result = json.loads(stderr.decode())
+		except json.JSONDecodeError:
+			log.error(f'Failed to parse rclone output: {stderr.decode()}')
+			raise
+		rclone_stats = rclone_result['stats']
+
 		dir_stats.append(BackupStats(
 			directory=str(rel_directory),
 			startTime=start_time,

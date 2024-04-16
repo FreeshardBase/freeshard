@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import traceback
 from datetime import datetime
 from pathlib import Path
 
@@ -48,19 +49,20 @@ async def get_backup_passphrase(request: Request, x_ptl_client_id: str = Header(
 
 @router.post('/sync')
 async def sync_backup():
+	path_root = Path(gconf.get('path_root'))
+	directories = [path_root / d for d in gconf.get('services.backup.directories')]
+
 	try:
 		sas_url_response = await get_backup_sas_url()
 	except HTTPError as e:
-		upstream_error = e.response.json()['detail']
-		raise HTTPException(status_code=e.response.status_code, detail=f'Failed to get SAS token: {upstream_error}')
+		raise HTTPException(status_code=e.response.status_code, detail=f'Failed to get SAS token: {e}')
 	try:
-		directories = [Path.cwd() / 'run']
 		task = asyncio.create_task(
 			sync_directories(directories, sas_url_response.container_name, sas_url_response.sas_url))
 
-		def on_task_done(task):
+		def on_task_done(task: asyncio.Task):
 			if task.exception():
-				log.error(f'Backup failed: {task.exception()}')
+				log.error('Backup failed\n' + ''.join(traceback.format_exception(task.exception())))
 				signals.on_backup_done.send(task.exception())
 			else:
 				signals.on_backup_done.send()

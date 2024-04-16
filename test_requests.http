@@ -1,10 +1,10 @@
 ### Make Backup
 
-POST http://127.0.0.1:8001/protected/backup/sync
+POST http://127.0.0.1:8000/protected/backup/sync
 
 ### Get Backup info
 
-GET http://127.0.0.1:8001/protected/backup/info
+GET http://127.0.0.1:8000/protected/backup/info
 
 ### Get Passphrase
 
