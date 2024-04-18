@@ -111,11 +111,10 @@ def ensure_packup_passphrase():
 		log.info('Backup passphrase already exists')
 
 
-def get_backup_passphrase(terminal_id: str, client_ip: str) -> str:
+def get_backup_passphrase(terminal_id: str) -> str:
 	passphrase = database.get_value(STORE_KEY_BACKUP_PASSPHRASE)
 	last_access_info = BackupPassphraseLastAccessInfo(
 		time=datetime.datetime.now(datetime.timezone.utc),
-		ip=client_ip,
 		terminal_id=terminal_id,
 	)
 	database.set_value(STORE_KEY_BACKUP_PASSPHRASE_LAST_ACCESS, last_access_info.dict())

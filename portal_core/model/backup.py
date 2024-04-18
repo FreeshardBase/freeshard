@@ -41,7 +41,6 @@ class BackupPassphraseResponse(BaseModel):
 
 class BackupPassphraseLastAccessInfo(BaseModel):
 	time: datetime.datetime
-	ip: str
 	terminal_id: str
 
 

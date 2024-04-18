@@ -39,11 +39,10 @@ async def get_backup_info():
 
 
 @router.get('/passphrase', response_model=BackupPassphraseResponse)
-async def get_backup_passphrase(request: Request, x_ptl_client_id: str = Header(None)):
+async def get_backup_passphrase(x_ptl_client_id: str = Header(None)):
 	if not x_ptl_client_id:
 		raise HTTPException(status_code=400, detail='Missing X-Ptl-Client-Id header')
-	client_ip = request.client.host
-	passphrase = backup.get_backup_passphrase(x_ptl_client_id, client_ip)
+	passphrase = backup.get_backup_passphrase(x_ptl_client_id)
 	return BackupPassphraseResponse(passphrase=passphrase)
 
 

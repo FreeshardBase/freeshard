@@ -8,6 +8,6 @@ GET http://127.0.0.1:8000/protected/backup/info
 
 ### Get Passphrase
 
-GET http://127.0.0.1:8001/protected/backup/passphrase
+GET http://127.0.0.1:8000/protected/backup/passphrase
 X-Ptl-Client-Id: my-terminal
 
