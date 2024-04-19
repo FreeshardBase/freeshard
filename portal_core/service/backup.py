@@ -65,7 +65,6 @@ async def start_backup():
 
 
 async def backup_directories(directories: List[Path], container_name: str, sas_token: str):
-	raise BackupInProgressError()
 	if BACKUP_IN_PROGESS_LOCK.locked():
 		raise BackupInProgressError()
 

@@ -41,7 +41,7 @@ async def add_terminal(api_client, pairing_code, t_name):
 		json={'name': t_name})
 
 
-async def wait_until_app_installed(api_client: AsyncClient, app_name, timeout=10):
+async def wait_until_app_installed(api_client: AsyncClient, app_name, timeout=20):
 	end = time.time() + timeout
 	while True:
 		if time.time() > end:

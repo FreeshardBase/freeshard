@@ -16,6 +16,7 @@ from .service import app_installation, identity, app_lifecycle, peer, \
 	app_usage_reporting, websocket, migration, portal_controller, backup
 from .service.app_installation import cancel_all_installations
 from .service.app_tools import docker_stop_all_apps, docker_shutdown_all_apps, docker_prune_images
+from .service.backup import start_backup
 from .util.async_util import PeriodicTask, BackgroundTask, CronTask
 from .util.misc import profile, log_request_and_response
 from .web import internal, public, protected, management
@@ -112,6 +113,11 @@ def make_background_tasks() -> List[BackgroundTask]:
 		CronTask(
 			docker_prune_images,
 			gconf.get('apps.pruning.schedule'),
+		),
+		CronTask(
+			start_backup,
+			cron=gconf.get('services.backup.timing.base_schedule'),
+			max_random_delay=gconf.get('services.backup.timing.max_random_delay'),
 		),
 		websocket.ws_worker,
 	]
