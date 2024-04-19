@@ -1,0 +1,13 @@
+### Make Backup
+
+POST http://127.0.0.1:8000/protected/backup/sync
+
+### Get Backup info
+
+GET http://127.0.0.1:8000/protected/backup/info
+
+### Get Passphrase
+
+GET http://127.0.0.1:8000/protected/backup/passphrase
+X-Ptl-Client-Id: my-terminal
+

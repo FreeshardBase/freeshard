@@ -4,3 +4,4 @@ log:
   levels:
     portal_core: debug
     'portal_core.service.app_usage_reporting': error
+    'portal_core.service.websocket': error

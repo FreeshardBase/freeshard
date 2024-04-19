@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import random
 import time
 from abc import ABC, abstractmethod
 from contextlib import suppress
@@ -58,7 +59,7 @@ class PeriodicTask(BackgroundTask):
 
 
 class CronTask(BackgroundTask):
-	def __init__(self, func: Callable[[], Awaitable], cron: str):
+	def __init__(self, func: Callable[[], Awaitable], cron: str, max_random_delay=None):
 		try:
 			croniter(cron)
 		except CroniterBadCronError as e:
@@ -67,6 +68,7 @@ class CronTask(BackgroundTask):
 		self.func = func
 		self.name = func.__name__
 		self.cron = cron
+		self.max_random_delay = max_random_delay
 		self.is_started = False
 		self._task = None
 
@@ -89,6 +91,8 @@ class CronTask(BackgroundTask):
 	async def _run_cron(self):
 		while True:
 			next_exec: float = croniter(self.cron).get_next()
+			if self.max_random_delay:
+				next_exec += random.uniform(0, self.max_random_delay)
 			delta = next_exec - time.time()
 			await asyncio.sleep(delta)
 			await self.func()

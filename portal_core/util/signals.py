@@ -11,3 +11,5 @@ on_app_install_error = Signal()
 
 on_peer_write = Signal()
 on_peer_auth = Signal()
+
+on_backup_update = Signal()

@@ -78,6 +78,12 @@ def peers_table() -> Iterator[Table]:
 
 
 @contextmanager
+def backups_table() -> Iterator[Table]:
+	with get_db() as db:
+		yield db.table('backups')
+
+
+@contextmanager
 def tours_table() -> Iterator[Table]:
 	with get_db() as db:
 		yield db.table('tours')

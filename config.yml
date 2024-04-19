@@ -6,7 +6,13 @@ dns:
 
 services:
   backup:
-    included_globs:
+    directories:
+      - core
+      - user_data
+    timing:
+      base_schedule: '0 3 * * *'
+      max_random_delay: 3600
+    included_globs: # todo: remove this
       - core/**/*
       - user_data/**/*
 
