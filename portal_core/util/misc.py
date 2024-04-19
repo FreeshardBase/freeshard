@@ -63,3 +63,10 @@ def log_request_and_response(request: Request, response: Response, log):
 		'=' * 20,
 	]
 	log.info('\n'.join(entry))
+
+
+def format_error(e: Exception):
+	if str(e):
+		return f'{type(e).__name__}: {e}'
+	else:
+		return type(e).__name__

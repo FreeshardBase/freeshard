@@ -13,6 +13,7 @@ from portal_core.model.terminal import Terminal
 from portal_core.service.app_tools import enrich_installed_app_with_meta
 from portal_core.util import signals
 from portal_core.util.async_util import BackgroundTask
+from portal_core.util.misc import format_error
 
 log = logging.getLogger(__name__)
 
@@ -86,6 +87,14 @@ class WSWorker(BackgroundTask):
 ws_worker = WSWorker()
 
 
+@signals.on_backup_update.connect
+async def send_backup_update(e: Exception | None = None):
+	await ws_worker.broadcast_message(
+		'backup_update',
+		{'error': format_error(e)} if e else None
+	)
+
+
 @signals.on_terminals_update.connect
 async def send_terminals_update(_):
 	with terminals_table() as terminals:  # type: Table
@@ -108,4 +117,7 @@ async def send_apps_update(_):
 
 @signals.on_app_install_error.connect
 async def send_app_install_error(e: Exception, name: str):
-	await ws_worker.broadcast_message('app_install_error', {'name': name, 'error': f'{type(e).__name__} {e}'})
+	await ws_worker.broadcast_message(
+		'app_install_error',
+		{'name': name, 'error': format_error(e)}
+	)
