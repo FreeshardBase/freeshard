@@ -8,7 +8,7 @@ RUN /venv/bin/pip install /project
 # Production
 FROM python:3.11 as production
 
-RUN apt-get update && apt-get install -y docker docker-compose
+RUN apt-get update && apt-get install -y docker docker-compose rclone
 
 COPY --from=build /venv /venv
 COPY config.yml .
