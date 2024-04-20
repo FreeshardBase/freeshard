@@ -1,6 +1,6 @@
 ### Make Backup
 
-POST http://127.0.0.1:8000/protected/backup/sync
+POST http://127.0.0.1:8000/protected/backup/start
 
 ### Get Backup info
 

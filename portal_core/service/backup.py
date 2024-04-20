@@ -126,7 +126,8 @@ async def _backup_directory(container_name, rel_directory, obscured_passphrase, 
 		stderr=asyncio.subprocess.PIPE)
 	stdout, stderr = await process.communicate()
 	try:
-		rclone_result = json.loads(stderr.decode())
+		last_entry = stderr.decode().split('\n')[-2]  # last line ends with newline
+		rclone_result = json.loads(last_entry)
 	except json.JSONDecodeError:
 		log.error(f'Failed to parse rclone output: {stderr.decode()}')
 		raise
