@@ -39,11 +39,15 @@ class BackupPassphraseResponse(BaseModel):
 	passphrase: str
 
 
-class BackupPassphraseLastAccessInfo(BaseModel):
+class BackupPassphraseLastAccessInfoDB(BaseModel):
 	time: datetime.datetime
 	terminal_id: str
 
 
+class BackupPassphraseLastAccessInfoResponse(BackupPassphraseLastAccessInfoDB):
+	terminal_name: str
+
+
 class BackupInfoResponse(BaseModel):
 	last_report: BackupReport | None
-	last_passphrase_access_info: BackupPassphraseLastAccessInfo | None
+	last_passphrase_access_info: BackupPassphraseLastAccessInfoResponse | None

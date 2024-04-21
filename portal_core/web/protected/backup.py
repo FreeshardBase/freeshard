@@ -5,10 +5,14 @@ from pathlib import Path
 import gconf
 from fastapi import Header, HTTPException, APIRouter, status
 from starlette.responses import StreamingResponse
+from tinydb import Query
 from zipstream import ZipStream
 
 from portal_core.database import database
-from portal_core.model.backup import BackupPassphraseResponse, BackupInfoResponse
+from portal_core.database.database import terminals_table
+from portal_core.model.backup import BackupPassphraseResponse, BackupInfoResponse, BackupPassphraseLastAccessInfoDB, \
+	BackupPassphraseLastAccessInfoResponse
+from portal_core.model.terminal import Terminal
 from portal_core.service import backup
 from portal_core.service.identity import get_default_identity
 
@@ -22,13 +26,23 @@ router = APIRouter(
 @router.get('/info', response_model=BackupInfoResponse)
 async def get_backup_info():
 	try:
-		last_access_info = database.get_value(backup.STORE_KEY_BACKUP_PASSPHRASE_LAST_ACCESS)
+		last_access_info_db = BackupPassphraseLastAccessInfoDB.parse_obj(
+			database.get_value(backup.STORE_KEY_BACKUP_PASSPHRASE_LAST_ACCESS)
+		)
 	except KeyError:
-		last_access_info = None
+		last_access_info_response = None
+	else:
+		with terminals_table() as terminals:
+			terminal_db = terminals.get(Query().id == last_access_info_db.terminal_id)
+		terminal_name = Terminal.parse_obj(terminal_db).name if terminal_db else 'Unknown'
+		last_access_info_response = BackupPassphraseLastAccessInfoResponse(
+			**last_access_info_db.dict(),
+			terminal_name=terminal_name
+		)
 
 	return BackupInfoResponse(
 		last_report=backup.get_latest_backup_report(),
-		last_passphrase_access_info=last_access_info
+		last_passphrase_access_info=last_access_info_response
 	)
 
 

@@ -12,7 +12,7 @@ from requests import HTTPError
 
 from portal_core import database
 from portal_core.database.database import backups_table
-from portal_core.model.backup import BackupReport, BackupStats, BackupPassphraseLastAccessInfo
+from portal_core.model.backup import BackupReport, BackupStats, BackupPassphraseLastAccessInfoDB
 from portal_core.service.portal_controller import get_backup_sas_url
 from portal_core.util import passphrase as passphrase_util, signals
 
@@ -166,7 +166,7 @@ def ensure_packup_passphrase():
 
 def get_backup_passphrase(terminal_id: str) -> str:
 	passphrase = database.get_value(STORE_KEY_BACKUP_PASSPHRASE)
-	last_access_info = BackupPassphraseLastAccessInfo(
+	last_access_info = BackupPassphraseLastAccessInfoDB(
 		time=datetime.datetime.now(datetime.timezone.utc),
 		terminal_id=terminal_id,
 	)
