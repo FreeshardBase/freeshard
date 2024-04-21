@@ -28,6 +28,6 @@ async def refresh_profile() -> profile.Profile:
 
 
 async def get_backup_sas_url() -> SasUrlResponse:
-	response = await call_portal_controller('portal_backup/sas_token')
+	response = await call_portal_controller('portal_backup/backup_sas_url')
 	response.raise_for_status()
 	return SasUrlResponse.parse_obj(response.json())
