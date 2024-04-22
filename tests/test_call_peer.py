@@ -1,4 +1,3 @@
-import pytest
 from common_py.crypto import PublicKey
 from fastapi import status
 from http_message_signatures import algorithms
