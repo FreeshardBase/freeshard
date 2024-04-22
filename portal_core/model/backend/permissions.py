@@ -13,7 +13,7 @@ class Permission(StrEnum):
 	DELETE_PORTAL = auto()
 	READ_REVENUE_SHARE = auto()
 	MODIFY_REVENUE_SHARE = auto()
-	CREATE_BACKUP = auto()
+	ISSUE_BACKUP_RESTORE_TOKEN = auto()
 
 
 class PermissionHolder(BaseModel):
