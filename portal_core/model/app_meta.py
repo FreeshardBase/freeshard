@@ -33,6 +33,7 @@ class Status(str, Enum):
 	INSTALLING = 'installing'
 	STOPPED = 'stopped'
 	RUNNING = 'running'
+	UNINSTALLATION_QUEUED = 'uninstallation_queued'
 	UNINSTALLING = 'uninstalling'
 	DOWN = 'down'
 	ERROR = 'error'
@@ -129,7 +130,6 @@ class InstalledApp(BaseModel):
 	installation_reason: InstallationReason = InstallationReason.UNKNOWN
 	status: str = Status.UNKNOWN
 	last_access: Optional[datetime.datetime] = None
-	from_branch: str | None = None
 
 
 class InstalledAppWithMeta(InstalledApp):

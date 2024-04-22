@@ -94,5 +94,6 @@ class CronTask(BackgroundTask):
 			if self.max_random_delay:
 				next_exec += random.uniform(0, self.max_random_delay)
 			delta = next_exec - time.time()
+			log.debug(f'next execution of cron task {self.name} in {delta:.2f} seconds')
 			await asyncio.sleep(delta)
 			await self.func()

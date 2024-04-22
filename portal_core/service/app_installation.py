@@ -5,7 +5,7 @@ import shutil
 import zipfile
 from contextlib import suppress
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Optional, Literal
 
 import aiofiles
 import gconf
@@ -27,8 +27,16 @@ from portal_core.util.subprocess import subprocess
 
 log = logging.getLogger(__name__)
 
-install_lock = asyncio.Lock()
-installation_tasks: Dict[str, asyncio.Task] = {}
+
+class InstallationTask(BaseModel):
+	app_name: str
+	task_type: Literal['install from store', 'install from zip', 'uninstall']
+
+	def __str__(self):
+		return f'{self.task_type} task for {self.app_name}'
+
+
+installation_tasks: asyncio.Queue[InstallationTask] = asyncio.Queue()
 
 
 class AppStoreStatus(BaseModel):
@@ -40,9 +48,8 @@ class AppStoreStatus(BaseModel):
 async def install_app_from_store(
 		name: str,
 		installation_reason: InstallationReason = InstallationReason.STORE,
-		store_branch: Optional[str] = 'master',
 ):
-	if not await _app_exists_in_store(name, store_branch):
+	if not await _app_exists_in_store(name):
 		raise AppDoesNotExist(name)
 
 	with installed_apps_table() as installed_apps:
@@ -53,41 +60,36 @@ async def install_app_from_store(
 			name=name,
 			installation_reason=installation_reason,
 			status=Status.INSTALLATION_QUEUED,
-			from_branch=store_branch,
 		)
 		installed_apps.insert(installed_app.dict())
 
-	task = asyncio.create_task(_install_app_from_store_task(installed_app))
-	installation_tasks[name] = task
+	installation_task = InstallationTask(
+		app_name=name,
+		task_type='install from store',
+	)
+	await installation_tasks.put(installation_task)
 	await signals.on_apps_update.send_async()
-	log.info(f'created installation task for {name} from branch {store_branch}')
-	log.debug(f'installation tasks: {installation_tasks.keys()}')
+	log.info(f'created {installation_task}')
+	log.debug(f'queue size: {installation_tasks.qsize()}')
 
 
 async def _install_app_from_store_task(installed_app: InstalledApp):
-	async with install_lock:
-		log.info(f'starting installation of {installed_app.name} from branch {installed_app.from_branch}')
-		with installed_apps_table() as installed_apps:
-			installed_apps.update({'status': Status.INSTALLING}, Query().name == installed_app.name)
-		await signals.on_apps_update.send_async()
-		try:
-			log.debug(f'downloading app {installed_app.name} from store')
-			zip_file = await _download_app_zip(installed_app.name, installed_app.from_branch)
+	log.info(f'starting installation of {installed_app.name}')
+	await _update_app_status(installed_app.name, Status.INSTALLING)
 
-			await _install_app_from_zip(installed_app, zip_file)
+	try:
+		log.debug(f'downloading app {installed_app.name} from store')
+		zip_file = await _download_app_zip(installed_app.name)
 
-			log.info(f'finished installation of {installed_app.name}')
-			with installed_apps_table() as installed_apps:
-				installed_apps.update({'status': Status.STOPPED}, Query().name == installed_app.name)
-		except Exception as e:
-			log.error(f'Error while installing app {installed_app.name}: {e!r}')
-			with installed_apps_table() as installed_apps:
-				installed_apps.update({'status': Status.ERROR}, Query().name == installed_app.name)
-			await signals.on_app_install_error.send_async(e, name=installed_app.name)
-			raise
-		finally:
-			del installation_tasks[installed_app.name]
-			await signals.on_apps_update.send_async()
+		await _install_app_from_zip(installed_app, zip_file)
+
+		log.info(f'finished installation of {installed_app.name}')
+		await _update_app_status(installed_app.name, Status.STOPPED)
+	except Exception as e:
+		log.error(f'Error while installing app {installed_app.name}: {e!r}')
+		await _update_app_status(installed_app.name, Status.ERROR, message=str(e))
+	finally:
+		installation_tasks.task_done()
 
 
 async def install_app_from_existing_zip(
@@ -105,35 +107,32 @@ async def install_app_from_existing_zip(
 		)
 		installed_apps.insert(installed_app.dict())
 
-	task = asyncio.create_task(_install_app_from_existing_zip_task(installed_app))
-	installation_tasks[name] = task
+	installation_task = InstallationTask(
+		app_name=name,
+		task_type='install from zip',
+	)
+	await installation_tasks.put(installation_task)
 	await signals.on_apps_update.send_async()
-	log.info(f'created installation task for {name} - custom install')
-	log.debug(f'installation tasks: {installation_tasks.keys()}')
+	log.info(f'created {installation_task}')
+	log.debug(f'queue size: {installation_tasks.qsize()}')
 
 
 async def _install_app_from_existing_zip_task(installed_app: InstalledApp):
-	async with install_lock:
-		log.info(f'starting installation of {installed_app.name} from branch {installed_app.from_branch}')
-		with installed_apps_table() as installed_apps:
-			installed_apps.update({'status': Status.INSTALLING}, Query().name == installed_app.name)
-		await signals.on_apps_update.send_async()
-		try:
-			zip_file = get_installed_apps_path() / installed_app.name / f'{installed_app.name}.zip'
+	log.info(f'starting installation of {installed_app.name}')
+	await _update_app_status(installed_app.name, Status.INSTALLING)
 
-			await _install_app_from_zip(installed_app, zip_file)
+	try:
+		zip_file = get_installed_apps_path() / installed_app.name / f'{installed_app.name}.zip'
 
-			log.info(f'finished installation of {installed_app.name}')
-			with installed_apps_table() as installed_apps:
-				installed_apps.update({'status': Status.STOPPED}, Query().name == installed_app.name)
-		except Exception as e:
-			log.error(f'Error while installing app {installed_app.name}: {e!r}')
-			with installed_apps_table() as installed_apps:
-				installed_apps.update({'status': Status.ERROR}, Query().name == installed_app.name)
-			await signals.on_app_install_error.send_async(e, name=installed_app.name)
-		finally:
-			del installation_tasks[installed_app.name]
-			await signals.on_apps_update.send_async()
+		await _install_app_from_zip(installed_app, zip_file)
+
+		log.info(f'finished installation of {installed_app.name}')
+		await _update_app_status(installed_app.name, Status.STOPPED)
+	except Exception as e:
+		log.error(f'Error while installing app {installed_app.name}: {e!r}')
+		await _update_app_status(installed_app.name, Status.ERROR, message=str(e))
+	finally:
+		installation_tasks.task_done()
 
 
 async def _install_app_from_zip(installed_app, zip_file):
@@ -141,17 +140,18 @@ async def _install_app_from_zip(installed_app, zip_file):
 		zip_ref.extractall(zip_file.parent)
 	zip_file.unlink()
 
-	log.debug('updating traefik dynamic config')
-	await _write_traefik_dyn_config()
-
 	log.debug(f'creating docker-compose.yml for app {installed_app.name}')
 	await _render_docker_compose_template(installed_app)
 
 	log.debug(f'creating containers for app {installed_app.name}')
 	await docker_create_app_containers(installed_app.name)
 
+	log.debug('updating traefik dynamic config')
+	await _write_traefik_dyn_config()
+
 
 async def cancel_all_installations(wait=False):
+	# todo
 	for name in list(installation_tasks.keys()):
 		await cancel_installation(name)
 	if wait:
@@ -161,6 +161,7 @@ async def cancel_all_installations(wait=False):
 
 
 async def cancel_installation(name: str):
+	# todo
 	if name not in installation_tasks:
 		raise AppNotInstalled(name)
 	installation_tasks[name].cancel()
@@ -171,85 +172,70 @@ async def cancel_installation(name: str):
 
 
 async def uninstall_app(name: str):
-	with installed_apps_table() as installed_apps:
-		if not installed_apps.contains(Query().name == name):
-			raise AppNotInstalled(name)
-		installed_apps.update({'status': Status.UNINSTALLING}, Query().name == name)
+	if not await _app_exists_in_store(name):
+		raise AppDoesNotExist(name)
+	await _update_app_status(name, Status.UNINSTALLATION_QUEUED)
 
-	asyncio.create_task(_uninstall_app_task(name))
+	uninstallation_task = InstallationTask(
+		app_name=name,
+		task_type='uninstall',
+	)
+	await installation_tasks.put(uninstallation_task)
+
 	await signals.on_apps_update.send_async()
-	log.info(f'created uninstallation task for {name}')
+	log.info(f'created {uninstallation_task}')
+	log.debug(f'queue size: {installation_tasks.qsize()}')
 
 
 async def _uninstall_app_task(name: str):
-	async with install_lock:
-		log.info(f'starting uninstallation of {name}')
+	log.info(f'starting uninstallation of {name}')
 
-		log.debug(f'shutting down docker container for app {name}')
-		try:
-			await docker_stop_app(name, set_status=False)
-			await docker_shutdown_app(name, set_status=False)
-		except FileNotFoundError as e:
-			log.error(f'Error while shutting down app {name}: {e}')
+	log.debug(f'shutting down docker container for app {name}')
+	try:
+		await docker_stop_app(name, set_status=False)
+		await docker_shutdown_app(name, set_status=False)
+	except FileNotFoundError as e:
+		# todo: delete app from db in this case?
+		log.error(f'Error while shutting down app {name}: {e}')
 
-		log.debug(f'deleting app data for {name}')
-		shutil.rmtree(Path(get_installed_apps_path() / name), ignore_errors=True)
-		log.debug(f'removing app {name} from database')
-		with installed_apps_table() as installed_apps:
-			installed_apps.remove(Query().name == name)
-		log.debug('updating traefik dynamic config')
-		await _write_traefik_dyn_config()
-		await signals.on_apps_update.send_async()
-		log.debug(f'finished uninstallation of {name}')
+	log.debug(f'deleting app data for {name}')
+	shutil.rmtree(Path(get_installed_apps_path() / name), ignore_errors=True)
+	log.debug(f'removing app {name} from database')
+	with installed_apps_table() as installed_apps:
+		installed_apps.remove(Query().name == name)
+	log.debug('updating traefik dynamic config')
+	await _write_traefik_dyn_config()
+	await signals.on_apps_update.send_async()
+	log.debug(f'finished uninstallation of {name}')
 
 
 async def reinstall_app(name: str):
-	with installed_apps_table() as installed_apps:
-		if not installed_apps.contains(Query().name == name):
-			raise AppNotInstalled(name)
-		installed_app = InstalledApp.parse_obj(installed_apps.get(Query().name == name))
-		installed_apps.update({'status': Status.UNINSTALLING}, Query().name == name)
+	if not await _app_exists_in_store(name):
+		raise AppDoesNotExist(name)
+	await _update_app_status(name, Status.UNINSTALLATION_QUEUED)
+
+	uninstallation_task = InstallationTask(
+		app_name=name,
+		task_type='uninstall',
+	)
+	await installation_tasks.put(uninstallation_task)
+
+	installation_task = InstallationTask(
+		app_name=name,
+		task_type='install from store',
+	)
+	await installation_tasks.put(installation_task)
+
 	await signals.on_apps_update.send_async()
-
-	task = asyncio.create_task(_reinstall_app_task(installed_app))
-	installation_tasks[name] = task
-	log.info(f'created reinstallation task for {name}')
-
-
-async def _reinstall_app_task(installed_app: InstalledApp):
-	async with install_lock:
-		log.info(f'starting reinstallation of {installed_app.name}')
-
-		log.debug(f'shutting down docker container for app {installed_app.name}')
-		await docker_stop_app(installed_app.name, set_status=False)
-		await docker_shutdown_app(installed_app.name, set_status=False)
-
-		log.debug(f'deleting app data for {installed_app.name}')
-		shutil.rmtree(Path(get_installed_apps_path() / installed_app.name))
-
-		try:
-			log.debug(f'downloading app {installed_app.name} from store')
-			# to avoid incompatibilities,
-			# we download from master branch and ignore the branch from which the app was installed before
-			zip_file = await _download_app_zip(installed_app.name)
-
-			await _install_app_from_zip(installed_app, zip_file)
-
-			log.info(f'finished installation of {installed_app.name}')
-			_update_app_status(installed_app.name, Status.STOPPED)
-		except Exception as e:
-			log.error(f'Error while installing app {installed_app.name}: {e!r}')
-			_update_app_status(installed_app.name, Status.ERROR)
-			await signals.on_app_install_error.send_async(e, name=installed_app.name)
-			raise
-		finally:
-			del installation_tasks[installed_app.name]
-			await signals.on_apps_update.send_async()
+	log.info(f'created {uninstallation_task}')
+	log.info(f'created {installation_task}')
+	log.debug(f'queue size: {installation_tasks.qsize()}')
 
 
-def _update_app_status(app_name: str, status: Status):
+async def _update_app_status(app_name: str, status: Status, message: str | None = None):
 	with installed_apps_table() as installed_apps:
 		installed_apps.update({'status': status}, Query().name == app_name)
+	await signals.on_apps_update.send_async(message=message)
 
 
 class AppAlreadyInstalled(Exception):
@@ -264,17 +250,17 @@ class AppNotInstalled(Exception):
 	pass
 
 
-async def _app_exists_in_store(name: str, branch: str = 'master') -> bool:
+async def _app_exists_in_store(name: str) -> bool:
 	app_store = gconf.get('apps.app_store')
-	url = f'{app_store["base_url"]}/{app_store["container_name"]}/{branch}/all_apps/{name}/{name}.zip'
+	url = f'{app_store["base_url"]}/{app_store["container_name"]}/master/all_apps/{name}/{name}.zip'
 	async with httpx.AsyncClient() as client:
 		response = await client.get(url)
 		return response.status_code == 200
 
 
-async def _download_app_zip(name: str, branch: str = None) -> Path:
+async def _download_app_zip(name: str) -> Path:
 	app_store = gconf.get('apps.app_store')
-	url = f'{app_store["base_url"]}/{app_store["container_name"]}/{branch or "master"}/all_apps/{name}/{name}.zip'
+	url = f'{app_store["base_url"]}/{app_store["container_name"]}/master/all_apps/{name}/{name}.zip'
 	async with httpx.AsyncClient() as client:
 		response = await client.get(url)
 		if response.status_code != 200:
