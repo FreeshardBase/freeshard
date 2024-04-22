@@ -2,8 +2,10 @@ from httpx import AsyncClient
 from starlette import status
 
 from portal_core.model.peer import Peer
+from tests.conftest import requires_test_env
 
 
+@requires_test_env('full')
 async def test_add_and_delete(peer_mock_requests, api_client: AsyncClient):
 	response = await api_client.put('protected/peers', json={
 		'id': peer_mock_requests.identity.short_id,
@@ -20,6 +22,7 @@ async def test_add_and_delete(peer_mock_requests, api_client: AsyncClient):
 	assert len(response.json()) == 0
 
 
+@requires_test_env('full')
 async def test_info_is_resolved(peer_mock_requests, api_client: AsyncClient):
 	response = await api_client.put('protected/peers', json={
 		'id': peer_mock_requests.identity.short_id,
@@ -36,6 +39,7 @@ async def test_info_is_resolved(peer_mock_requests, api_client: AsyncClient):
 	assert peer.name == 'mock peer'
 
 
+@requires_test_env('full')
 async def test_add_invalid_id(api_client: AsyncClient):
 	response = await api_client.put('protected/peers', json={
 		'id': 'foo',
@@ -46,6 +50,7 @@ async def test_add_invalid_id(api_client: AsyncClient):
 	assert len(response.json()) == 0
 
 
+@requires_test_env('full')
 async def test_update_with_real_name(peer_mock_requests, api_client: AsyncClient):
 	response = await api_client.put('protected/peers', json={
 		'id': peer_mock_requests.identity.short_id,
@@ -58,6 +63,7 @@ async def test_update_with_real_name(peer_mock_requests, api_client: AsyncClient
 	assert response.json()[0]['name'] == 'mock peer'
 
 
+@requires_test_env('full')
 async def test_is_unreachable(api_client: AsyncClient):
 	response = await api_client.put('protected/peers', json={
 		'id': 'foobar',

@@ -1,8 +1,10 @@
 import time
 
 from portal_core.util.misc import throttle
+from tests.conftest import requires_test_env
 
 
+@requires_test_env('full')
 def test_throttle_once():
 	@throttle(0.1)
 	def call_me():
@@ -11,6 +13,7 @@ def test_throttle_once():
 	assert call_me() == "called"
 
 
+@requires_test_env('full')
 def test_throttle_twice():
 	@throttle(0.1)
 	def call_me():
@@ -20,6 +23,7 @@ def test_throttle_twice():
 	assert call_me() is None
 
 
+@requires_test_env('full')
 def test_throttle_with_delay():
 	@throttle(0.1)
 	def call_me():

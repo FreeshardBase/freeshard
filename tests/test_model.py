@@ -2,8 +2,10 @@ import pytest
 
 from portal_core.model.app_meta import Lifecycle, PortalSize
 from portal_core.model.util import PropertyBaseModel
+from tests.conftest import requires_test_env
 
 
+@requires_test_env('full')
 def test_property_base_model():
 	class TestModel(PropertyBaseModel):
 		normal_field: str
@@ -27,6 +29,7 @@ def test_property_base_model():
 	assert 'prop_field_excluded' not in instance_dict
 
 
+@requires_test_env('full')
 def test_lifecycle():
 	Lifecycle(always_on=True)
 	Lifecycle(idle_time_for_shutdown=5)
@@ -38,6 +41,7 @@ def test_lifecycle():
 		Lifecycle(always_on=True, idle_time_for_shutdown=10)
 
 
+@requires_test_env('full')
 def test_portal_size():
 	assert PortalSize.XS < PortalSize.S
 	assert PortalSize.S < PortalSize.M

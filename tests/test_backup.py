@@ -3,7 +3,10 @@ from zipfile import ZipFile
 
 from httpx import AsyncClient
 
+from tests.conftest import requires_test_env
 
+
+@requires_test_env('full')
 async def test_backup(api_client: AsyncClient, tmp_path):
 	root_ = tmp_path / 'path_root'
 	backup_ = tmp_path / 'backup'

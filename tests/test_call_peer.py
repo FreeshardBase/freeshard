@@ -7,10 +7,11 @@ from requests import PreparedRequest, Request
 from requests_http_signature import HTTPSignatureAuth
 
 from portal_core.model.identity import OutputIdentity
+from tests.conftest import requires_test_env
 from tests.util import verify_signature_auth, modify_request_like_traefik_forward_auth
 
 
-#@pytest.mark.skip(reason='fails sometimes with missing signature, especially on CI build')
+@requires_test_env('full')
 async def test_call_peer_from_app_basic(peer_mock_requests, api_client):
 	whoareyou = await api_client.get('public/meta/whoareyou')
 	portal_identity = OutputIdentity(**whoareyou.json())
@@ -26,7 +27,7 @@ async def test_call_peer_from_app_basic(peer_mock_requests, api_client):
 	assert received_request.path_url == path
 
 
-#@pytest.mark.skip(reason='fails sometimes with missing signature, especially on CI build')
+@requires_test_env('full')
 async def test_call_peer_from_app_post(peer_mock_requests, api_client):
 	wouareyou = await api_client.get('public/meta/whoareyou')
 	portal_identity = OutputIdentity(**wouareyou.json())
@@ -45,7 +46,7 @@ async def test_call_peer_from_app_post(peer_mock_requests, api_client):
 	assert received_request.body == b'foo data bar'
 
 
-@pytest.mark.asyncio
+@requires_test_env('full')
 async def test_peer_auth_basic(peer_mock_requests, api_client: AsyncClient):
 	response = await api_client.post('protected/apps/mock_app')
 	response.raise_for_status()

@@ -1,6 +1,8 @@
 from portal_core.model.app_meta import AppMeta, Lifecycle, PortalSize
+from tests.conftest import requires_test_env
 
 
+@requires_test_env('full')
 def test_migrate_1_0_to_1_1():
 	app_meta_in = AppMeta(
 		v='1.0',

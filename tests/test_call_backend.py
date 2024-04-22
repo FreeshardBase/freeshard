@@ -1,8 +1,11 @@
 from portal_core.model.identity import OutputIdentity
 from common_py.crypto import PublicKey
+
+from tests.conftest import requires_test_env
 from tests.util import verify_signature_auth
 
 
+@requires_test_env('full')
 async def test_call_backend_from_app_basic(requests_mock, api_client):
 	whoareyou = await api_client.get('public/meta/whoareyou')
 	portal_identity = OutputIdentity(**whoareyou.json())

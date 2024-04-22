@@ -7,14 +7,16 @@ from tinydb.operations import delete
 from portal_core.database.database import terminals_table
 from portal_core.model.backend.portal_meta import PortalMetaExt
 from portal_core.model.terminal import Terminal, Icon
-from tests.conftest import requests_mock_context, mock_meta
+from tests.conftest import requests_mock_context, mock_meta, requires_test_env
 from tests.util import get_pairing_code, add_terminal, pair_new_terminal
 
 
+@requires_test_env('full')
 async def _delete_terminal(api_client: AsyncClient, t_id):
 	return await api_client.delete(f'protected/terminals/id/{t_id}')
 
 
+@requires_test_env('full')
 async def test_add_delete(api_client: AsyncClient):
 	t_name = 'T1'
 	await pair_new_terminal(api_client, t_name)
@@ -30,6 +32,7 @@ async def test_add_delete(api_client: AsyncClient):
 	assert len(response.json()) == 0
 
 
+@requires_test_env('full')
 async def test_edit(api_client: AsyncClient):
 	t_name_1 = 'T1'
 	await pair_new_terminal(api_client, t_name_1)
@@ -51,6 +54,7 @@ async def test_edit(api_client: AsyncClient):
 	assert Terminal(**response.json()).icon == response_terminal.icon
 
 
+@requires_test_env('full')
 async def test_pairing_happy(api_client: AsyncClient, requests_mock):
 	t_name = 'T1'
 	await pair_new_terminal(api_client, t_name)
@@ -83,6 +87,7 @@ async def test_pairing_happy(api_client: AsyncClient, requests_mock):
 	assert response.json()['email'] == 'testowner@foobar.com'
 
 
+@requires_test_env('full')
 async def test_pairing_two(api_client: AsyncClient):
 	t1_name = 'T1'
 	t2_name = 'T2'
@@ -93,6 +98,7 @@ async def test_pairing_two(api_client: AsyncClient):
 	assert len(response.json()) == 2
 
 
+@requires_test_env('full')
 async def test_pairing_two_with_same_name(api_client: AsyncClient):
 	t1_name = 'T1'
 	await pair_new_terminal(api_client, t1_name)
@@ -102,6 +108,7 @@ async def test_pairing_two_with_same_name(api_client: AsyncClient):
 	assert len(response.json()) == 2
 
 
+@requires_test_env('full')
 async def test_pairing_no_code(api_client: AsyncClient):
 	response = await add_terminal(api_client, 'somecode', 'T1')
 	assert response.status_code == 401
@@ -110,6 +117,7 @@ async def test_pairing_no_code(api_client: AsyncClient):
 	assert len(response.json()) == 0
 
 
+@requires_test_env('full')
 async def test_pairing_wrong_code(api_client: AsyncClient):
 	pairing_code = await get_pairing_code(api_client)
 
@@ -120,6 +128,7 @@ async def test_pairing_wrong_code(api_client: AsyncClient):
 	assert len(response.json()) == 0
 
 
+@requires_test_env('full')
 async def test_pairing_expired_code(api_client: AsyncClient):
 	pairing_code = await get_pairing_code(api_client, deadline=1)
 
@@ -132,11 +141,13 @@ async def test_pairing_expired_code(api_client: AsyncClient):
 	assert len(response.json()) == 0
 
 
+@requires_test_env('full')
 async def test_authorization_missing_header(api_client: AsyncClient):
 	response = await api_client.get('internal/authenticate_terminal')
 	assert response.status_code == 401
 
 
+@requires_test_env('full')
 async def test_authorization_wrong_header_prefix(api_client: AsyncClient):
 	response = await api_client.get(
 		'internal/authenticate_terminal',
@@ -145,6 +156,7 @@ async def test_authorization_wrong_header_prefix(api_client: AsyncClient):
 	assert response.status_code == 401
 
 
+@requires_test_env('full')
 async def test_authorization_invalid_token(api_client: AsyncClient):
 	response = await pair_new_terminal(api_client)
 	token = response.cookies['authorization']
@@ -154,6 +166,7 @@ async def test_authorization_invalid_token(api_client: AsyncClient):
 	assert response.status_code == 401
 
 
+@requires_test_env('full')
 async def test_authorization_deleted_terminal(api_client: AsyncClient):
 	t_name = 'T1'
 	await pair_new_terminal(api_client, t_name)
@@ -170,6 +183,7 @@ async def test_authorization_deleted_terminal(api_client: AsyncClient):
 	assert response.status_code == 401
 
 
+@requires_test_env('full')
 async def test_last_connection(api_client: AsyncClient):
 	t_name = 'T1'
 	await pair_new_terminal(api_client, t_name)
@@ -213,6 +227,7 @@ async def test_last_connection(api_client: AsyncClient):
 	assert last_connection_0 < last_connection_1 == last_connection_2 < last_connection_3
 
 
+@requires_test_env('full')
 async def test_pairing_with_profile_missing_owner(
 		requests_mock, api_client: AsyncClient):
 	meta_without_owner = PortalMetaExt.parse_obj(mock_meta.dict(exclude={'owner'}))
@@ -226,6 +241,7 @@ async def test_pairing_with_profile_missing_owner(
 		assert response.json()['email'] == 'testowner@foobar.com'
 
 
+@requires_test_env('full')
 async def test_pairing_with_profile_missing_email(
 		requests_mock, api_client: AsyncClient):
 	meta_without_email = PortalMetaExt.parse_obj(mock_meta.dict(exclude={'owner_email'}))

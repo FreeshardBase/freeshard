@@ -22,7 +22,7 @@ ruff:
   tags:
     - portal
 
-unittest:
+unittest_sparse:
   stage: unittest
   image: registry.gitlab.com/ptl/portal-ci-image:main
   script:
@@ -34,6 +34,24 @@ unittest:
     CONFIG: tests/config.yml
   tags:
     - portal
+  rules:
+    - if: $CI_COMMIT_TAG == null
+
+unittest_full:
+  stage: unittest
+  image: registry.gitlab.com/ptl/portal-ci-image:main
+  script:
+    - virtualenv venv --python 3.11
+    - source venv/bin/activate
+    - pip install ".[dev]"
+    - pytest tests
+  variables:
+    CONFIG: tests/config.yml
+    TEST_ENV: full
+  tags:
+    - portal
+  rules:
+    - if: $CI_COMMIT_TAG
 
 build:
   stage: build

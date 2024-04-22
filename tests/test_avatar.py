@@ -5,8 +5,10 @@ from fastapi import status
 from httpx import AsyncClient
 
 from portal_core.model.identity import OutputIdentity
+from tests.conftest import requires_test_env
 
 
+@requires_test_env('full')
 async def test_upload_happy(api_client: AsyncClient):
 	i = await api_client.get('protected/identities/default')
 	default_id = OutputIdentity.parse_obj(i.json())
@@ -23,6 +25,7 @@ async def test_upload_happy(api_client: AsyncClient):
 		assert uploaded_file_path.read_bytes() == avatar_file.read()
 
 
+@requires_test_env('full')
 async def test_upload_wrong_file_type(api_client: AsyncClient):
 	i = await api_client.get('protected/identities/default')
 	default_id = OutputIdentity.parse_obj(i.json())
@@ -33,6 +36,7 @@ async def test_upload_wrong_file_type(api_client: AsyncClient):
 	assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
+@requires_test_env('full')
 async def test_upload_to_unknown_identity(api_client: AsyncClient):
 	i = await api_client.get('protected/identities/default')
 	default_id = OutputIdentity.parse_obj(i.json())
@@ -44,6 +48,7 @@ async def test_upload_to_unknown_identity(api_client: AsyncClient):
 	assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
+@requires_test_env('full')
 async def test_upload_different_filetypes(api_client: AsyncClient):
 	i = await api_client.get('protected/identities/default')
 	default_id = OutputIdentity.parse_obj(i.json())
@@ -64,6 +69,7 @@ async def test_upload_different_filetypes(api_client: AsyncClient):
 	assert len(list(avatars_dir.iterdir())) == 1
 
 
+@requires_test_env('full')
 async def test_put_and_get_happy(api_client: AsyncClient):
 	i = await api_client.get('protected/identities/default')
 	default_id = OutputIdentity.parse_obj(i.json())
@@ -88,6 +94,7 @@ async def test_put_and_get_happy(api_client: AsyncClient):
 	assert response.headers['content-type'] == 'image/png'
 
 
+@requires_test_env('full')
 async def test_get_from_missing_identity(api_client: AsyncClient):
 	i = await api_client.get('protected/identities/default')
 	default_id = OutputIdentity.parse_obj(i.json())
@@ -97,6 +104,7 @@ async def test_get_from_missing_identity(api_client: AsyncClient):
 	assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
+@requires_test_env('full')
 async def test_get_missing_avatar(api_client: AsyncClient):
 	i = await api_client.get('protected/identities/default')
 	default_id = OutputIdentity.parse_obj(i.json())
@@ -105,6 +113,7 @@ async def test_get_missing_avatar(api_client: AsyncClient):
 	assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
+@requires_test_env('full')
 async def test_delete_avatar_happy(api_client: AsyncClient):
 	i = await api_client.get('protected/identities/default')
 	default_id = OutputIdentity.parse_obj(i.json())
@@ -123,6 +132,7 @@ async def test_delete_avatar_happy(api_client: AsyncClient):
 	assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
+@requires_test_env('full')
 async def test_delete_from_missing_identity(api_client: AsyncClient):
 	i = await api_client.get('protected/identities/default')
 	default_id = OutputIdentity.parse_obj(i.json())
@@ -132,6 +142,7 @@ async def test_delete_from_missing_identity(api_client: AsyncClient):
 	assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
+@requires_test_env('full')
 async def test_delete_missing_avatar(api_client: AsyncClient):
 	i = await api_client.get('protected/identities/default')
 	default_id = OutputIdentity.parse_obj(i.json())
@@ -140,6 +151,7 @@ async def test_delete_missing_avatar(api_client: AsyncClient):
 	response.raise_for_status()
 
 
+@requires_test_env('full')
 async def test_put_and_get_default_avatar_happy(api_client: AsyncClient):
 	sent_bytes = b'some bytes'
 	response = await api_client.put(
@@ -156,11 +168,13 @@ async def test_put_and_get_default_avatar_happy(api_client: AsyncClient):
 	assert response.headers['content-type'] == 'image/png'
 
 
+@requires_test_env('full')
 async def test_get_missing_default_avatar(api_client: AsyncClient):
 	response = await api_client.get('protected/identities/default/avatar')
 	assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
+@requires_test_env('full')
 async def test_delete_default_avatar(api_client: AsyncClient):
 	sent_bytes = b'some bytes'
 	response = await api_client.put(

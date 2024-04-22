@@ -6,6 +6,7 @@ import pytest
 
 from portal_core.model.app_meta import Status
 from portal_core.service.migration import migrate
+from tests.conftest import requires_test_env
 from tests.util import retry_async
 
 
@@ -18,6 +19,7 @@ def init_db_file(tmp_path):
 	shutil.copy(init_db_file, dest)
 
 
+@requires_test_env('full')
 async def test_migration(init_db_file, api_client, tmp_path):
 	response = (await api_client.get('protected/apps')).json()
 	assert len(response) == 2
@@ -43,6 +45,7 @@ def init_db_file_nonexisting_app(tmp_path):
 	shutil.copy(init_db_file, dest)
 
 
+@requires_test_env('full')
 async def test_migration_nonexisting_app(
 		init_db_file_nonexisting_app, api_client, tmp_path):
 	response = (await api_client.get('protected/apps')).json()
@@ -68,6 +71,7 @@ def init_db_file_incomplete_migration(tmp_path):
 	shutil.copy(init_db_file, dest)
 
 
+@requires_test_env('full')
 async def test_migration_incomplete_migration(
 		init_db_file_incomplete_migration, tmp_path):
 	await migrate()

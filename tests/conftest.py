@@ -2,6 +2,7 @@ import asyncio
 import importlib
 import json
 import logging
+import os
 import re
 import shutil
 from contextlib import contextmanager
@@ -239,3 +240,15 @@ def memory_logger():
 	root_logger.addHandler(memory_handler)
 	yield memory_handler
 	root_logger.removeHandler(memory_handler)
+
+
+def requires_test_env(*envs):
+	if env := os.environ.get('TEST_ENV'):
+		return pytest.mark.skipif(
+			env not in list(envs),
+			reason=f'Test requires TEST_ENV to be one of {envs}',
+		)
+	else:
+		return pytest.mark.skip(
+			reason=f'Test requires TEST_ENV to be one of {envs}',
+		)

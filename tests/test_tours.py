@@ -1,6 +1,9 @@
 from httpx import AsyncClient
 
+from tests.conftest import requires_test_env
 
+
+@requires_test_env('full')
 async def test_add(api_client: AsyncClient):
 	tour = {
 		'name': 'foo',
@@ -14,6 +17,7 @@ async def test_add(api_client: AsyncClient):
 	assert get_response.json() == tour
 
 
+@requires_test_env('full')
 async def test_update(api_client: AsyncClient):
 	tour1 = {
 		'name': 'foo',
@@ -34,6 +38,7 @@ async def test_update(api_client: AsyncClient):
 	assert get_response.json() == tour2
 
 
+@requires_test_env('full')
 async def test_list(api_client: AsyncClient):
 	tour1 = {
 		'name': 'foo',
@@ -56,6 +61,7 @@ async def test_list(api_client: AsyncClient):
 	assert tour2 in get_response.json()
 
 
+@requires_test_env('full')
 async def test_reset(api_client: AsyncClient):
 	tour = {
 		'name': 'foo',

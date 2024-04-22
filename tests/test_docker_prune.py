@@ -1,11 +1,13 @@
 import pytest
 from httpx import AsyncClient
 
+from tests.conftest import requires_test_env
 from tests.util import retry_async
 
 function_config_override = {'apps': {'pruning': {'schedule': '* * * * * *'}}}
 
 
+@requires_test_env('full')
 @pytest.mark.config_override(function_config_override)
 async def test_docker_prune(requests_mock, api_client: AsyncClient, memory_logger):
 	async def assert_docker_prune():
@@ -14,6 +16,7 @@ async def test_docker_prune(requests_mock, api_client: AsyncClient, memory_logge
 	await retry_async(assert_docker_prune, 10, 1)
 
 
+@requires_test_env('full')
 async def test_docker_prune_manually(requests_mock, api_client: AsyncClient, memory_logger):
 	response = await api_client.post('/protected/settings/prune-images')
 	assert response.status_code == 200

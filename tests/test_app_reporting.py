@@ -1,16 +1,14 @@
 import asyncio
 from datetime import date, timedelta, datetime, time
 
-import pytest
 import responses
 
 from portal_core.database.database import app_usage_track_table
 from portal_core.model.app_usage import AppUsageTrack, AppUsageReport
+from tests.conftest import requires_test_env
 
-pytest_plugins = ('pytest_asyncio',)
 
-
-@pytest.mark.asyncio
+@requires_test_env('full')
 async def test_app_reporting(api_client, requests_mock: responses.RequestsMock):
 	first_day_of_current_month = date.today().replace(day=1)
 	first_day_of_last_month = (first_day_of_current_month - timedelta(days=1)).replace(day=1)

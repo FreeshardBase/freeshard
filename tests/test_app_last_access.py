@@ -6,8 +6,10 @@ from tinydb import Query
 
 from portal_core.database.database import installed_apps_table
 from portal_core.model.app_meta import InstalledApp
+from tests.conftest import requires_test_env
 
 
+@requires_test_env('full')
 async def test_app_last_access_is_set(api_client):
 	assert _get_last_access_time_delta('filebrowser') is None
 
@@ -20,6 +22,7 @@ async def test_app_last_access_is_set(api_client):
 	assert _get_last_access_time_delta('filebrowser') < 3
 
 
+@requires_test_env('full')
 async def test_app_last_access_is_debounced(api_client):
 	await api_client.get('internal/auth', headers={
 		'X-Forwarded-Host': 'filebrowser.myportal.org',

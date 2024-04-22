@@ -1,8 +1,10 @@
 from starlette import status
 
+from tests.conftest import requires_test_env
 from tests.util import install_app
 
 
+@requires_test_env('full')
 async def test_status_404(api_client):
 	await install_app(api_client, 'mock_app')
 	response = await api_client.get(
@@ -12,6 +14,7 @@ async def test_status_404(api_client):
 	assert '404' in response.text
 
 
+@requires_test_env('full')
 async def test_status_500(api_client):
 	await install_app(api_client, 'mock_app')
 	response = await api_client.get(

@@ -2,9 +2,11 @@ import docker
 from fastapi import status
 
 from portal_core.model.app_meta import InstalledApp, Status
+from tests.conftest import requires_test_env
 from tests.util import retry_async, wait_until_app_installed, install_app
 
 
+@requires_test_env('full')
 async def test_app_starts_and_stops(requests_mock, api_client):
 	docker_client = docker.from_env()
 	app_name = 'quick_stop'
@@ -48,6 +50,7 @@ async def test_app_starts_and_stops(requests_mock, api_client):
 	assert InstalledApp.parse_obj((await api_client.get(f'protected/apps/{app_name}')).json()).status == Status.STOPPED
 
 
+@requires_test_env('full')
 async def test_always_on_app_starts(requests_mock, api_client):
 	docker_client = docker.from_env()
 	app_name = 'always_on'
@@ -64,6 +67,7 @@ async def test_always_on_app_starts(requests_mock, api_client):
 	assert InstalledApp.parse_obj((await api_client.get(f'protected/apps/{app_name}')).json()).status == Status.RUNNING
 
 
+@requires_test_env('full')
 async def test_large_app_does_not_start(api_client):
 	app_name = 'large_app'
 	await install_app(api_client, app_name)
