@@ -28,11 +28,11 @@ async def control_apps():
 			InstalledApp.parse_obj(a)
 			for a in installed_apps.all()
 			if a['status'] not in (Status.INSTALLATION_QUEUED, Status.INSTALLING)]
-	tasks = [control_app(app.name) for app in installed_apps]
+	tasks = [_control_app(app.name) for app in installed_apps]
 	await asyncio.gather(*tasks)
 
 
-async def control_app(name: str):
+async def _control_app(name: str):
 	global last_access_dict
 	app_meta = get_app_metadata(name)
 
@@ -44,7 +44,3 @@ async def control_app(name: str):
 		idle_time_for_shutdown = app_meta.lifecycle.idle_time_for_shutdown
 		if last_access < time.time() - idle_time_for_shutdown:
 			await docker_stop_app(app_meta.name)
-
-
-class AppNotStarted(Exception):
-	pass

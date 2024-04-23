@@ -2,8 +2,8 @@ import io
 import logging
 import mimetypes
 from typing import List
-import aiofiles
 
+import aiofiles
 from fastapi import APIRouter, status, HTTPException, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from tinydb import Query
@@ -11,7 +11,7 @@ from tinydb import Query
 from portal_core.database.database import installed_apps_table
 from portal_core.model.app_meta import InstalledAppWithMeta, InstalledApp
 from portal_core.service import app_installation
-from portal_core.service.app_installation import AppAlreadyInstalled, AppNotInstalled
+from portal_core.service.app_installation.exceptions import AppAlreadyInstalled, AppNotInstalled
 from portal_core.service.app_tools import get_installed_apps_path, get_app_metadata, MetadataNotFound, \
 	enrich_installed_app_with_meta
 

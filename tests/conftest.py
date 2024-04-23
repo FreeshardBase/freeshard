@@ -196,7 +196,7 @@ def mock_app_store(mocker):
 		return target_zip
 
 	mocker.patch(
-		'portal_core.service.app_installation._download_app_zip',
+		'portal_core.service.app_installation.worker._download_app_zip',
 		mock_download_app_zip
 	)
 
@@ -205,7 +205,7 @@ def mock_app_store(mocker):
 		return source_zip.exists()
 
 	mocker.patch(
-		'portal_core.service.app_installation._app_exists_in_store',
+		'portal_core.service.app_installation.util.app_exists_in_store',
 		mock_app_exists_in_store
 	)
 

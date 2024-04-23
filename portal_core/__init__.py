@@ -14,7 +14,7 @@ from fastapi import FastAPI, Request, Response
 from .database import database
 from .service import app_installation, identity, app_lifecycle, peer, \
 	app_usage_reporting, websocket, migration, portal_controller, backup
-from .service.app_installation import cancel_all_installations
+from .service.app_installation.worker import installation_worker
 from .service.app_tools import docker_stop_all_apps, docker_shutdown_all_apps, docker_prune_images
 from .service.backup import start_backup
 from .util.async_util import PeriodicTask, BackgroundTask, CronTask
@@ -87,7 +87,6 @@ async def lifespan(_):
 
 	yield  # === run app ===
 
-	await cancel_all_installations(wait=True)
 	for t in background_tasks:
 		t.stop()
 	for t in background_tasks:
@@ -98,6 +97,7 @@ async def lifespan(_):
 
 def make_background_tasks() -> List[BackgroundTask]:
 	return [
+		installation_worker,
 		PeriodicTask(
 			app_lifecycle.control_apps, gconf.get('apps.lifecycle.refresh_interval')
 		),

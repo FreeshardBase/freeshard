@@ -17,6 +17,7 @@ log = logging.getLogger(__name__)
 
 
 async def docker_create_app_containers(name: str):
+	log.debug(f'creating containers for app {name}')
 	await subprocess('docker-compose', 'up', '--no-start', cwd=get_installed_apps_path() / name)
 
 
