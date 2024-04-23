@@ -56,6 +56,7 @@ def create_app():
 			log_request_and_response(request, response, log)
 			return response
 
+	log.info('finished app creation')
 	return app
 
 
@@ -85,7 +86,9 @@ async def lifespan(_):
 		for t in background_tasks:
 			t.start()
 
+	log.info('Startup complete')
 	yield  # === run app ===
+	log.info('Shutting down')
 
 	for t in background_tasks:
 		t.stop()
