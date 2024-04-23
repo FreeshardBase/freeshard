@@ -31,7 +31,7 @@ async def docker_start_app(name: str):
 		await subprocess('docker-compose', 'up', '-d', cwd=get_installed_apps_path() / name)
 		with installed_apps_table() as installed_apps:
 			installed_apps.update({'status': Status.RUNNING}, Query().name == name)
-		await signals.on_apps_update.send_async()
+		signals.async_on_apps_update.send()
 
 
 async def docker_stop_app(name: str, set_status: bool = True):
@@ -43,7 +43,7 @@ async def docker_stop_app(name: str, set_status: bool = True):
 		if set_status:
 			with installed_apps_table() as installed_apps:
 				installed_apps.update({'status': Status.STOPPED}, Query().name == name)
-		await signals.on_apps_update.send_async()
+		signals.async_on_apps_update.send()
 
 
 async def docker_shutdown_app(name: str, set_status: bool = True, force: bool = False):
@@ -55,7 +55,7 @@ async def docker_shutdown_app(name: str, set_status: bool = True, force: bool = 
 		if set_status:
 			with installed_apps_table() as installed_apps:
 				installed_apps.update({'status': Status.DOWN}, Query().name == name)
-		await signals.on_apps_update.send_async()
+		signals.async_on_apps_update.send()
 
 
 async def docker_stop_all_apps():

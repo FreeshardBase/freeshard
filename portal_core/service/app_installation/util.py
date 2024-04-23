@@ -12,6 +12,7 @@ from tinydb import Query
 from portal_core.database.database import installed_apps_table, identities_table
 from portal_core.model.app_meta import Status, InstalledApp
 from portal_core.model.identity import Identity, SafeIdentity
+from portal_core.service import websocket
 from portal_core.service.app_installation.exceptions import AppInIllegalStatus
 from portal_core.service.app_tools import get_installed_apps_path, get_app_metadata
 from portal_core.service.traefik_dynamic_config import AppInfo, compile_config
@@ -39,13 +40,13 @@ def assert_app_status(installed_app: InstalledApp, *allowed_status: Status):
 			f'App {installed_app.name} is in status {installed_app.status}, should be one of {allowed_status}')
 
 
-async def update_app_status(app_name: str, status: Status, message: str | None = None):
+def update_app_status(app_name: str, status: Status, message: str | None = None):
 	with installed_apps_table() as installed_apps:
 		updated_docs = installed_apps.update({'status': status}, Query().name == app_name)
 	if len(updated_docs) == 0:
 		raise KeyError(app_name)
 	log.debug(f'status of {app_name} updated to {status}' + (f': {message}' if message else ''))
-	await signals.on_apps_update.send_async(message=message)
+	signals.async_on_apps_update.send()
 
 
 async def app_exists_in_store(name: str) -> bool:

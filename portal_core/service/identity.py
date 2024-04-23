@@ -6,7 +6,7 @@ from tinydb import Query
 from portal_core.database.database import identities_table
 from portal_core.model.identity import Identity
 from portal_core.service.portal_controller import refresh_profile
-from portal_core.util.signals import on_first_terminal_add
+from portal_core.util.signals import async_on_first_terminal_add
 
 log = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ def get_default_identity() -> Identity:
 		return Identity(**identities.get(Query().is_default == True))  # noqa: E712
 
 
-@on_first_terminal_add.connect
+@async_on_first_terminal_add.connect
 async def enrich_identity_from_profile(_):
 	try:
 		profile = await refresh_profile()

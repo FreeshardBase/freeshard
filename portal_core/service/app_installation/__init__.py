@@ -36,7 +36,7 @@ async def install_app_from_store(
 		task_type='install from store',
 	)
 	installation_worker.enqueue(installation_task)
-	await signals.on_apps_update.send_async()
+	signals.async_on_apps_update.send()
 	log.info(f'created {installation_task}')
 
 
@@ -63,13 +63,13 @@ async def install_app_from_existing_zip(
 		task_type='install from zip',
 	)
 	installation_worker.enqueue(installation_task)
-	await signals.on_apps_update.send_async()
+	signals.async_on_apps_update.send()
 	log.info(f'created {installation_task}')
 
 
-async def uninstall_app(name: str):
+def uninstall_app(name: str):
 	try:
-		await update_app_status(name, Status.UNINSTALLATION_QUEUED)
+		update_app_status(name, Status.UNINSTALLATION_QUEUED)
 	except KeyError:
 		log.warning(f'during queueing of uninstallation of {name}: app not found in database')
 
@@ -79,14 +79,14 @@ async def uninstall_app(name: str):
 	)
 	installation_worker.enqueue(uninstallation_task)
 
-	await signals.on_apps_update.send_async()
+	signals.async_on_apps_update.send()
 	log.info(f'created {uninstallation_task}')
 
 
 async def reinstall_app(name: str):
 	if not await app_exists_in_store(name):
 		raise AppDoesNotExist(name)
-	await update_app_status(name, Status.UNINSTALLATION_QUEUED)
+	update_app_status(name, Status.UNINSTALLATION_QUEUED)
 
 	uninstallation_task = InstallationTask(
 		app_name=name,

@@ -52,9 +52,9 @@ def get_app_icon(name: str):
 
 
 @router.delete('/{name}', status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
-async def uninstall_app(name: str):
+def uninstall_app(name: str):
 	try:
-		await app_installation.uninstall_app(name)
+		app_installation.uninstall_app(name)
 	except AppNotInstalled:
 		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'App {name} is not installed')
 

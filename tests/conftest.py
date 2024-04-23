@@ -84,9 +84,7 @@ async def api_client(mocker, event_loop, mock_app_store) -> AsyncClient:
 			# so we have to configure the TestClient with the correct domain.
 			# This way, the TestClient remembers cookies
 			client.base_url = f'https://{whoareyou["domain"]}'
-			print('=== waiting for all apps to be installed ===')
 			await wait_until_all_apps_installed(client)
-			print('=== all apps installed ===')
 			yield client
 
 

@@ -19,6 +19,7 @@ from portal_core.util import signals
 from .exceptions import AppDoesNotExist
 from .util import update_app_status, render_docker_compose_template, write_traefik_dyn_config, get_app_from_db, \
 	assert_app_status
+from ...util.signals import on_app_install_error
 
 log = logging.getLogger(__name__)
 
@@ -78,25 +79,27 @@ installation_worker = InstallationWorker()
 async def _install_app_from_store(app_name: str):
 	installed_app = get_app_from_db(app_name)
 	assert_app_status(installed_app, Status.INSTALLATION_QUEUED)
-	await update_app_status(installed_app.name, Status.INSTALLING)
+	update_app_status(installed_app.name, Status.INSTALLING)
 	try:
 		zip_file = await _download_app_zip(installed_app.name)
 		await _install_app_from_zip(installed_app, zip_file)
-		await update_app_status(installed_app.name, Status.STOPPED)
+		update_app_status(installed_app.name, Status.STOPPED)
 	except Exception as e:
-		await update_app_status(installed_app.name, Status.ERROR, message=repr(e))
+		update_app_status(installed_app.name, Status.ERROR, message=repr(e))
+		on_app_install_error.send(e, app_name)
 
 
 async def _install_app_from_existing_zip(app_name: str):
 	installed_app = get_app_from_db(app_name)
 	assert_app_status(installed_app, Status.INSTALLATION_QUEUED)
-	await update_app_status(installed_app.name, Status.INSTALLING)
+	update_app_status(installed_app.name, Status.INSTALLING)
 	try:
 		zip_file = get_installed_apps_path() / installed_app.name / f'{installed_app.name}.zip'
 		await _install_app_from_zip(installed_app, zip_file)
-		await update_app_status(installed_app.name, Status.STOPPED)
+		update_app_status(installed_app.name, Status.STOPPED)
 	except Exception as e:
-		await update_app_status(installed_app.name, Status.ERROR, message=repr(e))
+		update_app_status(installed_app.name, Status.ERROR, message=repr(e))
+		on_app_install_error.send(e, app_name)
 
 
 async def _install_app_from_zip(installed_app, zip_file):
@@ -111,7 +114,7 @@ async def _install_app_from_zip(installed_app, zip_file):
 
 async def _uninstall_app_task(app_name: str):
 	try:
-		await update_app_status(app_name, Status.UNINSTALLING)
+		update_app_status(app_name, Status.UNINSTALLING)
 	except KeyError:
 		log.warning(f'during uninstallation of {app_name}: app not found in database')
 
@@ -127,7 +130,7 @@ async def _uninstall_app_task(app_name: str):
 	with installed_apps_table() as installed_apps:
 		installed_apps.remove(Query().name == app_name)
 	await write_traefik_dyn_config()
-	await signals.on_apps_update.send_async()
+	signals.async_on_apps_update.send()
 	log.info(f'uninstalled {app_name}')
 
 

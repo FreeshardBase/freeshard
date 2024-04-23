@@ -50,23 +50,23 @@ def get_terminal_by_name(name: str):
 
 
 @router.put('/id/{id_}')
-async def edit_terminal(id_: str, terminal: InputTerminal):
+def edit_terminal(id_: str, terminal: InputTerminal):
 	with terminals_table() as terminals:  # type: Table
 		if t := terminals.get(Query().id == id_):
 			existing_terminal = Terminal(**t)
 			existing_terminal.name = terminal.name
 			existing_terminal.icon = terminal.icon
 			terminals.update(existing_terminal.dict(), Query().id == id_)
-			await on_terminals_update.send_async()
+			on_terminals_update.send()
 		else:
 			raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
 
 @router.delete('/id/{id_}', status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
-async def delete_terminal_by_id(id_: str):
+def delete_terminal_by_id(id_: str):
 	with terminals_table() as terminals:  # type: Table
 		terminals.remove(Query().id == id_)
-	await on_terminals_update.send_async()
+	on_terminals_update.send()
 
 
 @router.get('/pairing-code', response_model=PairingCode, status_code=status.HTTP_201_CREATED)

@@ -19,6 +19,7 @@ async def ensure_app_is_running(app: InstalledApp):
 	if size_is_compatible(app_meta.minimum_portal_size):
 		global last_access_dict
 		last_access_dict[app.name] = time.time()
+		# todo: don't wait for this
 		await docker_start_app(app.name)
 
 
