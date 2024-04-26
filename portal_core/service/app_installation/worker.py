@@ -19,14 +19,13 @@ from portal_core.util import signals
 from .exceptions import AppDoesNotExist
 from .util import update_app_status, render_docker_compose_template, write_traefik_dyn_config, get_app_from_db, \
 	assert_app_status
-from ...util.signals import on_app_install_error
 
 log = logging.getLogger(__name__)
 
 
 class InstallationTask(BaseModel):
 	app_name: str
-	task_type: Literal['install from store', 'install from zip', 'uninstall']
+	task_type: Literal['install from store', 'install from zip', 'uninstall', 'reinstall']
 
 	def __str__(self):
 		return f'"{self.task_type}" task for {self.app_name}'
@@ -68,7 +67,9 @@ class InstallationWorker:
 				elif task.task_type == 'install from zip':
 					await _install_app_from_existing_zip(task.app_name)
 				elif task.task_type == 'uninstall':
-					await _uninstall_app_task(task.app_name)
+					await _uninstall_app(task.app_name)
+				elif task.task_type == 'reinstall':
+					await _reinstall_app(task.app_name)
 			finally:
 				self._task_queue.task_done()
 
@@ -86,7 +87,7 @@ async def _install_app_from_store(app_name: str):
 		update_app_status(installed_app.name, Status.STOPPED)
 	except Exception as e:
 		update_app_status(installed_app.name, Status.ERROR, message=repr(e))
-		on_app_install_error.send(e, app_name)
+		signals.on_app_install_error.send((e, app_name))
 
 
 async def _install_app_from_existing_zip(app_name: str):
@@ -99,20 +100,10 @@ async def _install_app_from_existing_zip(app_name: str):
 		update_app_status(installed_app.name, Status.STOPPED)
 	except Exception as e:
 		update_app_status(installed_app.name, Status.ERROR, message=repr(e))
-		on_app_install_error.send(e, app_name)
+		signals.on_app_install_error.send((e, app_name))
 
 
-async def _install_app_from_zip(installed_app, zip_file):
-	with zipfile.ZipFile(zip_file, "r") as zip_ref:
-		zip_ref.extractall(zip_file.parent)
-	zip_file.unlink()
-
-	await render_docker_compose_template(installed_app)
-	await docker_create_app_containers(installed_app.name)
-	await write_traefik_dyn_config()
-
-
-async def _uninstall_app_task(app_name: str):
+async def _uninstall_app(app_name: str):
 	try:
 		update_app_status(app_name, Status.UNINSTALLING)
 	except KeyError:
@@ -132,6 +123,39 @@ async def _uninstall_app_task(app_name: str):
 	await write_traefik_dyn_config()
 	signals.async_on_apps_update.send()
 	log.info(f'uninstalled {app_name}')
+
+
+async def _reinstall_app(app_name: str):
+	installed_app = get_app_from_db(app_name)
+	assert_app_status(installed_app, Status.REINSTALLATION_QUEUED)
+	update_app_status(installed_app.name, Status.REINSTALLING)
+
+	try:
+		await docker_stop_app(app_name, set_status=False)
+		await docker_shutdown_app(app_name, set_status=False)
+	except Exception as e:
+		log.error(f'Error while shutting down app {app_name}: {e:!r}')
+
+	log.debug(f'deleting app data for {app_name}')
+	shutil.rmtree(Path(get_installed_apps_path() / app_name), ignore_errors=True)
+
+	try:
+		zip_file = await _download_app_zip(installed_app.name)
+		await _install_app_from_zip(installed_app, zip_file)
+		update_app_status(installed_app.name, Status.STOPPED)
+	except Exception as e:
+		update_app_status(installed_app.name, Status.ERROR, message=repr(e))
+		signals.on_app_install_error.send((e, app_name))
+
+
+async def _install_app_from_zip(installed_app, zip_file):
+	with zipfile.ZipFile(zip_file, "r") as zip_ref:
+		zip_ref.extractall(zip_file.parent)
+	zip_file.unlink()
+
+	await render_docker_compose_template(installed_app)
+	await docker_create_app_containers(installed_app.name)
+	await write_traefik_dyn_config()
 
 
 async def _download_app_zip(name: str) -> Path:

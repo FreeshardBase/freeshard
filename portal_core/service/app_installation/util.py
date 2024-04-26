@@ -12,7 +12,6 @@ from tinydb import Query
 from portal_core.database.database import installed_apps_table, identities_table
 from portal_core.model.app_meta import Status, InstalledApp
 from portal_core.model.identity import Identity, SafeIdentity
-from portal_core.service import websocket
 from portal_core.service.app_installation.exceptions import AppInIllegalStatus
 from portal_core.service.app_tools import get_installed_apps_path, get_app_metadata
 from portal_core.service.traefik_dynamic_config import AppInfo, compile_config

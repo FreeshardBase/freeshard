@@ -60,9 +60,9 @@ def uninstall_app(name: str):
 
 
 @router.post('/{name}', status_code=status.HTTP_201_CREATED)
-async def install_app(name: str, branch: str = 'master'):
+async def install_app(name: str):
 	try:
-		await app_installation.install_app_from_store(name, store_branch=branch)
+		await app_installation.install_app_from_store(name)
 	except AppAlreadyInstalled:
 		raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f'App {name} is already installed')
 

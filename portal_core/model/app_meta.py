@@ -35,6 +35,8 @@ class Status(str, Enum):
 	RUNNING = 'running'
 	UNINSTALLATION_QUEUED = 'uninstallation_queued'
 	UNINSTALLING = 'uninstalling'
+	REINSTALLATION_QUEUED = 'reinstallation_queued'
+	REINSTALLING = 'reinstalling'
 	DOWN = 'down'
 	ERROR = 'error'
 
