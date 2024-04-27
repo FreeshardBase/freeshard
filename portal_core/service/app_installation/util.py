@@ -45,7 +45,7 @@ def update_app_status(app_name: str, status: Status, message: str | None = None)
 	if len(updated_docs) == 0:
 		raise KeyError(app_name)
 	log.debug(f'status of {app_name} updated to {status}' + (f': {message}' if message else ''))
-	signals.async_on_apps_update.send()
+	signals.on_apps_update.send()
 
 
 async def app_exists_in_store(name: str) -> bool:

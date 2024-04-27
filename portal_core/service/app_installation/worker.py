@@ -121,7 +121,7 @@ async def _uninstall_app(app_name: str):
 	with installed_apps_table() as installed_apps:
 		installed_apps.remove(Query().name == app_name)
 	await write_traefik_dyn_config()
-	signals.async_on_apps_update.send()
+	signals.on_apps_update.send()
 	log.info(f'uninstalled {app_name}')
 
 

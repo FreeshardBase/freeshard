@@ -202,6 +202,7 @@ async def test_last_connection(api_client: AsyncClient):
 	assert not last_connection_missing.last_connection
 
 	sleep(0.1)
+
 	assert (await api_client.get('internal/auth', headers={
 		'X-Forwarded-Host': 'mock_app.myportal.org',
 		'X-Forwarded-Uri': '/foo'
@@ -211,11 +212,13 @@ async def test_last_connection(api_client: AsyncClient):
 	).last_connection
 
 	sleep(0.1)
+
 	last_connection_2 = Terminal(
 		**(await api_client.get(f'protected/terminals/name/{t_name}')).json()
 	).last_connection
 
 	sleep(0.1)
+
 	assert (await api_client.get('internal/auth', headers={
 		'X-Forwarded-Host': 'mock_app.myportal.org',
 		'X-Forwarded-Uri': '/foo'

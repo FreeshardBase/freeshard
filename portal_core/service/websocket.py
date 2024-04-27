@@ -110,7 +110,7 @@ def send_terminal_add(terminal: Terminal):
 	ws_worker.broadcast_message('terminal_add', terminal.dict())
 
 
-@signals.async_on_apps_update.connect
+@signals.on_apps_update.connect
 def send_apps_update(_):
 	with installed_apps_table() as installed_apps:
 		all_apps = installed_apps.all()

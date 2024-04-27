@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 last_access_dict: Dict[str, float] = dict()
 
 
-@signals.on_request_to_app.connect
+@signals.async_on_request_to_app.connect
 async def ensure_app_is_running(app: InstalledApp):
 	app_meta = get_app_metadata(app.name)
 	if size_is_compatible(app_meta.minimum_portal_size):

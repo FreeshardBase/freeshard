@@ -15,7 +15,7 @@ from portal_core.model.identity import Identity, SafeIdentity
 from portal_core.service import pairing, peer as peer_service
 from portal_core.service.app_tools import get_app_metadata
 from portal_core.service.management import validate_shared_secret, SharedSecretInvalid
-from portal_core.util.signals import on_terminal_auth, on_request_to_app, on_peer_auth
+from portal_core.util.signals import on_terminal_auth, async_on_request_to_app, on_peer_auth
 
 log = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ def authenticate_terminal(response: Response, authorization: str = Cookie(None))
 		response.headers['X-Ptl-Client-Type'] = 'terminal'
 		response.headers['X-Ptl-Client-Id'] = terminal.id
 		response.headers['X-Ptl-Client-Name'] = terminal.name
-		on_terminal_auth.send_async(terminal)
+		on_terminal_auth.send(terminal)
 
 
 @router.get('/authenticate_management', status_code=status.HTTP_200_OK)
@@ -77,7 +77,7 @@ async def authenticate_and_authorize(
 				.render(auth=auth_state.header_values, portal=portal_header_values)
 	log.debug(f'granted auth for {x_forwarded_host}{x_forwarded_uri} with headers {response.headers.items()}')
 
-	await on_request_to_app.send_async(app)
+	await async_on_request_to_app.send_async(app)
 
 
 def _match_app(x_forwarded_host) -> InstalledApp:
@@ -118,7 +118,7 @@ async def _get_auth_state(request, authorization) -> AuthState:
 	except pairing.InvalidJwt as e:
 		log.debug(f'invalid terminal JWT: {e}')
 	else:
-		on_terminal_auth.send_async(terminal)
+		on_terminal_auth.send(terminal)
 		return AuthState(
 			x_ptl_client_type=AuthState.ClientType.TERMINAL,
 			x_ptl_client_id=terminal.id,

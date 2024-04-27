@@ -35,7 +35,7 @@ async def install_app_from_store(
 		task_type='install from store',
 	)
 	worker.installation_worker.enqueue(installation_task)
-	signals.async_on_apps_update.send()
+	signals.on_apps_update.send()
 	log.info(f'created {installation_task}')
 
 
@@ -62,7 +62,7 @@ async def install_app_from_existing_zip(
 		task_type='install from zip',
 	)
 	worker.installation_worker.enqueue(installation_task)
-	signals.async_on_apps_update.send()
+	signals.on_apps_update.send()
 	log.info(f'created {installation_task}')
 
 
@@ -78,7 +78,7 @@ def uninstall_app(name: str):
 	)
 	worker.installation_worker.enqueue(uninstallation_task)
 
-	signals.async_on_apps_update.send()
+	signals.on_apps_update.send()
 	log.info(f'created {uninstallation_task}')
 
 
