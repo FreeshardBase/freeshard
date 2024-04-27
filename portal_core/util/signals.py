@@ -6,7 +6,7 @@ on_terminal_add = Signal()
 on_terminal_auth = Signal()
 
 on_apps_update = Signal()
-async_on_request_to_app = Signal()  # todo: make sync
+on_request_to_app = Signal()
 on_app_install_error = Signal()
 
 async_on_peer_write = Signal()

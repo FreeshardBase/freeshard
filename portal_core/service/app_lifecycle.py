@@ -13,14 +13,13 @@ log = logging.getLogger(__name__)
 last_access_dict: Dict[str, float] = dict()
 
 
-@signals.async_on_request_to_app.connect
-async def ensure_app_is_running(app: InstalledApp):
+@signals.on_request_to_app.connect
+def ensure_app_is_running(app: InstalledApp):
 	app_meta = get_app_metadata(app.name)
 	if size_is_compatible(app_meta.minimum_portal_size):
 		global last_access_dict
 		last_access_dict[app.name] = time.time()
-		# todo: don't wait for this
-		await docker_start_app(app.name)
+		asyncio.create_task(docker_start_app(app.name), name=f'ensure {app.name} is running')
 
 
 async def control_apps():
