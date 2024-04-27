@@ -60,7 +60,7 @@ class InstallationWorker:
 	async def _run(self):
 		while True:
 			task = await self._task_queue.get()
-			log.debug(f'processing {task}')
+			log.info(f'processing {task}')
 			try:
 				if task.task_type == 'install from store':
 					await _install_app_from_store(task.app_name)
@@ -70,6 +70,7 @@ class InstallationWorker:
 					await _uninstall_app(task.app_name)
 				elif task.task_type == 'reinstall':
 					await _reinstall_app(task.app_name)
+				log.info(f'finished {task}')
 			finally:
 				self._task_queue.task_done()
 
@@ -151,6 +152,7 @@ async def _reinstall_app(app_name: str):
 async def _install_app_from_zip(installed_app, zip_file):
 	with zipfile.ZipFile(zip_file, "r") as zip_ref:
 		zip_ref.extractall(zip_file.parent)
+	signals.on_apps_update.send()
 	zip_file.unlink()
 
 	await render_docker_compose_template(installed_app)
