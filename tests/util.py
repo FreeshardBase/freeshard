@@ -46,9 +46,18 @@ async def wait_until_app_installed(api_client: AsyncClient, app_name, timeout=20
 	while True:
 		if time.time() > end:
 			raise TimeoutError(f'App {app_name} was not installed in time')
-		app = InstalledApp.parse_obj((await api_client.get(f'protected/apps/{app_name}')).json())
-		if app.status in (Status.INSTALLING, Status.INSTALLATION_QUEUED, Status.UNINSTALLING):
+		response = await api_client.get(f'protected/apps/{app_name}')
+		if response.status_code == status.HTTP_404_NOT_FOUND:
 			await asyncio.sleep(2)
+			continue
+		app = InstalledApp.parse_obj(response.json())
+		if app.status in (
+				Status.INSTALLING, Status.INSTALLATION_QUEUED,
+				Status.UNINSTALLING, Status.UNINSTALLATION_QUEUED,
+				Status.REINSTALLING, Status.REINSTALLATION_QUEUED,
+		):
+			await asyncio.sleep(2)
+			continue
 		elif app.status in (Status.STOPPED, Status.RUNNING):
 			return app
 		else:

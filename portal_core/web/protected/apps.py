@@ -2,8 +2,8 @@ import io
 import logging
 import mimetypes
 from typing import List
-import aiofiles
 
+import aiofiles
 from fastapi import APIRouter, status, HTTPException, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from tinydb import Query
@@ -11,7 +11,7 @@ from tinydb import Query
 from portal_core.database.database import installed_apps_table
 from portal_core.model.app_meta import InstalledAppWithMeta, InstalledApp
 from portal_core.service import app_installation
-from portal_core.service.app_installation import AppAlreadyInstalled, AppNotInstalled
+from portal_core.service.app_installation.exceptions import AppAlreadyInstalled, AppNotInstalled
 from portal_core.service.app_tools import get_installed_apps_path, get_app_metadata, MetadataNotFound, \
 	enrich_installed_app_with_meta
 
@@ -52,17 +52,17 @@ def get_app_icon(name: str):
 
 
 @router.delete('/{name}', status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
-async def uninstall_app(name: str):
+def uninstall_app(name: str):
 	try:
-		await app_installation.uninstall_app(name)
+		app_installation.uninstall_app(name)
 	except AppNotInstalled:
 		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'App {name} is not installed')
 
 
 @router.post('/{name}', status_code=status.HTTP_201_CREATED)
-async def install_app(name: str, branch: str = 'master'):
+async def install_app(name: str):
 	try:
-		await app_installation.install_app_from_store(name, store_branch=branch)
+		await app_installation.install_app_from_store(name)
 	except AppAlreadyInstalled:
 		raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f'App {name} is already installed')
 

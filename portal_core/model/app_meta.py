@@ -33,7 +33,10 @@ class Status(str, Enum):
 	INSTALLING = 'installing'
 	STOPPED = 'stopped'
 	RUNNING = 'running'
+	UNINSTALLATION_QUEUED = 'uninstallation_queued'
 	UNINSTALLING = 'uninstalling'
+	REINSTALLATION_QUEUED = 'reinstallation_queued'
+	REINSTALLING = 'reinstalling'
 	DOWN = 'down'
 	ERROR = 'error'
 
@@ -129,7 +132,6 @@ class InstalledApp(BaseModel):
 	installation_reason: InstallationReason = InstallationReason.UNKNOWN
 	status: str = Status.UNKNOWN
 	last_access: Optional[datetime.datetime] = None
-	from_branch: str | None = None
 
 
 class InstalledAppWithMeta(InstalledApp):
@@ -137,7 +139,7 @@ class InstalledAppWithMeta(InstalledApp):
 
 
 @signals.on_request_to_app.connect
-async def update_last_access(app: InstalledApp):
+def update_last_access(app: InstalledApp):
 	now = datetime.datetime.utcnow()
 	max_update_frequency = datetime.timedelta(seconds=gconf.get('apps.last_access.max_update_frequency'))
 	if app.last_access and now - app.last_access < max_update_frequency:

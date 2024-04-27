@@ -57,9 +57,9 @@ async def start_backup():
 	async def on_task_done(task: asyncio.Task):
 		if task.exception():
 			log.error('Backup failed\n' + ''.join(traceback.format_exception(task.exception())))
-			await signals.on_backup_update.send_async(task.exception())
+			signals.on_backup_update.send(task.exception())
 		else:
-			await signals.on_backup_update.send_async()
+			signals.on_backup_update.send()
 
 	task.add_done_callback(lambda task: asyncio.create_task(on_task_done(task)))
 

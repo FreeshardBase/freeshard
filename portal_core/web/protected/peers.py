@@ -42,7 +42,7 @@ async def put_peer(p: InputPeer):
 		else:
 			peers.insert(p.dict())
 			log.info(f'added {p}')
-	await signals.on_peer_write.send_async(Peer(**p.dict()))
+	await signals.async_on_peer_write.send_async(Peer(**p.dict()))
 	return p
 
 

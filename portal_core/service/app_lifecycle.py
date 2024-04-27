@@ -14,12 +14,12 @@ last_access_dict: Dict[str, float] = dict()
 
 
 @signals.on_request_to_app.connect
-async def ensure_app_is_running(app: InstalledApp):
+def ensure_app_is_running(app: InstalledApp):
 	app_meta = get_app_metadata(app.name)
 	if size_is_compatible(app_meta.minimum_portal_size):
 		global last_access_dict
 		last_access_dict[app.name] = time.time()
-		await docker_start_app(app.name)
+		asyncio.create_task(docker_start_app(app.name), name=f'ensure {app.name} is running')
 
 
 async def control_apps():
@@ -28,11 +28,11 @@ async def control_apps():
 			InstalledApp.parse_obj(a)
 			for a in installed_apps.all()
 			if a['status'] not in (Status.INSTALLATION_QUEUED, Status.INSTALLING)]
-	tasks = [control_app(app.name) for app in installed_apps]
+	tasks = [_control_app(app.name) for app in installed_apps]
 	await asyncio.gather(*tasks)
 
 
-async def control_app(name: str):
+async def _control_app(name: str):
 	global last_access_dict
 	app_meta = get_app_metadata(name)
 
@@ -44,7 +44,3 @@ async def control_app(name: str):
 		idle_time_for_shutdown = app_meta.lifecycle.idle_time_for_shutdown
 		if last_access < time.time() - idle_time_for_shutdown:
 			await docker_stop_app(app_meta.name)
-
-
-class AppNotStarted(Exception):
-	pass

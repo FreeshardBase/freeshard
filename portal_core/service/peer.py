@@ -105,6 +105,6 @@ class _KR(HTTPSignatureKeyResolver):
 			raise KeyError(f'No public key known for peer id {key_id}')
 
 
-@signals.on_peer_write.connect
+@signals.async_on_peer_write.connect
 async def _on_peer_write(peer: Peer):
 	await update_peer_meta(peer)

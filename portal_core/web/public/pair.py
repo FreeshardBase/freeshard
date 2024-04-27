@@ -7,7 +7,7 @@ from portal_core.database.database import terminals_table, identities_table
 from portal_core.model.identity import Identity
 from portal_core.model.terminal import Terminal, InputTerminal
 from portal_core.service import pairing
-from portal_core.util.signals import on_first_terminal_add, on_terminals_update, on_terminal_add
+from portal_core.util.signals import async_on_first_terminal_add, on_terminals_update, on_terminal_add
 
 log = logging.getLogger(__name__)
 
@@ -37,9 +37,9 @@ async def add_terminal(code: str, terminal: InputTerminal, response: Response):
 		domain=default_identity.domain,
 		secure=True, httponly=True, expires=60 * 60 * 24 * 356 * 10)
 
-	await on_terminals_update.send_async()
-	await on_terminal_add.send_async(new_terminal)
+	on_terminals_update.send()
+	on_terminal_add.send(new_terminal)
 	if is_first_terminal:
-		await on_first_terminal_add.send_async(new_terminal)
+		await async_on_first_terminal_add.send_async(new_terminal)
 
 	log.info(f'added {new_terminal}')

@@ -76,48 +76,51 @@ class WSWorker(BackgroundTask):
 	async def send_personal_message(self, message: str, websocket: WebSocket):
 		await websocket.send_text(message)
 
-	async def broadcast_message(self, message_type: str, message: Dict | List | None = None):
+	def broadcast_message(self, message_type: str, message: Dict | List | None = None):
 		log.debug(f'enqueuing {message_type} message for sending, queue size: {self.outgoing_messages.qsize()}')
-		await self.outgoing_messages.put(Message(
-			message_type=message_type,
-			message=message or {},
-		))
+		try:
+			self.outgoing_messages.put_nowait(Message(
+				message_type=message_type,
+				message=message or {},
+			))
+		except asyncio.QueueFull:
+			log.error('Websocket message queue is full, dropping message')
 
 
 ws_worker = WSWorker()
 
 
 @signals.on_backup_update.connect
-async def send_backup_update(e: Exception | None = None):
-	await ws_worker.broadcast_message(
+def send_backup_update(e: Exception | None = None):
+	ws_worker.broadcast_message(
 		'backup_update',
 		{'error': format_error(e)} if e else None
 	)
 
 
 @signals.on_terminals_update.connect
-async def send_terminals_update(_):
+def send_terminals_update(_):
 	with terminals_table() as terminals:  # type: Table
 		all_terminals = terminals.all()
-	await ws_worker.broadcast_message('terminals_update', all_terminals)
+	ws_worker.broadcast_message('terminals_update', all_terminals)
 
 
 @signals.on_terminal_add.connect
-async def send_terminal_add(terminal: Terminal):
-	await ws_worker.broadcast_message('terminal_add', terminal.dict())
+def send_terminal_add(terminal: Terminal):
+	ws_worker.broadcast_message('terminal_add', terminal.dict())
 
 
 @signals.on_apps_update.connect
-async def send_apps_update(_):
+def send_apps_update(_):
 	with installed_apps_table() as installed_apps:
 		all_apps = installed_apps.all()
 	enriched_apps = [enrich_installed_app_with_meta(InstalledApp.parse_obj(app)) for app in all_apps]
-	await ws_worker.broadcast_message('apps_update', enriched_apps)
+	ws_worker.broadcast_message('apps_update', enriched_apps)
 
 
 @signals.on_app_install_error.connect
-async def send_app_install_error(e: Exception, name: str):
-	await ws_worker.broadcast_message(
+def send_app_install_error(e: Exception, name: str):
+	ws_worker.broadcast_message(
 		'app_install_error',
 		{'name': name, 'error': format_error(e)}
 	)

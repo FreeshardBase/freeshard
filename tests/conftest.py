@@ -27,8 +27,7 @@ from portal_core.model.app_meta import PortalSize
 from portal_core.model.backend.portal_meta import PortalMetaExt, Size
 from portal_core.model.identity import OutputIdentity, Identity
 from portal_core.model.profile import Profile
-from portal_core.service import websocket
-from portal_core.service.app_installation import login_docker_registries
+from portal_core.service import websocket, app_installation
 from portal_core.service.app_tools import get_installed_apps_path
 from portal_core.web.internal.call_peer import _get_app_for_ip_address
 from tests.util import docker_network_portal, wait_until_all_apps_installed, \
@@ -41,7 +40,7 @@ pytest_plugins = ('pytest_asyncio',)
 def setup_all():
 	# Logging in with each api_client hit a rate limit or something.
 	# We do it one time here, and then patch the login function to noop for each api_client
-	asyncio.run(login_docker_registries())
+	asyncio.run(app_installation.login_docker_registries())
 
 
 @pytest.fixture(autouse=True)
@@ -65,9 +64,13 @@ def config_override(tmp_path, request):
 
 
 @pytest_asyncio.fixture
-async def api_client(mocker, event_loop, mock_app_store) -> AsyncClient:
+async def api_client(mocker, event_loop) -> AsyncClient:
 	# Modules that define some global state need to be reloaded
 	importlib.reload(websocket)
+	importlib.reload(app_installation.worker)
+
+	# Mocks must be set up after modules are reloaded or else they will be overwritten
+	mock_app_store(mocker)
 
 	async def noop():
 		pass
@@ -185,7 +188,6 @@ def peer_mock_requests(mocker):
 	_get_app_for_ip_address.cache_clear()
 
 
-@pytest.fixture
 def mock_app_store(mocker):
 	async def mock_download_app_zip(name: str, _=None) -> Path:
 		source_zip = mock_app_store_path() / name / f'{name}.zip'
@@ -196,16 +198,16 @@ def mock_app_store(mocker):
 		return target_zip
 
 	mocker.patch(
-		'portal_core.service.app_installation._download_app_zip',
+		'portal_core.service.app_installation.worker._download_app_zip',
 		mock_download_app_zip
 	)
 
-	async def mock_app_exists_in_store(name: str, _) -> bool:
+	async def mock_app_exists_in_store(name: str) -> bool:
 		source_zip = mock_app_store_path() / name / f'{name}.zip'
 		return source_zip.exists()
 
 	mocker.patch(
-		'portal_core.service.app_installation._app_exists_in_store',
+		'portal_core.service.app_installation.util.app_exists_in_store',
 		mock_app_exists_in_store
 	)
 
