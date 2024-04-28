@@ -63,6 +63,8 @@ def uninstall_app(name: str):
 async def install_app(name: str):
 	try:
 		await app_installation.install_app_from_store(name)
+	except app_installation.exceptions.AppDoesNotExist:
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'App {name} does not exist')
 	except AppAlreadyInstalled:
 		raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f'App {name} is already installed')
 
@@ -71,6 +73,8 @@ async def install_app(name: str):
 async def reinstall_app(name: str):
 	try:
 		await app_installation.reinstall_app(name)
+	except app_installation.exceptions.AppDoesNotExist:
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'App {name} does not exist')
 	except AppNotInstalled:
 		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'App {name} is not installed')
 
@@ -88,4 +92,9 @@ async def install_custom_app(file: UploadFile):
 		while chunk := await file.read(1024):
 			await f.write(chunk)
 
-	await app_installation.install_app_from_existing_zip(file.filename[:-4])
+	try:
+		await app_installation.install_app_from_existing_zip(file.filename[:-4])
+	except app_installation.exceptions.AppDoesNotExist:
+		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'App {file.filename[:-4]} does not exist')
+	except app_installation.exceptions.AppAlreadyInstalled:
+		raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f'App {file.filename[:-4]} is already installed')
