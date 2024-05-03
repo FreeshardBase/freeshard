@@ -94,7 +94,5 @@ async def install_custom_app(file: UploadFile):
 
 	try:
 		await app_installation.install_app_from_existing_zip(file.filename[:-4])
-	except app_installation.exceptions.AppDoesNotExist:
-		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'App {file.filename[:-4]} does not exist')
 	except app_installation.exceptions.AppAlreadyInstalled:
 		raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f'App {file.filename[:-4]} is already installed')

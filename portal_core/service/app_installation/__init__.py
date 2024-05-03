@@ -43,9 +43,6 @@ async def install_app_from_existing_zip(
 		name: str,
 		installation_reason: InstallationReason = InstallationReason.CUSTOM
 ):
-	if not await util.app_exists_in_store(name):
-		raise AppDoesNotExist(name)
-
 	if util.app_exists_in_db(name):
 		raise AppAlreadyInstalled(name)
 
