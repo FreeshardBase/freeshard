@@ -13,7 +13,7 @@ class Profile(BaseModel):
 	owner: Optional[str]
 	owner_email: Optional[str]
 	time_created: datetime
-	time_assigned: datetime  # todo: make optional in order to support unassigned portals
+	time_assigned: Optional[datetime]
 	delete_after: Optional[datetime]
 	portal_size: PortalSize
 	max_portal_size: Optional[PortalSize]
