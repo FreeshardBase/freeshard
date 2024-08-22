@@ -32,7 +32,7 @@ setup(
 		'aiohttp',
 		'requests-http-signature',
 		'aiozipstream',
-		'email-validator',
+		'email_validator',
 		'croniter',
 		'azure-storage-blob',
 		'asgi-lifespan==2.*',
