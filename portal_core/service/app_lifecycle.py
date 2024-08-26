@@ -16,7 +16,7 @@ last_access_dict: Dict[str, float] = dict()
 
 @signals.on_request_to_app.connect
 def ensure_app_is_running(app: InstalledApp):
-	if disk.disk_space_low:
+	if disk.current_disk_usage.disk_space_low:
 		return
 	app_meta = get_app_metadata(app.name)
 	if size_is_compatible(app_meta.minimum_portal_size):
@@ -39,7 +39,7 @@ async def _control_app(name: str):
 	global last_access_dict
 	app_meta = get_app_metadata(name)
 
-	if disk.disk_space_low:
+	if disk.current_disk_usage.disk_space_low:
 		await docker_stop_app(name)
 		return
 

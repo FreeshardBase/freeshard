@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from . import apps, backup, feedback, identities, peers, terminals, help, management, settings, ws
+from . import apps, backup, feedback, identities, peers, terminals, help, management, settings, stats, ws
 
 router = APIRouter(
 	prefix='/protected',
@@ -16,4 +16,5 @@ router.include_router(terminals.router)
 router.include_router(help.router)
 router.include_router(management.router)
 router.include_router(settings.router)
+router.include_router(stats.router)
 router.include_router(ws.router)

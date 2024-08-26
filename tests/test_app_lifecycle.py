@@ -50,7 +50,7 @@ async def test_app_starts_and_stops(requests_mock, api_client):
 	assert InstalledApp.parse_obj((await api_client.get(f'protected/apps/{app_name}')).json()).status == Status.STOPPED
 
 
-#@requires_test_env('full')
+@requires_test_env('full')
 async def test_always_on_app_starts(requests_mock, api_client):
 	docker_client = docker.from_env()
 	app_name = 'always_on'

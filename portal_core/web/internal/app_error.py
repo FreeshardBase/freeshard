@@ -50,7 +50,7 @@ def get_splash_behaviour(request: Request):
 		display_status='Unknown Status...',
 		do_reload=True,
 	)
-	if disk.disk_space_low:
+	if disk.current_disk_usage.disk_space_low:
 		behaviour.display_status = 'Low Disk Space'
 		behaviour.do_reload = False
 	if not size_is_compatible(app_meta.minimum_portal_size):
