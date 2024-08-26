@@ -13,7 +13,7 @@ from fastapi import FastAPI, Request, Response
 
 from .database import database
 from .service import app_installation, identity, app_lifecycle, peer, \
-	app_usage_reporting, websocket, migration, portal_controller, backup
+	app_usage_reporting, websocket, migration, portal_controller, backup, disk
 from .service.app_tools import docker_stop_all_apps, docker_shutdown_all_apps, docker_prune_images
 from .service.backup import start_backup
 from .util.async_util import PeriodicTask, BackgroundTask, CronTask
@@ -120,6 +120,7 @@ def make_background_tasks() -> List[BackgroundTask]:
 			cron=gconf.get('services.backup.timing.base_schedule'),
 			max_random_delay=gconf.get('services.backup.timing.max_random_delay'),
 		),
+		PeriodicTask(disk.update_disk_space, 3),
 		websocket.ws_worker,
 	]
 
