@@ -3,6 +3,8 @@ import shutil
 
 from pydantic import BaseModel
 
+from portal_core.util import signals
+
 log = logging.getLogger(__name__)
 
 
@@ -23,3 +25,4 @@ async def update_disk_space():
 		free_gb=usage.free / 1024 ** 3,
 		disk_space_low=usage.free / 1024 ** 3 < 1
 	)
+	signals.on_disk_usage_update.send(current_disk_usage)

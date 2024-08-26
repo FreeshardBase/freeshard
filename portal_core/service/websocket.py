@@ -11,6 +11,7 @@ from portal_core.database.database import terminals_table, installed_apps_table
 from portal_core.model.app_meta import InstalledApp
 from portal_core.model.terminal import Terminal
 from portal_core.service.app_tools import enrich_installed_app_with_meta
+from portal_core.service.disk import DiskUsage
 from portal_core.util import signals
 from portal_core.util.async_util import BackgroundTask
 from portal_core.util.misc import format_error
@@ -96,6 +97,11 @@ def send_backup_update(e: Exception | None = None):
 		'backup_update',
 		{'error': format_error(e)} if e else None
 	)
+
+
+@signals.on_disk_usage_update.connect
+def send_disk_usage_update(disk_usage: DiskUsage):
+	ws_worker.broadcast_message('disk_usage_update', disk_usage.dict())
 
 
 @signals.on_terminals_update.connect
