@@ -13,3 +13,5 @@ async_on_peer_write = Signal()
 on_peer_auth = Signal()
 
 on_backup_update = Signal()
+
+on_disk_usage_update = Signal()

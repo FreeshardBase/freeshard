@@ -10,6 +10,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
+from portal_core.service import disk
 from portal_core.service.app_tools import get_app_metadata, MetadataNotFound, get_installed_apps_path, \
 	size_is_compatible
 
@@ -49,6 +50,9 @@ def get_splash_behaviour(request: Request):
 		display_status='Unknown Status...',
 		do_reload=True,
 	)
+	if disk.current_disk_usage.disk_space_low:
+		behaviour.display_status = 'Low Disk Space'
+		behaviour.do_reload = False
 	if not size_is_compatible(app_meta.minimum_portal_size):
 		display_size = app_meta.minimum_portal_size.value.upper()
 		behaviour.display_status = f'Portal too small, need at least {display_size}'
