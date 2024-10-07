@@ -109,6 +109,7 @@ class Lifecycle(BaseModel):
 class AppMeta(BaseModel):
 	v: str
 	app_version: str
+	upstream_repo: str | None
 	name: str
 	pretty_name: str
 	icon: str
