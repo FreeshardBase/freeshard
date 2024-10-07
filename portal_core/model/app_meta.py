@@ -110,6 +110,7 @@ class AppMeta(BaseModel):
 	v: str
 	app_version: str
 	upstream_repo: str | None
+	homepage: str | None
 	name: str
 	pretty_name: str
 	icon: str
@@ -121,9 +122,14 @@ class AppMeta(BaseModel):
 
 	@root_validator(pre=True)
 	def migrate(cls, values):
+		migration_count = 0
 		while values['v'] != CURRENT_VERSION:
+			if migration_count > len(app_meta_migration.migrations):
+				raise Exception(
+					'migration seems to be stuck, perhaps a migration does not increment the version number?')
 			migrate = app_meta_migration.migrations[values['v']]
 			values = migrate(values)
+			migration_count += 1
 		return values
 
 
