@@ -35,6 +35,7 @@ class InstallationWorker:
 	def __init__(self):
 		self._task_queue: asyncio.Queue[InstallationTask] = asyncio.Queue()
 		self.is_started = False
+		self.current_task = None
 		self._task = None
 
 	def enqueue(self, task: InstallationTask):
@@ -59,20 +60,23 @@ class InstallationWorker:
 
 	async def _run(self):
 		while True:
-			task = await self._task_queue.get()
-			log.info(f'processing {task}')
+			self.current_task = await self._task_queue.get()
+			log.info(f'processing {self.current_task}')
 			try:
-				if task.task_type == 'install from store':
-					await _install_app_from_store(task.app_name)
-				elif task.task_type == 'install from zip':
-					await _install_app_from_existing_zip(task.app_name)
-				elif task.task_type == 'uninstall':
-					await _uninstall_app(task.app_name)
-				elif task.task_type == 'reinstall':
-					await _reinstall_app(task.app_name)
-				log.info(f'finished {task}')
+				if self.current_task.task_type == 'install from store':
+					await _install_app_from_store(self.current_task.app_name)
+				elif self.current_task.task_type == 'install from zip':
+					await _install_app_from_existing_zip(self.current_task.app_name)
+				elif self.current_task.task_type == 'uninstall':
+					await _uninstall_app(self.current_task.app_name)
+				elif self.current_task.task_type == 'reinstall':
+					await _reinstall_app(self.current_task.app_name)
+				log.info(f'finished {self.current_task}')
+			except Exception as e:
+				log.error(f'Error during {self.current_task}: {e}')
 			finally:
 				self._task_queue.task_done()
+				self.current_task = None
 
 
 installation_worker = InstallationWorker()

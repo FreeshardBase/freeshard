@@ -11,3 +11,6 @@ GET http://127.0.0.1:8000/protected/backup/info
 GET http://127.0.0.1:8000/protected/backup/passphrase
 X-Ptl-Client-Id: my-terminal
 
+### Get Tasks Status
+
+GET http://127.0.0.1:8000/protected/stats/tasks

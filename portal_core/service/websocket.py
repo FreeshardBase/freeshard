@@ -2,7 +2,7 @@ import asyncio
 import logging
 from asyncio import Task
 from contextlib import suppress
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from pydantic import BaseModel
 from starlette.websockets import WebSocket
@@ -125,7 +125,8 @@ def send_apps_update(_):
 
 
 @signals.on_app_install_error.connect
-def send_app_install_error(e: Exception, name: str):
+def send_app_install_error(args: Tuple[Exception, str]):
+	e, name = args
 	ws_worker.broadcast_message(
 		'app_install_error',
 		{'name': name, 'error': format_error(e)}
