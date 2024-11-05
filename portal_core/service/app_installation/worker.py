@@ -11,7 +11,7 @@ import httpx
 from pydantic import BaseModel
 from tinydb import Query
 
-from portal_core.database.database import installed_apps_table
+from portal_core.old_database.database import installed_apps_table
 from portal_core.model.app_meta import Status
 from portal_core.service.app_tools import get_installed_apps_path, docker_create_app_containers, docker_stop_app, \
 	docker_shutdown_app

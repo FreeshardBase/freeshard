@@ -10,8 +10,8 @@ from typing import List
 import gconf
 from requests import HTTPError
 
-from portal_core import database
-from portal_core.database.database import backups_table
+from portal_core.old_database import database as old_database
+from portal_core.old_database.database import backups_table
 from portal_core.model.backup import BackupReport, BackupStats, BackupPassphraseLastAccessInfoDB
 from portal_core.service.portal_controller import get_backup_sas_url
 from portal_core.util import passphrase as passphrase_util, signals
@@ -135,7 +135,7 @@ async def _backup_directory(container_name, rel_directory, obscured_passphrase, 
 
 
 async def _get_obscured_passphrase():
-	passphrase = database.get_value(STORE_KEY_BACKUP_PASSPHRASE)
+	passphrase = old_database.get_value(STORE_KEY_BACKUP_PASSPHRASE)
 	obscured_passphrase = subprocess.run(
 		['rclone', 'obscure', passphrase], capture_output=True, text=True).stdout.strip()
 	return obscured_passphrase
@@ -154,23 +154,23 @@ def get_latest_backup_report() -> BackupReport | None:
 
 def ensure_packup_passphrase():
 	try:
-		database.get_value(STORE_KEY_BACKUP_PASSPHRASE)
+		old_database.get_value(STORE_KEY_BACKUP_PASSPHRASE)
 	except KeyError:
 		passphrase_numbers = passphrase_util.generate_passphrase_numbers(10)
 		passphrase = passphrase_util.get_passphrase(passphrase_numbers)
-		database.set_value(STORE_KEY_BACKUP_PASSPHRASE, passphrase)
+		old_database.set_value(STORE_KEY_BACKUP_PASSPHRASE, passphrase)
 		log.info('Generated new backup passphrase')
 	else:
 		log.info('Backup passphrase already exists')
 
 
 def get_backup_passphrase(terminal_id: str) -> str:
-	passphrase = database.get_value(STORE_KEY_BACKUP_PASSPHRASE)
+	passphrase = old_database.get_value(STORE_KEY_BACKUP_PASSPHRASE)
 	last_access_info = BackupPassphraseLastAccessInfoDB(
 		time=datetime.datetime.now(datetime.timezone.utc),
 		terminal_id=terminal_id,
 	)
-	database.set_value(STORE_KEY_BACKUP_PASSPHRASE_LAST_ACCESS, last_access_info.dict())
+	old_database.set_value(STORE_KEY_BACKUP_PASSPHRASE_LAST_ACCESS, last_access_info.dict())
 	return passphrase
 
 

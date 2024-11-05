@@ -7,7 +7,7 @@ from typing import Dict, List, Tuple
 from pydantic import BaseModel
 from starlette.websockets import WebSocket
 
-from portal_core.database.database import terminals_table, installed_apps_table
+from portal_core.old_database.database import terminals_table, installed_apps_table
 from portal_core.model.app_meta import InstalledApp
 from portal_core.model.terminal import Terminal
 from portal_core.service.app_tools import enrich_installed_app_with_meta

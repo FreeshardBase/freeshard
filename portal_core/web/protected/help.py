@@ -7,7 +7,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 from tinydb import Query
 
-from portal_core.database.database import tours_table
+from portal_core.old_database.database import tours_table
 
 log = logging.getLogger(__name__)
 

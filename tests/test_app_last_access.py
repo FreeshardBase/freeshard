@@ -4,7 +4,7 @@ from typing import Optional
 
 from tinydb import Query
 
-from portal_core.database.database import installed_apps_table
+from portal_core.old_database.database import installed_apps_table
 from portal_core.model.app_meta import InstalledApp
 from tests.conftest import requires_test_env
 

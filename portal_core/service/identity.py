@@ -3,7 +3,7 @@ import logging
 from requests import HTTPError
 from tinydb import Query
 
-from portal_core.database.database import identities_table
+from portal_core.old_database.database import identities_table
 from portal_core.model.identity import Identity
 from portal_core.service.portal_controller import refresh_profile
 from portal_core.util.signals import async_on_first_terminal_add

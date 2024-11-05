@@ -9,8 +9,8 @@ import jwt
 from pydantic import BaseModel
 from tinydb import Query
 
-from portal_core import database
-from portal_core.database.database import terminals_table
+from portal_core.old_database import database as old_database
+from portal_core.old_database.database import terminals_table
 from portal_core.model.terminal import Terminal
 
 STORE_KEY_JWT_SECRET = 'terminal_jwt_secret'
@@ -33,13 +33,13 @@ def make_pairing_code(deadline: int = None):
 		valid_until=now + timedelta(
 			seconds=deadline or gconf.get('terminal.pairing code deadline', default=600))
 	)
-	database.set_value(STORE_KEY_PAIRING_CODE, pairing_code.dict())
+	old_database.set_value(STORE_KEY_PAIRING_CODE, pairing_code.dict())
 	return pairing_code
 
 
 def redeem_pairing_code(incoming_code: str):
 	try:
-		existing_pairing_code = PairingCode(**database.get_value(STORE_KEY_PAIRING_CODE))
+		existing_pairing_code = PairingCode(**old_database.get_value(STORE_KEY_PAIRING_CODE))
 	except KeyError:
 		raise InvalidPairingCode('no pairing code was issued yet')
 	if existing_pairing_code.code != incoming_code:
@@ -48,7 +48,7 @@ def redeem_pairing_code(incoming_code: str):
 	if datetime.now(timezone.utc) > existing_pairing_code.valid_until:
 		raise PairingCodeExpired(f'issued code ({existing_pairing_code.code}) is expired')
 	else:
-		database.remove_value(STORE_KEY_PAIRING_CODE)
+		old_database.remove_value(STORE_KEY_PAIRING_CODE)
 
 
 def create_terminal_jwt(terminal_id, **kwargs) -> str:
@@ -85,11 +85,11 @@ def verify_terminal_jwt(token: str = None):
 
 def _ensure_jwt_secret():
 	try:
-		database.get_value(STORE_KEY_JWT_SECRET)
+		old_database.get_value(STORE_KEY_JWT_SECRET)
 	except KeyError:
 		jwt_secret = secrets.token_urlsafe(gconf.get('terminal.jwt secret length', default=64))
-		database.set_value(STORE_KEY_JWT_SECRET, jwt_secret)
-	return database.get_value(STORE_KEY_JWT_SECRET)
+		old_database.set_value(STORE_KEY_JWT_SECRET, jwt_secret)
+	return old_database.get_value(STORE_KEY_JWT_SECRET)
 
 
 class InvalidPairingCode(Exception):

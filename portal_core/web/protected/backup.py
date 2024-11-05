@@ -8,8 +8,8 @@ from starlette.responses import StreamingResponse
 from tinydb import Query
 from zipstream import ZipStream
 
-from portal_core.database import database
-from portal_core.database.database import terminals_table
+from portal_core.old_database import database
+from portal_core.old_database.database import terminals_table
 from portal_core.model.backup import BackupPassphraseResponse, BackupInfoResponse, BackupPassphraseLastAccessInfoDB, \
 	BackupPassphraseLastAccessInfoResponse
 from portal_core.model.terminal import Terminal

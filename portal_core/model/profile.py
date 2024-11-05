@@ -3,7 +3,7 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from portal_core.database.database import set_value, get_value
+from portal_core.old_database.database import set_value, get_value
 from portal_core.model.app_meta import PortalSize
 from portal_core.model.backend.portal_meta import PortalMetaExt
 

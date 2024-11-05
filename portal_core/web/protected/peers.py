@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, status
 from tinydb import Query
 
 import portal_core.service.peer as peer_service
-from portal_core.database.database import peers_table
+from portal_core.old_database.database import peers_table
 from portal_core.model.peer import Peer, InputPeer
 from portal_core.util import signals
 

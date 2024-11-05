@@ -4,7 +4,7 @@ from httpx import AsyncClient
 from starlette import status
 from tinydb.operations import delete
 
-from portal_core.database.database import terminals_table
+from portal_core.old_database.database import terminals_table
 from portal_core.model.backend.portal_meta import PortalMetaExt
 from portal_core.model.terminal import Terminal, Icon
 from tests.conftest import requests_mock_context, mock_meta, requires_test_env

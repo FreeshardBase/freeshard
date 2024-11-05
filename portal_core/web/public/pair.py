@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, HTTPException, status, Response
 from tinydb import Query
 
-from portal_core.database.database import terminals_table, identities_table
+from portal_core.old_database.database import terminals_table, identities_table
 from portal_core.model.identity import Identity
 from portal_core.model.terminal import Terminal, InputTerminal
 from portal_core.service import pairing

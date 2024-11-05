@@ -11,7 +11,7 @@ from requests import ConnectionError, HTTPError
 import gconf
 from fastapi import FastAPI, Request, Response
 
-from .database import database
+from .old_database import database
 from .service import app_installation, identity, app_lifecycle, peer, \
 	app_usage_reporting, websocket, migration, portal_controller, backup, disk
 from .service.app_tools import docker_stop_all_apps, docker_shutdown_all_apps, docker_prune_images

@@ -1,6 +1,6 @@
 import logging
 
-from portal_core.database.database import get_db
+from portal_core.old_database.database import get_db
 from portal_core.service.app_installation import install_app_from_store, AppDoesNotExist
 
 log = logging.getLogger(__name__)

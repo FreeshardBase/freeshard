@@ -7,7 +7,7 @@ import gconf
 from pydantic import BaseModel, root_validator, validator
 from tinydb import Query
 
-from portal_core.database.database import installed_apps_table
+from portal_core.old_database.database import installed_apps_table
 from portal_core.model import app_meta_migration
 from portal_core.util import signals
 

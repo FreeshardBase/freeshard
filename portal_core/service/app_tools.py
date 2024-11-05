@@ -7,7 +7,7 @@ import gconf
 from tinydb import Query
 
 import portal_core.model.profile
-from portal_core.database.database import installed_apps_table
+from portal_core.old_database.database import installed_apps_table
 from portal_core.model.app_meta import Status, AppMeta, InstalledApp, InstalledAppWithMeta
 from portal_core.util import signals
 from portal_core.util.misc import throttle

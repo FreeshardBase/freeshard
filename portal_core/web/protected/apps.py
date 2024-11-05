@@ -8,7 +8,7 @@ from fastapi import APIRouter, status, HTTPException, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from tinydb import Query
 
-from portal_core.database.database import installed_apps_table
+from portal_core.old_database.database import installed_apps_table
 from portal_core.model.app_meta import InstalledAppWithMeta, InstalledApp
 from portal_core.service import app_installation
 from portal_core.service.app_installation.exceptions import AppAlreadyInstalled, AppNotInstalled

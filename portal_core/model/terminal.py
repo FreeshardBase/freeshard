@@ -6,7 +6,7 @@ from common_py import human_encoding
 from pydantic import BaseModel
 from tinydb import Query
 
-from portal_core.database.database import terminals_table
+from portal_core.old_database.database import terminals_table
 from portal_core.util.signals import on_terminal_auth
 
 

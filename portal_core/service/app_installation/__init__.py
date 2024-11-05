@@ -2,7 +2,7 @@ import logging
 
 import gconf
 
-from portal_core.database.database import installed_apps_table
+from portal_core.old_database.database import installed_apps_table
 from portal_core.model.app_meta import InstallationReason, InstalledApp, Status
 from portal_core.util import signals
 from portal_core.util.subprocess import subprocess

@@ -2,7 +2,7 @@ import logging
 
 import gconf
 
-from portal_core.database import database
+from portal_core.old_database import database
 from portal_core.service.signed_call import signed_request
 
 log = logging.getLogger(__name__)

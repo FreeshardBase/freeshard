@@ -10,7 +10,7 @@ from fastapi.datastructures import UploadFile
 from fastapi.responses import Response, StreamingResponse
 from tinydb import Query
 
-from portal_core.database.database import identities_table
+from portal_core.old_database.database import identities_table
 from portal_core.model.identity import Identity, OutputIdentity, InputIdentity
 from portal_core.service import identity as identity_service, identity
 from portal_core.service.assets import put_asset

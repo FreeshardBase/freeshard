@@ -3,7 +3,7 @@ from datetime import date, timedelta, datetime, time
 
 import responses
 
-from portal_core.database.database import app_usage_track_table
+from portal_core.old_database.database import app_usage_track_table
 from portal_core.model.app_usage import AppUsageTrack, AppUsageReport
 from tests.conftest import requires_test_env
 

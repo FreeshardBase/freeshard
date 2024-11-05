@@ -3,7 +3,7 @@ import logging
 import time
 from typing import Dict
 
-from portal_core.database.database import installed_apps_table
+from portal_core.old_database.database import installed_apps_table
 from portal_core.model.app_meta import InstalledApp, Status
 from portal_core.service import disk
 from portal_core.service.app_tools import docker_start_app, docker_stop_app, get_app_metadata, size_is_compatible
