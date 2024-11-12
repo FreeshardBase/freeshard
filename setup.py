@@ -16,6 +16,7 @@ setup(
 		'gconf',
 		'tinydb',
 		'tinydb-serialization',
+		'sqlmodel',
 		'uvicorn',
 		'fastapi',
 		'websockets',
