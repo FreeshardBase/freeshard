@@ -18,7 +18,7 @@ import pytest_asyncio
 import responses
 import yappi
 from asgi_lifespan import LifespanManager
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 from requests import PreparedRequest
 from responses import RequestsMock
 
@@ -81,7 +81,7 @@ async def api_client(mocker, event_loop) -> AsyncClient:
 		app = portal_core.create_app()
 		# for the LifeSpanManager, see: https://github.com/encode/httpx/issues/1024
 		async with LifespanManager(app, startup_timeout=20), \
-				AsyncClient(app=app, base_url='https://init', timeout=20) as client:
+				AsyncClient(transport=ASGITransport(app=app), base_url='https://init', timeout=20) as client:
 			whoareyou = (await client.get('/public/meta/whoareyou')).json()
 			# Cookies are scoped for the domain,
 			# so we have to configure the TestClient with the correct domain.

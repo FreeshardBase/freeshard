@@ -82,7 +82,7 @@ def get_app_metadata(app_name: str) -> AppMeta:
 		raise MetadataNotFound(app_name)
 	try:
 		with open(app_path / 'app_meta.json') as f:
-			return AppMeta.parse_obj(json.load(f))
+			return AppMeta.model_validate(json.load(f))
 	except (FileNotFoundError, json.JSONDecodeError):
 		raise MetadataNotFound(app_name)
 

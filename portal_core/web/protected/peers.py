@@ -37,12 +37,12 @@ def get_peer_by_id(id):
 async def put_peer(p: InputPeer):
 	with peers_table() as peers:  # type: Table
 		if peers.get(Query().id.matches(f'{p.id}:*')):
-			peers.update(p.dict(exclude={'id'}), Query().id.matches(f'{p.id}:*'))
+			peers.update(p.model_dump(exclude={'id'}), Query().id.matches(f'{p.id}:*'))
 			log.debug(f'updated {p}')
 		else:
-			peers.insert(p.dict())
+			peers.insert(p.model_dump())
 			log.info(f'added {p}')
-	await signals.async_on_peer_write.send_async(Peer(**p.dict()))
+	await signals.async_on_peer_write.send_async(Peer(**p.model_dump()))
 	return p
 
 

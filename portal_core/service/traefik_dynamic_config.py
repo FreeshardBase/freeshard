@@ -72,14 +72,14 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
 
 	_middlewares = {
 		'strip': t.HttpMiddleware(
-			__root__=t.HttpMiddlewareItem21(
+			root=t.HttpMiddleware23(
 				stripPrefix=t.StripPrefixMiddleware(
 					prefixes=['/core/']
 				)
 			)
 		),
 		'auth-private': t.HttpMiddleware(
-			__root__=t.HttpMiddlewareItem9(
+			root=t.HttpMiddleware10(
 				forwardAuth=t.ForwardAuthMiddleware(
 					address='http://portal_core/internal/authenticate_terminal',
 					authResponseHeaders=[
@@ -91,14 +91,14 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
 			)
 		),
 		'auth-management': t.HttpMiddleware(
-			__root__=t.HttpMiddlewareItem9(
+			root=t.HttpMiddleware10(
 				forwardAuth=t.ForwardAuthMiddleware(
 					address='http://portal_core/internal/authenticate_management'
 				)
 			)
 		),
 		'auth-public': t.HttpMiddleware(
-			__root__=t.HttpMiddlewareItem10(
+			root=t.HttpMiddleware11(
 				headers=t.HeadersMiddleware(
 					customRequestHeaders={
 						'X-Ptl-Client-Type': 'public',
@@ -109,7 +109,7 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
 			)
 		),
 		'auth': t.HttpMiddleware(
-			__root__=t.HttpMiddlewareItem9(
+			root=t.HttpMiddleware10(
 				forwardAuth=t.ForwardAuthMiddleware(
 					address='http://portal_core/internal/auth',
 					authResponseHeadersRegex='^X-Ptl-.*'
@@ -117,7 +117,7 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
 			)
 		),
 		'app-error': t.HttpMiddleware(
-			__root__=t.HttpMiddlewareItem8(
+			root=t.HttpMiddleware9(
 				errors=t.ErrorsMiddleware(
 					status=['500-599', '400-499'],
 					service='portal_core',
@@ -128,7 +128,7 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
 	}
 	_services = {
 		'portal_core': t.HttpService(
-			__root__=t.HttpServiceItem(
+			root=t.HttpService1(
 				loadBalancer=t.HttpLoadBalancerService(
 					servers=[
 						t.Server(url='http://portal_core:80/')
@@ -137,7 +137,7 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
 			)
 		),
 		'web-terminal': t.HttpService(
-			__root__=t.HttpServiceItem(
+			root=t.HttpService1(
 				loadBalancer=t.HttpLoadBalancerService(
 					servers=[
 						t.Server(url='http://web-terminal:80/')
@@ -185,7 +185,7 @@ def _add_service(model: t.Model, entrypoint: Entrypoint, app: InstalledApp):
 	ep_value = entrypoint.entrypoint_port.value
 	if entrypoint.entrypoint_port == EntrypointPort.HTTPS_443:
 		model.http.services[f'{app.name}_{ep_value}'] = t.HttpService(
-			__root__=t.HttpServiceItem(
+			root=t.HttpService1(
 				loadBalancer=t.HttpLoadBalancerService(
 					servers=[
 						t.Server(url=f'http://{entrypoint.container_name}:{entrypoint.container_port}')
@@ -195,7 +195,7 @@ def _add_service(model: t.Model, entrypoint: Entrypoint, app: InstalledApp):
 		)
 	elif entrypoint.entrypoint_port == EntrypointPort.MQTTS_1883:
 		model.tcp.services[f'{app.name}_{ep_value}'] = t.TcpService(
-			__root__=t.TcpServiceItem(
+			root=t.TcpService1(
 				loadBalancer=t.TcpLoadBalancerService(
 					servers=[
 						t.Server1(address=f'{entrypoint.container_name}:{entrypoint.container_port}')
@@ -208,10 +208,10 @@ def _add_service(model: t.Model, entrypoint: Entrypoint, app: InstalledApp):
 
 
 def make_cert_resolver(portal: SafeIdentity):
-	return t.Tls1(
-		certResolver='letsencrypt',
-		domains=[t.Domain(
+	return {
+		'certResolver': 'letsencrypt',
+		'domains':[t.Domain(
 			main=portal.domain,
 			sans=[f'*.{portal.domain}']
 		)]
-	)
+	}

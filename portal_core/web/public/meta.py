@@ -39,8 +39,8 @@ def get_default_avatar():
 
 class OutputWhoAmI(BaseModel):
 	type: AuthState.ClientType
-	id: str = None
-	name: str = None
+	id: str | None = None
+	name: str | None = None
 
 	@classmethod
 	def anonymous(cls):

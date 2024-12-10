@@ -1,14 +1,15 @@
 import datetime
+import json
 from enum import Enum
 from pathlib import Path as FilePath
-from typing import Optional, List, Dict, Union
+from typing import Optional, List, Dict, Self
 
 import gconf
-from pydantic import BaseModel, root_validator, validator
+from pydantic import BaseModel, field_validator, model_validator
 from tinydb import Query
 
-from portal_core.old_database.database import installed_apps_table
 from portal_core.model import app_meta_migration
+from portal_core.old_database.database import installed_apps_table
 from portal_core.util import signals
 
 CURRENT_VERSION = '1.2'
@@ -70,10 +71,10 @@ class PortalSize(str, Enum):
 
 
 class StoreInfo(BaseModel):
-	description_short: Optional[str]
-	description_long: Optional[Union[str, List[str]]]
-	hint: Optional[Union[str, List[str]]]
-	is_featured: Optional[bool]
+	description_short: str | None = None
+	description_long: str | List[str] | None = None
+	hint: str | List[str] | None = None
+	is_featured: bool = False
 
 
 class Path(BaseModel):
@@ -89,28 +90,28 @@ class Entrypoint(BaseModel):
 
 class Lifecycle(BaseModel):
 	always_on: bool = False
-	idle_time_for_shutdown: Optional[int]
+	idle_time_for_shutdown: int | None = None
 
-	@validator('idle_time_for_shutdown')
+	@field_validator('idle_time_for_shutdown')
 	def validate_idle_time_for_shutdown(cls, v):
 		if v and v < 5:
 			raise ValueError(f'idle_time_for_shutdown must be at least 5, was {v}')
 		return v
 
-	@root_validator
-	def validate_exclusivity(cls, values):
-		if values.get('always_on') and values.get('idle_time_for_shutdown', None):
+	@model_validator(mode='after')
+	def validate_exclusivity(self) -> Self:
+		if self.always_on and self.idle_time_for_shutdown:
 			raise ValueError('if always_on is true, idle_time_for_shutdown must not be set')
-		if not values.get('always_on') and not values.get('idle_time_for_shutdown', None):
+		if not self.always_on and not self.idle_time_for_shutdown:
 			raise ValueError('if always_on is false or not set, idle_time_for_shutdown must be set')
-		return values
+		return self
 
 
 class AppMeta(BaseModel):
 	v: str
 	app_version: str
-	upstream_repo: str | None
-	homepage: str | None
+	upstream_repo: str | None = None
+	homepage: str | None = None
 	name: str
 	pretty_name: str
 	icon: str
@@ -120,7 +121,7 @@ class AppMeta(BaseModel):
 	minimum_portal_size: PortalSize = PortalSize.XS
 	store_info: Optional[StoreInfo]
 
-	@root_validator(pre=True)
+	@model_validator(mode='before')
 	def migrate(cls, values):
 		migration_count = 0
 		while values['v'] != CURRENT_VERSION:
@@ -147,7 +148,7 @@ class InstalledAppWithMeta(InstalledApp):
 
 @signals.on_request_to_app.connect
 def update_last_access(app: InstalledApp):
-	now = datetime.datetime.utcnow()
+	now = datetime.datetime.now(datetime.timezone.utc)
 	max_update_frequency = datetime.timedelta(seconds=gconf.get('apps.last_access.max_update_frequency'))
 	if app.last_access and now - app.last_access < max_update_frequency:
 		return
@@ -159,4 +160,4 @@ if __name__ == '__main__':
 	dest_dir = FilePath('schemas')
 	dest_dir.mkdir(exist_ok=True)
 	with open(dest_dir / f'schema_app_meta_{CURRENT_VERSION}.json', 'w') as f:
-		f.write(AppMeta.schema_json(indent=2))
+		f.write(json.dumps(AppMeta.model_json_schema(), indent=2))

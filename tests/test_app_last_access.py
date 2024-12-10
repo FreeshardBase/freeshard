@@ -1,5 +1,5 @@
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from tinydb import Query
@@ -53,7 +53,7 @@ async def test_app_last_access_is_debounced(api_client):
 def _get_last_access_time_delta(app_name: str) -> Optional[float]:
 	last_access = _get_last_access_time(app_name)
 	if last_access:
-		now = datetime.utcnow()
+		now = datetime.now(timezone.utc)
 		delta = now - last_access
 		return delta.total_seconds()
 	else:
