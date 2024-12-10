@@ -4,6 +4,9 @@ dns:
   zone: p.getportal.org
   prefix length: 6
 
+db:
+  sqlite_file: 'core/db.sqlite'
+
 services:
   backup:
     directories:
