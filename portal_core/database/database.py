@@ -25,7 +25,7 @@ def create_db_and_tables():
     SQLModel.metadata.create_all(engine())
 
 def _sqlite_file():
-    return f'{gconf.get('path_root')}/{gconf.get('db.sqlite_file')}'
+    return f'{gconf.get("path_root")}/{gconf.get("db.sqlite_file")}'
 
 
 def _sqlite_url():

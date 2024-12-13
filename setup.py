@@ -12,6 +12,7 @@ setup(
 	author='Max von Tettenborn',
 	author_email='max.von.tettenborn@getportal.org',
 	description='Core software stack that manages all aspects of a Portal',
+	python_requires='>=3.12',
 	install_requires=[
 		'gconf',
 		'tinydb',
