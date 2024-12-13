@@ -8,10 +8,11 @@ from typing import List
 from fastapi import APIRouter, HTTPException, status
 from fastapi.datastructures import UploadFile
 from fastapi.responses import Response, StreamingResponse
-from tinydb import Query
+from sqlmodel import select, col
 
-from portal_core.old_database.database import identities_table
-from portal_core.model.identity import Identity, OutputIdentity, InputIdentity
+from portal_core.database.database import session
+from portal_core.database.models import Identity
+from portal_core.model.identity import OutputIdentity, InputIdentity
 from portal_core.service import identity as identity_service, identity
 from portal_core.service.assets import put_asset
 from portal_core.service.avatar import find_avatar_file
@@ -25,11 +26,11 @@ router = APIRouter(
 
 @router.get('', response_model=List[OutputIdentity])
 def list_all_identities(name: str = None):
-	with identities_table() as identities:  # type: Table
+	with session() as sesssion_:
+		statement = select(Identity)
 		if name:
-			return identities.search(Query().name.search(name))
-		else:
-			return identities.all()
+			statement = statement.where(col(Identity.name).ilike(f'%{name}%'))
+		return sesssion_.exec(statement).all()
 
 
 @router.get('/default', response_model=OutputIdentity)
@@ -39,8 +40,9 @@ def get_default_identity():
 
 @router.get('/{id}', response_model=OutputIdentity)
 def get_identity_by_id(id):
-	with identities_table() as identities:
-		if i := identities.get(Query().id == id):
+	with session() as session_:
+		statement = select(Identity).where(Identity.id == id)
+		if i := session_.exec(statement).first():
 			return i
 		else:
 			raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
@@ -54,7 +56,7 @@ def get_default_avatar():
 
 @router.get('/{id}/avatar')
 def get_avatar_by_identity(id):
-	i = OutputIdentity.parse_obj(get_identity_by_id(id))
+	i = get_identity_by_id(id)
 
 	try:
 		avatar_file = find_avatar_file(i.id)
@@ -67,17 +69,23 @@ def get_avatar_by_identity(id):
 
 
 @router.put('', response_model=OutputIdentity, status_code=status.HTTP_201_CREATED)
-def put_identity(i: InputIdentity):
-	with identities_table() as identities:  # type: Table
-		if i.id:
-			if identities.get(Query().id == i.id):
-				identities.update(i.dict(exclude_unset=True), Query().id == i.id)
-				return OutputIdentity(**identities.get(Query().id == i.id))
+def put_identity(input_identity: InputIdentity):
+	with session() as session_:
+		if input_identity.id:
+			statement = select(Identity).where(Identity.id == input_identity.id)
+			if db_identity := session_.exec(statement).first():
+				db_identity.sqlmodel_update(input_identity.model_dump(exclude_unset=True))
+				session_.add(db_identity)
+				session_.commit()
+				session_.refresh(db_identity)
+				return db_identity
 			else:
 				raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 		else:
-			new_identity = Identity.create(**i.dict(exclude_unset=True))
-			identities.insert(new_identity.dict())
+			new_identity = Identity.create(**input_identity.model_dump(exclude_unset=True))
+			session_.add(new_identity)
+			session_.commit()
+			session_.refresh(new_identity)
 			log.info(f'added {new_identity}')
 			return new_identity
 
@@ -103,7 +111,7 @@ async def put_avatar(id: str, file: UploadFile):
 	else:
 		existing_file.unlink()
 
-	i = OutputIdentity.parse_obj(get_identity_by_id(id))
+	i = get_identity_by_id(id)
 	file_extension = file.filename.split('.')[-1]
 	file_path = Path('avatars') / f'{i.id}.{file_extension}'
 	put_asset(await file.read(), file_path, overwrite=True)
@@ -117,7 +125,7 @@ async def delete_default_avatar():
 
 @router.delete('/{id}/avatar', status_code=status.HTTP_200_OK)
 async def delete_avatar(id: str):
-	i = OutputIdentity.parse_obj(get_identity_by_id(id))
+	i = get_identity_by_id(id)
 
 	try:
 		avatar_file = find_avatar_file(i.id)

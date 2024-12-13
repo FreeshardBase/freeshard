@@ -23,6 +23,7 @@ from requests import PreparedRequest
 from responses import RequestsMock
 
 import portal_core
+from portal_core import database
 from portal_core.model.app_meta import PortalSize
 from portal_core.model.backend.portal_meta import PortalMetaExt, Size
 from portal_core.model.identity import OutputIdentity, Identity
@@ -68,6 +69,7 @@ async def api_client(mocker, event_loop) -> AsyncClient:
 	# Modules that define some global state need to be reloaded
 	importlib.reload(websocket)
 	importlib.reload(app_installation.worker)
+	importlib.reload(database)
 
 	# Mocks must be set up after modules are reloaded or else they will be overwritten
 	mock_app_store(mocker)

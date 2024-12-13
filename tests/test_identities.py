@@ -3,7 +3,6 @@ from starlette import status
 from portal_core.model.identity import OutputIdentity
 from httpx import AsyncClient
 
-from tests.conftest import requires_test_env
 
 
 async def test_add_and_get(api_client: AsyncClient):

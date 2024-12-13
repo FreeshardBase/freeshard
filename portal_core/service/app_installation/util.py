@@ -9,11 +9,12 @@ import pydantic
 import yaml
 from tinydb import Query
 
-from portal_core.old_database.database import installed_apps_table, identities_table
 from portal_core.model.app_meta import Status, InstalledApp
-from portal_core.model.identity import Identity, SafeIdentity
+from portal_core.model.identity import SafeIdentity
+from portal_core.old_database.database import installed_apps_table
 from portal_core.service.app_installation.exceptions import AppInIllegalStatus
 from portal_core.service.app_tools import get_installed_apps_path, get_app_metadata
+from portal_core.service.identity import get_default_identity
 from portal_core.service.traefik_dynamic_config import AppInfo, compile_config
 from portal_core.util import signals
 
@@ -44,7 +45,10 @@ def update_app_status(app_name: str, status: Status, message: str | None = None)
 		updated_docs = installed_apps.update({'status': status}, Query().name == app_name)
 	if len(updated_docs) == 0:
 		raise KeyError(app_name)
-	log.debug(f'status of {app_name} updated to {status}' + (f': {message}' if message else ''))
+	if status == Status.ERROR:
+		log.error(f'status of {app_name} updated to {status}: {message}', exc_info=True)
+	else:
+		log.debug(f'status of {app_name} updated to {status}' + (f': {message}' if message else ''))
 	signals.on_apps_update.send()
 
 
@@ -64,8 +68,7 @@ async def render_docker_compose_template(app: InstalledApp):
 		'shared': '/home/portal/user_data/shared',
 	}
 
-	with identities_table() as identities:
-		default_identity = Identity(**identities.get(Query().is_default == True))  # noqa: E712
+	default_identity = get_default_identity()
 	portal = SafeIdentity.from_identity(default_identity)
 
 	app_dir = get_installed_apps_path() / app.name
@@ -81,8 +84,7 @@ async def write_traefik_dyn_config():
 		installed_apps = [InstalledApp(**a) for a in installed_apps.all() if a['status'] != Status.INSTALLATION_QUEUED]
 	app_infos = [AppInfo(get_app_metadata(a.name), installed_app=a) for a in installed_apps if a.status != Status.ERROR]
 
-	with identities_table() as identities:
-		default_identity = Identity(**identities.get(Query().is_default == True))  # noqa: E712
+	default_identity = get_default_identity()
 	portal = SafeIdentity.from_identity(default_identity)
 
 	traefik_dyn_filename = Path(gconf.get('path_root')) / 'core' / 'traefik_dyn' / 'traefik_dyn.yml'

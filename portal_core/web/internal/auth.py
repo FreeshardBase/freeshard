@@ -8,12 +8,13 @@ from http_message_signatures import InvalidSignature
 from jinja2 import Template
 from tinydb import Query
 
-from portal_core.old_database.database import installed_apps_table, identities_table
 from portal_core.model.app_meta import InstalledApp, Access, Path
 from portal_core.model.auth import AuthState
-from portal_core.model.identity import Identity, SafeIdentity
+from portal_core.model.identity import SafeIdentity
+from portal_core.old_database.database import installed_apps_table
 from portal_core.service import pairing, peer as peer_service
 from portal_core.service.app_tools import get_app_metadata
+from portal_core.service.identity import get_default_identity
 from portal_core.service.management import validate_shared_secret, SharedSecretInvalid
 from portal_core.util.signals import on_terminal_auth, on_request_to_app, on_peer_auth
 
@@ -91,8 +92,7 @@ def _match_app(x_forwarded_host) -> InstalledApp:
 
 @cached(cache=TTLCache(maxsize=8, ttl=gconf.get('tests.cache_ttl', default=3)))
 def _get_portal_identity():
-	with identities_table() as identities:
-		default_identity = Identity(**identities.get(Query().is_default == True))  # noqa: E712
+	default_identity = get_default_identity()
 	return SafeIdentity.from_identity(default_identity)
 
 

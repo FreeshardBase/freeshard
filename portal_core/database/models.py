@@ -1,6 +1,7 @@
 
 import gconf
 from common_py import crypto
+from pydantic import computed_field
 from sqlmodel import SQLModel, Field
 
 
@@ -38,10 +39,12 @@ class Identity(SQLModel, table=True):
 	def public_key(self) -> crypto.PublicKey:
 		return crypto.PrivateKey(self.private_key).get_public_key()
 
+	@computed_field
 	@property
 	def public_key_pem(self) -> str:
 		return self.public_key.to_bytes().decode()
 
+	@computed_field
 	@property
 	def domain(self) -> str:
 		zone = gconf.get('dns.zone')

@@ -4,11 +4,9 @@ from requests import HTTPError
 from sqlalchemy import update
 from sqlalchemy.exc import MultipleResultsFound, NoResultFound
 from sqlmodel import select, col
-from tinydb import Query
 
 from portal_core.database.database import session
 from portal_core.database.models import Identity
-from portal_core.old_database.database import identities_table
 from portal_core.service.portal_controller import refresh_profile
 from portal_core.util.signals import async_on_first_terminal_add
 
@@ -17,7 +15,7 @@ log = logging.getLogger(__name__)
 
 def init_default_identity():
 	with session() as _session:
-		statement = select(Identity).where(col(Identity.is_default) == True)
+		statement = select(Identity).where(col(Identity.is_default) == True)  # noqa: E712
 		try:
 			default_identity = _session.exec(statement).one()
 		except MultipleResultsFound:
@@ -50,16 +48,8 @@ def make_default(id):
 
 
 def get_default_identity() -> Identity:
-	with session() as _session:
-		statement = select(Identity).where(col(Identity.is_default) == True)
-		try:
-			return _session.exec(statement).one()
-		except MultipleResultsFound:
-			log.error('Multiple default identities found')
-			raise
-		except NoResultFound:
-			log.error('No default identity found')
-			raise
+	with session() as session_:
+		return _get_default_identity_from_session(session_)
 
 
 @async_on_first_terminal_add.connect
@@ -70,12 +60,23 @@ async def enrich_identity_from_profile(_):
 		log.error(f'Could not enrich default identity from profile because profile could not be obtained: {e}')
 		return
 
-	with identities_table() as identities:  # type: Table
+	with session() as session_:
+		default_identity = _get_default_identity_from_session(session_)
 		if profile.owner:
-			identities.update({
-				'name': profile.owner,
-			}, Query().is_default == True)  # noqa: E712
+			default_identity.name = profile.owner
 		if profile.owner_email:
-			identities.update({
-				'email': profile.owner_email,
-			}, Query().is_default == True)  # noqa: E712
+			default_identity.email = profile.owner_email
+		session_.add(default_identity)
+		session_.commit()
+
+
+def _get_default_identity_from_session(session_):
+	statement = select(Identity).where(col(Identity.is_default) == True)  # noqa: E712
+	try:
+		return session_.exec(statement).one()
+	except MultipleResultsFound:
+		log.error('Multiple default identities found')
+		raise
+	except NoResultFound:
+		log.error('No default identity found')
+		raise
