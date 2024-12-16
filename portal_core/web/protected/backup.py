@@ -9,12 +9,11 @@ from tinydb import Query
 from zipstream import ZipStream
 
 from portal_core.old_database import database
-from portal_core.old_database.database import terminals_table
 from portal_core.model.backup import BackupPassphraseResponse, BackupInfoResponse, BackupPassphraseLastAccessInfoDB, \
 	BackupPassphraseLastAccessInfoResponse
-from portal_core.model.terminal import Terminal
 from portal_core.service import backup
 from portal_core.service.identity import get_default_identity
+from portal_core.service.terminal import get_terminal_by_id
 
 log = logging.getLogger(__name__)
 
@@ -32,12 +31,10 @@ async def get_backup_info():
 	except KeyError:
 		last_access_info_response = None
 	else:
-		with terminals_table() as terminals:
-			terminal_db = terminals.get(Query().id == last_access_info_db.terminal_id)
-		terminal_name = Terminal.parse_obj(terminal_db).name if terminal_db else 'Unknown'
+		terminal_db = get_terminal_by_id(last_access_info_db.terminal_id)
 		last_access_info_response = BackupPassphraseLastAccessInfoResponse(
-			**last_access_info_db.dict(),
-			terminal_name=terminal_name
+			**last_access_info_db.model_dump(),
+			terminal_name=terminal_db.name
 		)
 
 	return BackupInfoResponse(

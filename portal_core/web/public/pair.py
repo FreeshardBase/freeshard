@@ -2,9 +2,10 @@ import logging
 
 from fastapi import APIRouter, HTTPException, status, Response
 from tinydb import Query
-
-from portal_core.model.terminal import Terminal, InputTerminal
-from portal_core.old_database.database import terminals_table
+from sqlmodel import select
+from portal_core.database.database import session
+from portal_core.database.models import Terminal
+from portal_core.model.terminal import InputTerminal
 from portal_core.service import pairing
 from portal_core.service.identity import get_default_identity
 from portal_core.util.signals import async_on_first_terminal_add, on_terminals_update, on_terminal_add
@@ -25,9 +26,12 @@ async def add_terminal(code: str, terminal: InputTerminal, response: Response):
 		raise HTTPException(status.HTTP_401_UNAUTHORIZED) from e
 
 	new_terminal = Terminal.create(terminal.name)
-	with terminals_table() as terminals:  # type: Table
-		terminals.insert(new_terminal.dict())
-		is_first_terminal = terminals.count(Query().noop()) == 1
+	with session() as session_:
+		session_.add(new_terminal)
+		session_.commit()
+
+		session_.exec(select(Terminal)).all()
+		is_first_terminal = len(session_.exec(select(Terminal)).all()) == 1
 
 	default_identity = get_default_identity()
 

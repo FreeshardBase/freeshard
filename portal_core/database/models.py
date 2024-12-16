@@ -1,9 +1,11 @@
+from datetime import datetime, timezone
+from enum import Enum
 
 import gconf
 from common_py import crypto
+from common_py import human_encoding
 from pydantic import computed_field
 from sqlmodel import SQLModel, Field
-
 
 
 class Identity(SQLModel, table=True):
@@ -52,3 +54,28 @@ class Identity(SQLModel, table=True):
 		subdomain = self.id[:prefix_length].lower()
 		domain = f'{subdomain}.{zone}'
 		return domain
+
+
+class Icon(str, Enum):
+	UNKNOWN = 'unknown'
+	SMARTPHONE = 'smartphone'
+	TABLET = 'tablet'
+	NOTEBOOK = 'notebook'
+	DESKTOP = 'desktop'
+
+class Terminal(SQLModel, table=True):
+	id: str = Field(primary_key=True)
+	name: str
+	icon: Icon = Icon.UNKNOWN
+	last_connection: datetime | None = None
+
+	def __str__(self):
+		return f'Terminal[{self.id}, {self.name}]'
+
+	@classmethod
+	def create(cls, name: str) -> 'Terminal':
+		return Terminal(
+			id=human_encoding.random_string(6),
+			name=name,
+			last_connection=datetime.now(timezone.utc)
+		)

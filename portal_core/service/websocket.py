@@ -5,11 +5,13 @@ from contextlib import suppress
 from typing import Dict, List, Tuple
 
 from pydantic import BaseModel
+from sqlmodel import select
 from starlette.websockets import WebSocket
 
-from portal_core.old_database.database import terminals_table, installed_apps_table
+from portal_core.database.database import session
+from portal_core.database.models import Terminal
 from portal_core.model.app_meta import InstalledApp
-from portal_core.model.terminal import Terminal
+from portal_core.old_database.database import installed_apps_table
 from portal_core.service.app_tools import enrich_installed_app_with_meta
 from portal_core.service.disk import DiskUsage
 from portal_core.util import signals
@@ -106,8 +108,9 @@ def send_disk_usage_update(disk_usage: DiskUsage):
 
 @signals.on_terminals_update.connect
 def send_terminals_update(_):
-	with terminals_table() as terminals:  # type: Table
-		all_terminals = terminals.all()
+	with session() as session_:
+		statement = select(Terminal)
+		all_terminals = session_.exec(statement).all()
 	ws_worker.broadcast_message('terminals_update', all_terminals)
 
 

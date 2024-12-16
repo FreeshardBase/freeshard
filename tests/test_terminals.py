@@ -2,11 +2,12 @@ from time import sleep
 
 from httpx import AsyncClient
 from starlette import status
-from tinydb.operations import delete
 
-from portal_core.old_database.database import terminals_table
+from portal_core.database.database import session
 from portal_core.model.backend.portal_meta import PortalMetaExt
-from portal_core.model.terminal import Terminal, Icon
+from portal_core.model.terminal import  Icon
+from portal_core.database.models import Terminal
+from sqlmodel import select
 from tests.conftest import requests_mock_context, mock_meta, requires_test_env
 from tests.util import get_pairing_code, add_terminal, pair_new_terminal
 
@@ -194,8 +195,12 @@ async def test_last_connection(api_client: AsyncClient):
 	response = await api_client.post('protected/apps/mock_app')
 	response.raise_for_status()
 
-	with terminals_table() as terminals:  # type: Table
-		terminals.update(delete('last_connection'))
+	with session() as session_:
+		terminal = session_.exec(select(Terminal)).one()
+		terminal.last_connection = None
+		session_.add(terminal)
+		session_.commit()
+
 	last_connection_missing = Terminal(
 		**(await api_client.get(f'protected/terminals/name/{t_name}')).json()
 	)

@@ -7,11 +7,11 @@ from datetime import datetime, timedelta, timezone
 import gconf
 import jwt
 from pydantic import BaseModel
-from tinydb import Query
 
+from portal_core.database.models import Terminal
 from portal_core.old_database import database as old_database
-from portal_core.old_database.database import terminals_table
-from portal_core.model.terminal import Terminal
+
+from portal_core.service.terminal import get_terminal_by_id
 
 STORE_KEY_JWT_SECRET = 'terminal_jwt_secret'
 STORE_KEY_PAIRING_CODE = 'pairing_code'
@@ -61,7 +61,7 @@ def create_terminal_jwt(terminal_id, **kwargs) -> str:
 	return jwt.encode(payload, jwt_secret, algorithm='HS256')
 
 
-def verify_terminal_jwt(token: str = None):
+def verify_terminal_jwt(token: str = None) -> Terminal:
 	if not token:
 		raise InvalidJwt('Missing JWT')
 
@@ -76,11 +76,10 @@ def verify_terminal_jwt(token: str = None):
 	except jwt.InvalidTokenError as e:
 		raise InvalidJwt from e
 
-	with terminals_table() as terminals:  # type: Table
-		if terminal := terminals.get(Query().id == decoded_token['sub']):
-			return Terminal(**terminal)
-		else:
-			raise InvalidJwt
+	try:
+		return get_terminal_by_id(decoded_token['sub'])
+	except KeyError as e:
+		raise InvalidJwt from e
 
 
 def _ensure_jwt_secret():

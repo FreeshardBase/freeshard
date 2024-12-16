@@ -60,18 +60,6 @@ def installed_apps_table() -> Iterator[Table]:
 
 
 @contextmanager
-def identities_table() -> Iterator[Table]:
-	with get_db() as db:
-		yield db.table('identities')
-
-
-@contextmanager
-def terminals_table() -> Iterator[Table]:
-	with get_db() as db:
-		yield db.table('terminals')
-
-
-@contextmanager
 def peers_table() -> Iterator[Table]:
 	with get_db() as db:
 		yield db.table('peers')
