@@ -4,20 +4,22 @@ from datetime import datetime, date, timedelta
 
 import gconf
 from requests import HTTPError
+from sqlmodel import select
 from starlette import status
 from tinydb import Query
 
-from portal_core.old_database.database import installed_apps_table, app_usage_track_table
+from portal_core.database.database import session
 from portal_core.model.app_meta import InstalledApp
 from portal_core.model.app_usage import AppUsageTrack, AppUsageReport
+from portal_core.old_database.database import app_usage_track_table
 from portal_core.service.signed_call import signed_request
 
 log = logging.getLogger(__name__)
 
 
 async def track_currently_installed_apps():
-	with installed_apps_table() as installed_apps:  # type: Table
-		all_apps = [InstalledApp.parse_obj(a) for a in installed_apps.all()]
+	with session() as session_:
+		all_apps = session_.exec(select(InstalledApp)).all()
 	track = AppUsageTrack(
 		timestamp=datetime.utcnow(),
 		installed_apps=[app.name for app in all_apps]

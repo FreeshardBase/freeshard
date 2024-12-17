@@ -1,7 +1,7 @@
 import docker
 from fastapi import status
 
-from portal_core.model.app_meta import InstalledApp, Status
+from portal_core.database.models import InstalledApp, Status
 from tests.conftest import requires_test_env
 from tests.util import retry_async, wait_until_app_installed, install_app
 

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from portal_core.model.app_meta import Status
+from portal_core.database.models import Status
 from portal_core.service.migration import migrate
 from tests.conftest import requires_test_env
 from tests.util import retry_async

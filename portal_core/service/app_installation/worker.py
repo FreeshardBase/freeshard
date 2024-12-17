@@ -9,16 +9,16 @@ from typing import Literal
 import gconf
 import httpx
 from pydantic import BaseModel
-from tinydb import Query
+from sqlmodel import select
 
-from portal_core.old_database.database import installed_apps_table
-from portal_core.model.app_meta import Status
 from portal_core.service.app_tools import get_installed_apps_path, docker_create_app_containers, docker_stop_app, \
 	docker_shutdown_app
 from portal_core.util import signals
 from .exceptions import AppDoesNotExist
 from .util import update_app_status, render_docker_compose_template, write_traefik_dyn_config, get_app_from_db, \
 	assert_app_status
+from ...database.database import session
+from ...database.models import InstalledApp, Status
 
 log = logging.getLogger(__name__)
 
@@ -123,8 +123,12 @@ async def _uninstall_app(app_name: str):
 	log.debug(f'deleting app data for {app_name}')
 	shutil.rmtree(Path(get_installed_apps_path() / app_name), ignore_errors=True)
 	log.debug(f'removing app {app_name} from database')
-	with installed_apps_table() as installed_apps:
-		installed_apps.remove(Query().name == app_name)
+
+	with session() as session_:
+		existing_app = session_.exec(select(InstalledApp).where(InstalledApp.name == app_name)).one()
+		session_.delete(existing_app)
+		session_.commit()
+
 	await write_traefik_dyn_config()
 	signals.on_apps_update.send()
 	log.info(f'uninstalled {app_name}')

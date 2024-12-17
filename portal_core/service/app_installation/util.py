@@ -7,11 +7,12 @@ import httpx
 import jinja2
 import pydantic
 import yaml
-from tinydb import Query
+from sqlalchemy.exc import NoResultFound
+from sqlmodel import select
 
-from portal_core.model.app_meta import Status, InstalledApp
+from portal_core.database.database import session
+from portal_core.database.models import Status, InstalledApp
 from portal_core.model.identity import SafeIdentity
-from portal_core.old_database.database import installed_apps_table
 from portal_core.service.app_installation.exceptions import AppInIllegalStatus
 from portal_core.service.app_tools import get_installed_apps_path, get_app_metadata
 from portal_core.service.identity import get_default_identity
@@ -22,16 +23,21 @@ log = logging.getLogger(__name__)
 
 
 def get_app_from_db(app_name: str) -> InstalledApp:
-	with installed_apps_table() as installed_apps:
-		if record := installed_apps.get(Query().name == app_name):
-			return InstalledApp.parse_obj(record)
-		else:
+	with session() as session_:
+		statement = select(InstalledApp).where(InstalledApp.name == app_name)
+		try:
+			return session_.exec(statement).one()
+		except NoResultFound:
 			raise KeyError(app_name)
 
 
 def app_exists_in_db(app_name: str) -> bool:
-	with installed_apps_table() as installed_apps:
-		return installed_apps.contains(Query().name == app_name)
+	try:
+		get_app_from_db(app_name)
+	except KeyError:
+		return False
+	else:
+		return True
 
 
 def assert_app_status(installed_app: InstalledApp, *allowed_status: Status):
@@ -41,14 +47,22 @@ def assert_app_status(installed_app: InstalledApp, *allowed_status: Status):
 
 
 def update_app_status(app_name: str, status: Status, message: str | None = None):
-	with installed_apps_table() as installed_apps:
-		updated_docs = installed_apps.update({'status': status}, Query().name == app_name)
-	if len(updated_docs) == 0:
-		raise KeyError(app_name)
+	with session() as session_:
+		statement = select(InstalledApp).where(InstalledApp.name == app_name)
+		try:
+			installed_app = session_.exec(statement).one()
+		except NoResultFound:
+			raise KeyError(app_name)
+
+		installed_app.status = status
+		session_.add(installed_app)
+		session_.commit()
+
 	if status == Status.ERROR:
 		log.error(f'status of {app_name} updated to {status}: {message}', exc_info=True)
 	else:
 		log.debug(f'status of {app_name} updated to {status}' + (f': {message}' if message else ''))
+
 	signals.on_apps_update.send()
 
 
@@ -80,8 +94,10 @@ async def render_docker_compose_template(app: InstalledApp):
 
 async def write_traefik_dyn_config():
 	log.debug('updating traefik dynamic config')
-	with installed_apps_table() as installed_apps:
-		installed_apps = [InstalledApp(**a) for a in installed_apps.all() if a['status'] != Status.INSTALLATION_QUEUED]
+	with session() as session_:
+		statement = select(InstalledApp).where(InstalledApp.status != Status.INSTALLATION_QUEUED)
+		installed_apps = session_.exec(statement).all()
+
 	app_infos = [AppInfo(get_app_metadata(a.name), installed_app=a) for a in installed_apps if a.status != Status.ERROR]
 
 	default_identity = get_default_identity()

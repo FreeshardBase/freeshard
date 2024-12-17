@@ -1,7 +1,6 @@
 import logging
 
 from fastapi import APIRouter, HTTPException, status, Response
-from tinydb import Query
 from sqlmodel import select
 from portal_core.database.database import session
 from portal_core.database.models import Terminal

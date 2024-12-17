@@ -1,13 +1,14 @@
 import logging
 
 import gconf
+from sqlmodel import select
 
-from portal_core.old_database.database import installed_apps_table
-from portal_core.model.app_meta import InstallationReason, InstalledApp, Status
+from portal_core.database.models import InstallationReason, InstalledApp, Status
 from portal_core.util import signals
 from portal_core.util.subprocess import subprocess
 from . import util, worker
 from .exceptions import AppAlreadyInstalled, AppDoesNotExist, AppNotInstalled
+from ...database.database import session
 
 log = logging.getLogger(__name__)
 
@@ -22,13 +23,14 @@ async def install_app_from_store(
 	if util.app_exists_in_db(name):
 		raise AppAlreadyInstalled(name)
 
-	with installed_apps_table() as installed_apps:
+	with session() as session_:
 		installed_app = InstalledApp(
 			name=name,
 			installation_reason=installation_reason,
 			status=Status.INSTALLATION_QUEUED,
 		)
-		installed_apps.insert(installed_app.dict())
+		session_.add(installed_app)
+		session_.commit()
 
 	installation_task = worker.InstallationTask(
 		app_name=name,
@@ -46,13 +48,14 @@ async def install_app_from_existing_zip(
 	if util.app_exists_in_db(name):
 		raise AppAlreadyInstalled(name)
 
-	with installed_apps_table() as installed_apps:
+	with session() as session_:
 		installed_app = InstalledApp(
 			name=name,
 			installation_reason=installation_reason,
 			status=Status.INSTALLATION_QUEUED,
 		)
-		installed_apps.insert(installed_app.dict())
+		session_.add(installed_app)
+		session_.commit()
 
 	installation_task = worker.InstallationTask(
 		app_name=name,
@@ -99,8 +102,8 @@ async def reinstall_app(name: str):
 
 async def refresh_init_apps():
 	configured_init_apps = set(gconf.get('apps.initial_apps'))
-	with installed_apps_table() as apps:
-		installed_apps = {app['name'] for app in apps.all()}
+	with session() as session_:
+		installed_apps = {a.name for a in session_.exec(select(InstalledApp)).all()}
 
 	for app_name in configured_init_apps - installed_apps:
 		log.info(f'installing initial app {app_name}')

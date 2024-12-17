@@ -14,7 +14,8 @@ from httpx import URL, Request
 from requests import PreparedRequest
 from requests_http_signature import HTTPSignatureAuth
 
-from portal_core.model.app_meta import InstalledApp, Status
+from portal_core.database.models import Status
+from portal_core.model.app_meta import InstalledApp
 from portal_core.util.subprocess import subprocess
 
 WAITING_DOCKER_IMAGE = 'nginx:alpine'

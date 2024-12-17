@@ -5,7 +5,6 @@ from pathlib import Path
 import gconf
 from fastapi import Header, HTTPException, APIRouter, status
 from starlette.responses import StreamingResponse
-from tinydb import Query
 from zipstream import ZipStream
 
 from portal_core.old_database import database

@@ -11,7 +11,6 @@ from starlette.websockets import WebSocket
 from portal_core.database.database import session
 from portal_core.database.models import Terminal
 from portal_core.model.app_meta import InstalledApp
-from portal_core.old_database.database import installed_apps_table
 from portal_core.service.app_tools import enrich_installed_app_with_meta
 from portal_core.service.disk import DiskUsage
 from portal_core.util import signals
@@ -121,9 +120,9 @@ def send_terminal_add(terminal: Terminal):
 
 @signals.on_apps_update.connect
 def send_apps_update(_):
-	with installed_apps_table() as installed_apps:
-		all_apps = installed_apps.all()
-	enriched_apps = [enrich_installed_app_with_meta(InstalledApp.parse_obj(app)) for app in all_apps]
+	with session() as session_:
+		all_apps = session_.exec(select(InstalledApp)).all()
+	enriched_apps = [enrich_installed_app_with_meta(InstalledApp.model_validate(app)) for app in all_apps]
 	ws_worker.broadcast_message('apps_update', enriched_apps)
 
 

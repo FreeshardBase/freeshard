@@ -6,40 +6,20 @@ from typing import Optional, List, Dict, Self
 
 import gconf
 from pydantic import BaseModel, field_validator, model_validator
-from tinydb import Query
+from sqlmodel import select
 
+from portal_core.database.database import session
+from portal_core.database.models import InstalledApp, InstallationReason
 from portal_core.model import app_meta_migration
-from portal_core.old_database.database import installed_apps_table
 from portal_core.util import signals
 
 CURRENT_VERSION = '1.2'
-
-
-class InstallationReason(str, Enum):
-	UNKNOWN = 'unknown'
-	CONFIG = 'config'
-	CUSTOM = 'custom'
-	STORE = 'store'
 
 
 class Access(str, Enum):
 	PUBLIC = 'public'
 	PRIVATE = 'private'
 	PEER = 'peer'
-
-
-class Status(str, Enum):
-	UNKNOWN = 'unknown'
-	INSTALLATION_QUEUED = 'installation_queued'
-	INSTALLING = 'installing'
-	STOPPED = 'stopped'
-	RUNNING = 'running'
-	UNINSTALLATION_QUEUED = 'uninstallation_queued'
-	UNINSTALLING = 'uninstalling'
-	REINSTALLATION_QUEUED = 'reinstallation_queued'
-	REINSTALLING = 'reinstalling'
-	DOWN = 'down'
-	ERROR = 'error'
 
 
 class EntrypointPort(str, Enum):
@@ -134,15 +114,11 @@ class AppMeta(BaseModel):
 		return values
 
 
-class InstalledApp(BaseModel):
-	# database model
+class InstalledAppWithMeta(BaseModel):
 	name: str
-	installation_reason: InstallationReason = InstallationReason.UNKNOWN
-	status: str = Status.UNKNOWN
-	last_access: Optional[datetime.datetime] = None
-
-
-class InstalledAppWithMeta(InstalledApp):
+	installation_reason: InstallationReason
+	status: str
+	last_access: datetime.datetime | None = None
 	meta: AppMeta | None
 
 
@@ -152,8 +128,11 @@ def update_last_access(app: InstalledApp):
 	max_update_frequency = datetime.timedelta(seconds=gconf.get('apps.last_access.max_update_frequency'))
 	if app.last_access and now - app.last_access < max_update_frequency:
 		return
-	with installed_apps_table() as installed_apps:  # type: Table
-		installed_apps.update({'last_access': now}, Query().name == app.name)
+	with session() as session_:
+		app_db = session_.exec(select(InstalledApp).where(InstalledApp.name == app.name)).one()
+		app_db.last_access = now
+		session_.add(app_db)
+		session_.commit()
 
 
 if __name__ == '__main__':

@@ -2,9 +2,9 @@ import time
 from datetime import datetime, timezone
 from typing import Optional
 
-from tinydb import Query
+from sqlmodel import select
 
-from portal_core.old_database.database import installed_apps_table
+from portal_core.database.database import session
 from portal_core.model.app_meta import InstalledApp
 from tests.conftest import requires_test_env
 
@@ -61,6 +61,6 @@ def _get_last_access_time_delta(app_name: str) -> Optional[float]:
 
 
 def _get_last_access_time(app_name: str) -> Optional[datetime]:
-	with installed_apps_table() as installed_apps:  # type: Table
-		app = InstalledApp(**installed_apps.get(Query().name == app_name))
+	with session() as session_:
+		app = session_.exec(select(InstalledApp).where(InstalledApp.name == app_name)).one()
 	return app.last_access

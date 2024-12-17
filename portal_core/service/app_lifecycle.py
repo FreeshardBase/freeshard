@@ -3,8 +3,10 @@ import logging
 import time
 from typing import Dict
 
-from portal_core.old_database.database import installed_apps_table
-from portal_core.model.app_meta import InstalledApp, Status
+from sqlmodel import select
+
+from portal_core.database.database import session
+from portal_core.database.models import InstalledApp, Status
 from portal_core.service import disk
 from portal_core.service.app_tools import docker_start_app, docker_stop_app, get_app_metadata, size_is_compatible
 from portal_core.util import signals
@@ -26,11 +28,12 @@ def ensure_app_is_running(app: InstalledApp):
 
 
 async def control_apps():
-	with installed_apps_table() as installed_apps:
-		installed_apps = [
-			InstalledApp.parse_obj(a)
-			for a in installed_apps.all()
-			if a['status'] not in (Status.INSTALLATION_QUEUED, Status.INSTALLING)]
+	with session() as session_:
+		statement = select(InstalledApp) \
+			.where(InstalledApp.status != Status.INSTALLING) \
+			.where(InstalledApp.status != Status.INSTALLATION_QUEUED)
+		installed_apps = session_.exec(statement).all()
+
 	tasks = [_control_app(app.name) for app in installed_apps]
 	await asyncio.gather(*tasks)
 

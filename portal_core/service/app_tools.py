@@ -4,11 +4,12 @@ import logging
 from pathlib import Path
 
 import gconf
-from tinydb import Query
+from sqlmodel import select
 
 import portal_core.model.profile
-from portal_core.old_database.database import installed_apps_table
-from portal_core.model.app_meta import Status, AppMeta, InstalledApp, InstalledAppWithMeta
+from portal_core.database.database import session
+from portal_core.database.models import Status, InstalledApp
+from portal_core.model.app_meta import AppMeta, InstalledAppWithMeta
 from portal_core.util import signals
 from portal_core.util.misc import throttle
 from portal_core.util.subprocess import subprocess, SubprocessError
@@ -23,51 +24,58 @@ async def docker_create_app_containers(name: str):
 
 @throttle(5)
 async def docker_start_app(name: str):
-	with installed_apps_table() as installed_apps:
-		# todo: think more about how to handle different states
-		app_status = installed_apps.get(Query().name == name)['status']
+	with session() as session_:
+		installed_app = session_.exec(select(InstalledApp).where(InstalledApp.name == name)).one()
 
-	if app_status in [Status.STOPPED, Status.RUNNING, Status.DOWN]:
+	if installed_app.status in [Status.STOPPED, Status.RUNNING, Status.DOWN]:
 		await subprocess('docker-compose', 'up', '-d', cwd=get_installed_apps_path() / name)
-		with installed_apps_table() as installed_apps:
-			installed_apps.update({'status': Status.RUNNING}, Query().name == name)
+		with session() as session_:
+			installed_app = session_.exec(select(InstalledApp).where(InstalledApp.name == name)).one()
+			installed_app.status = Status.RUNNING
+			session_.add(installed_app)
+			session_.commit()
 		signals.on_apps_update.send()
 
 
 async def docker_stop_app(name: str, set_status: bool = True):
-	with installed_apps_table() as installed_apps:
-		# todo: think more about how to handle different states
-		app_status = installed_apps.get(Query().name == name)['status']
-	if app_status in [Status.RUNNING, Status.UNINSTALLING]:
+	with session() as session_:
+		installed_app = session_.exec(select(InstalledApp).where(InstalledApp.name == name)).one()
+
+	if installed_app.status in [Status.RUNNING, Status.UNINSTALLING]:
 		await subprocess('docker-compose', 'stop', cwd=get_installed_apps_path() / name)
 		if set_status:
-			with installed_apps_table() as installed_apps:
-				installed_apps.update({'status': Status.STOPPED}, Query().name == name)
+			with session() as session_:
+				installed_app = session_.exec(select(InstalledApp).where(InstalledApp.name == name)).one()
+				installed_app.status = Status.STOPPED
+				session_.add(installed_app)
+				session_.commit()
 		signals.on_apps_update.send()
 
 
 async def docker_shutdown_app(name: str, set_status: bool = True, force: bool = False):
-	with installed_apps_table() as installed_apps:
-		# todo: think more about how to handle different states
-		app_status = installed_apps.get(Query().name == name)['status']
-	if force or app_status in [Status.STOPPED, Status.UNINSTALLING]:
+	with session() as session_:
+		installed_app = session_.exec(select(InstalledApp).where(InstalledApp.name == name)).one()
+	if force or installed_app.status in [Status.STOPPED, Status.UNINSTALLING]:
 		await subprocess('docker-compose', 'down', cwd=get_installed_apps_path() / name)
 		if set_status:
-			with installed_apps_table() as installed_apps:
-				installed_apps.update({'status': Status.DOWN}, Query().name == name)
+			with session() as session_:
+				installed_app = session_.exec(select(InstalledApp).where(InstalledApp.name == name)).one()
+				installed_app.status = Status.DOWN
+				session_.add(installed_app)
+				session_.commit()
 		signals.on_apps_update.send()
 
 
 async def docker_stop_all_apps():
-	with installed_apps_table() as installed_apps:
-		apps = [InstalledApp.parse_obj(a) for a in installed_apps.all()]
+	with session() as session_:
+		apps = session_.exec(select(InstalledApp)).all()
 	tasks = [docker_stop_app(app.name) for app in apps]
 	await asyncio.gather(*tasks)
 
 
 async def docker_shutdown_all_apps(force: bool = False):
-	with installed_apps_table() as installed_apps:
-		apps = [InstalledApp.parse_obj(a) for a in installed_apps.all()]
+	with session() as session_:
+		apps = session_.exec(select(InstalledApp)).all()
 	tasks = [docker_shutdown_app(app.name, force=force) for app in apps]
 	await asyncio.gather(*tasks)
 
@@ -101,7 +109,7 @@ def enrich_installed_app_with_meta(installed_app: InstalledApp) -> InstalledAppW
 	except MetadataNotFound:
 		metadata = None
 	return InstalledAppWithMeta(
-		**installed_app.dict(),
+		**installed_app.model_dump(),
 		meta=metadata
 	)
 

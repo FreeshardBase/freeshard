@@ -6,9 +6,10 @@ from typing import List
 import aiofiles
 from fastapi import APIRouter, status, HTTPException, UploadFile
 from fastapi.responses import Response, StreamingResponse
-from tinydb import Query
+from sqlalchemy.exc import NoResultFound
+from sqlmodel import select
 
-from portal_core.old_database.database import installed_apps_table
+from portal_core.database.database import session
 from portal_core.model.app_meta import InstalledAppWithMeta, InstalledApp
 from portal_core.service import app_installation
 from portal_core.service.app_installation.exceptions import AppAlreadyInstalled, AppNotInstalled
@@ -24,18 +25,19 @@ router = APIRouter(
 
 @router.get('', response_model=List[InstalledAppWithMeta])
 def list_all_apps():
-	with installed_apps_table() as installed_apps:
-		apps = [InstalledApp.parse_obj(app) for app in installed_apps.all()]
+	with session() as session_:
+		apps = session_.exec(select(InstalledApp)).all()
 	return [enrich_installed_app_with_meta(app) for app in apps]
 
 
 @router.get('/{name}', response_model=InstalledAppWithMeta)
 def get_app(name: str):
-	with installed_apps_table() as installed_apps:
-		installed_app = installed_apps.get(Query().name == name)
-	if installed_app:
-		return enrich_installed_app_with_meta(InstalledApp.parse_obj(installed_app))
-	raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+	with session() as session_:
+		try:
+			app = session_.exec(select(InstalledApp).where(InstalledApp.name == name)).one()
+		except NoResultFound:
+			raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+	return enrich_installed_app_with_meta(app)
 
 
 @router.get('/{name}/icon')

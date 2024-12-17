@@ -6,12 +6,14 @@ from cachetools import cached, TTLCache
 from fastapi import HTTPException, APIRouter, Cookie, Response, status, Header, Request
 from http_message_signatures import InvalidSignature
 from jinja2 import Template
-from tinydb import Query
+from sqlalchemy.exc import NoResultFound
+from sqlalchemy.orm import make_transient
+from sqlmodel import select
 
+from portal_core.database.database import session
 from portal_core.model.app_meta import InstalledApp, Access, Path
 from portal_core.model.auth import AuthState
 from portal_core.model.identity import SafeIdentity
-from portal_core.old_database.database import installed_apps_table
 from portal_core.service import pairing, peer as peer_service
 from portal_core.service.app_tools import get_app_metadata
 from portal_core.service.identity import get_default_identity
@@ -98,10 +100,13 @@ def _get_portal_identity():
 
 @cached(cache=TTLCache(maxsize=32, ttl=gconf.get('tests.cache_ttl', default=3)))
 def _find_app(app_name) -> Optional[InstalledApp]:
-	with installed_apps_table() as installed_apps:  # type: Table
-		if result := installed_apps.get(Query().name == app_name):
-			return InstalledApp(**result)
-		else:
+	with session() as session_:
+		try:
+			app = session_.exec(select(InstalledApp).where(InstalledApp.name == app_name)).one()
+			session_.refresh(app, attribute_names=app.__table__.columns.keys())
+			make_transient(app)
+			return app
+		except NoResultFound:
 			return None
 
 

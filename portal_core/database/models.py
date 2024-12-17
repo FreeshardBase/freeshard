@@ -5,7 +5,9 @@ import gconf
 from common_py import crypto
 from common_py import human_encoding
 from pydantic import computed_field
-from sqlmodel import SQLModel, Field
+from sqlmodel import SQLModel, Field, Column
+
+from portal_core.database.util import UTCTimestamp
 
 
 class Identity(SQLModel, table=True):
@@ -67,7 +69,7 @@ class Terminal(SQLModel, table=True):
 	id: str = Field(primary_key=True)
 	name: str
 	icon: Icon = Icon.UNKNOWN
-	last_connection: datetime | None = None
+	last_connection: datetime | None = Field(default=None, sa_column=Column(UTCTimestamp, nullable=True))
 
 	def __str__(self):
 		return f'Terminal[{self.id}, {self.name}]'
@@ -79,3 +81,31 @@ class Terminal(SQLModel, table=True):
 			name=name,
 			last_connection=datetime.now(timezone.utc)
 		)
+
+
+class InstallationReason(str, Enum):
+	UNKNOWN = 'unknown'
+	CONFIG = 'config'
+	CUSTOM = 'custom'
+	STORE = 'store'
+
+
+class Status(str, Enum):
+	UNKNOWN = 'unknown'
+	INSTALLATION_QUEUED = 'installation_queued'
+	INSTALLING = 'installing'
+	STOPPED = 'stopped'
+	RUNNING = 'running'
+	UNINSTALLATION_QUEUED = 'uninstallation_queued'
+	UNINSTALLING = 'uninstalling'
+	REINSTALLATION_QUEUED = 'reinstallation_queued'
+	REINSTALLING = 'reinstalling'
+	DOWN = 'down'
+	ERROR = 'error'
+
+
+class InstalledApp(SQLModel, table=True):
+	name: str = Field(primary_key=True)
+	installation_reason: InstallationReason = InstallationReason.UNKNOWN
+	status: str = Status.UNKNOWN
+	last_access: datetime | None = Field(default=None, sa_column=Column(UTCTimestamp, nullable=True))
