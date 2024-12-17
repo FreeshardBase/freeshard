@@ -1,7 +1,7 @@
 from httpx import AsyncClient
 from starlette import status
 
-from portal_core.model.peer import Peer
+from portal_core.database.models import Peer
 from tests.conftest import requires_test_env
 
 

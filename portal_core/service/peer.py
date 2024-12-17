@@ -7,31 +7,36 @@ from common_py.crypto import PublicKey
 from fastapi.requests import Request
 from http_message_signatures import HTTPSignatureKeyResolver, algorithms
 from requests_http_signature import HTTPSignatureAuth
-from tinydb import Query
+from sqlalchemy.exc import NoResultFound
+from sqlalchemy.orm import make_transient
+from sqlmodel import select, col
 
-from portal_core.old_database.database import peers_table
+from portal_core.database.database import session
+from portal_core.database.models import Peer
 from portal_core.model.identity import OutputIdentity
-from portal_core.model.peer import Peer
-from portal_core.util import signals
 
 log = logging.getLogger(__name__)
 
 
 def get_peer_by_id(id: str):
-	with peers_table() as peers:
-		if p := peers.get(Query().id.matches(f'{id}:*')):
-			return Peer(**p)
-		else:
+	with session() as session_:
+		try:
+			peer = session_.exec(select(Peer).where(col(Peer.id).ilike(f'{id}%'))).one()
+			session_.refresh(peer, attribute_names=Peer.__table__.columns.keys())
+			make_transient(peer)
+			return peer
+		except NoResultFound:
 			raise KeyError(id)
 
-
 async def update_all_peer_pubkeys():
-	with peers_table() as peers:  # type: Table
-		peers_without_pubkey = peers.search(Query().public_bytes_b64.exists())
-	await asyncio.gather(*[update_peer_meta(Peer(**peer)) for peer in peers_without_pubkey])
+	with session() as session_:
+		peers_without_pubkey = session_.exec(select(Peer).filter(Peer.public_bytes_b64 == None)).all()  # noqa E711
+		updated_peers = await asyncio.gather(*[update_peer_meta(Peer(**peer)) for peer in peers_without_pubkey])
+		session_.add_all(updated_peers)
+		session_.commit()
 
 
-async def update_peer_meta(peer: Peer):
+async def update_peer_meta(peer: Peer) -> Peer:
 	url = f'https://{peer.short_id}.p.getportal.org/core/public/meta/whoareyou'
 
 	def do_request():
@@ -41,17 +46,15 @@ async def update_peer_meta(peer: Peer):
 		response = await asyncio.get_running_loop().run_in_executor(None, do_request)
 	except requests.ConnectionError as e:
 		log.debug(f'Could not find peer {peer.short_id}: {e}')
-		with peers_table() as peers:
-			peers.update({'is_reachable': False}, Query().id == peer.id)
-		return
+		peer.is_reachable = False
+		return peer
 
 	try:
 		response.raise_for_status()
 	except httpx.HTTPStatusError as e:
 		log.debug(f'Could not update peer meta for {peer.short_id}: {e}')
-		with peers_table() as peers:  # type: Table
-			peers.update({'is_reachable': False}, Query().id == peer.id)
-		return
+		peer.is_reachable = False
+		return peer
 
 	peer_identity = OutputIdentity(**response.json())
 
@@ -59,8 +62,7 @@ async def update_peer_meta(peer: Peer):
 		raise KeyError(f'Portal {peer.short_id} responded with wrong identity {peer_identity.id}')
 
 	updated_peer = output_identity_to_peer(peer_identity)
-	with peers_table() as peers:  # type: Table
-		peers.update(updated_peer.dict(), Query().id == peer.id)
+	return updated_peer
 
 
 def output_identity_to_peer(identity: OutputIdentity) -> Peer:
@@ -103,8 +105,3 @@ class _KR(HTTPSignatureKeyResolver):
 			return peer.public_bytes_b64.encode()
 		else:
 			raise KeyError(f'No public key known for peer id {key_id}')
-
-
-@signals.async_on_peer_write.connect
-async def _on_peer_write(peer: Peer):
-	await update_peer_meta(peer)

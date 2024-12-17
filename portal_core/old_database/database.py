@@ -54,12 +54,6 @@ def get_db() -> TinyDB:
 
 
 @contextmanager
-def peers_table() -> Iterator[Table]:
-	with get_db() as db:
-		yield db.table('peers')
-
-
-@contextmanager
 def backups_table() -> Iterator[Table]:
 	with get_db() as db:
 		yield db.table('backups')

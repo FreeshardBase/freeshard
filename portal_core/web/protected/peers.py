@@ -2,12 +2,14 @@ import logging
 from typing import List
 
 from fastapi import APIRouter, HTTPException, status
-from tinydb import Query
+from sqlalchemy.exc import NoResultFound
+from sqlmodel import select, col
 
 import portal_core.service.peer as peer_service
-from portal_core.old_database.database import peers_table
-from portal_core.model.peer import Peer, InputPeer
-from portal_core.util import signals
+from portal_core.database.database import session
+from portal_core.database.models import Peer
+from portal_core.model.peer import InputPeer
+from portal_core.service.peer import update_peer_meta
 
 log = logging.getLogger(__name__)
 
@@ -18,11 +20,11 @@ router = APIRouter(
 
 @router.get('', response_model=List[Peer])
 def list_all_peers(name: str = None):
-	with peers_table() as peers:  # type: Table
+	with session() as session_:
+		statement = select(Peer)
 		if name:
-			return peers.search(Query().name.search(name))
-		else:
-			return peers.all()
+			statement = statement.where(col(Peer.name).ilike(f'%{name}%'))
+		return session_.exec(statement).all()
 
 
 @router.get('/{id}', response_model=Peer)
@@ -35,21 +37,35 @@ def get_peer_by_id(id):
 
 @router.put('', response_model=Peer)
 async def put_peer(p: InputPeer):
-	with peers_table() as peers:  # type: Table
-		if peers.get(Query().id.matches(f'{p.id}:*')):
-			peers.update(p.model_dump(exclude={'id'}), Query().id.matches(f'{p.id}:*'))
+	with session() as session_:
+		statement = select(Peer).where(col(Peer.id).ilike(f'{id}%'))
+		try:
+			peer = session_.exec(statement).one()
+			for k, v in p.model_dump(exclude_unset=True).items():
+				setattr(peer, k, v)
 			log.debug(f'updated {p}')
-		else:
-			peers.insert(p.model_dump())
+		except NoResultFound:
+			peer = Peer.from_input_peer(p)
 			log.info(f'added {p}')
-	await signals.async_on_peer_write.send_async(Peer(**p.model_dump()))
-	return p
+
+		peer = await update_peer_meta(peer)
+
+		session_.add(peer)
+		session_.commit()
+		session_.refresh(peer)
+
+	return peer
 
 
 @router.delete('/{id}', status_code=status.HTTP_204_NO_CONTENT)
 def delete_peer(id):
-	with peers_table() as peers:  # type: Table
-		deleted = peers.remove(Query().id.matches(f'{id}:*'))
-		if len(deleted) > 1:
-			log.critical(f'during deleting of peer {id}, {len(deleted)} peers were deleted')
-		log.info(f'removed peer {deleted[0]}')
+	with session() as session_:
+		statement = select(Peer).where(col(Peer.id).ilike(f'{id}%'))
+		try:
+			peer = session_.exec(statement).one()
+		except NoResultFound:
+			log.warning(f'peer {id} cannot be deleted: not found')
+			return
+		session_.delete(peer)
+		session_.commit()
+		log.info(f'removed {peer}')
