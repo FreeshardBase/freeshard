@@ -151,3 +151,13 @@ class Peer(SQLModel, table=True):
 	@property
 	def pubkey(self):
 		return PublicKey(self.public_bytes_b64)
+
+
+class TourStatus(str, Enum):
+	SEEN = 'seen'
+	UNSEEN = 'unseen'
+
+
+class Tour(SQLModel, table=True):
+	name: str = Field(primary_key=True)
+	status: TourStatus = TourStatus.UNSEEN

@@ -3,8 +3,10 @@ from starlette import status
 from portal_core.model.identity import OutputIdentity
 from httpx import AsyncClient
 
+from tests.conftest import requires_test_env
 
 
+@requires_test_env('full')
 async def test_add_and_get(api_client: AsyncClient):
 	second_identity = {'name': 'second id', 'email': 'hello@getportal.org'}
 	response_post = await api_client.put('protected/identities', json=second_identity)
@@ -18,6 +20,7 @@ async def test_add_and_get(api_client: AsyncClient):
 	assert result_i.email == second_identity['email']
 
 
+@requires_test_env('full')
 async def test_get_default(api_client: AsyncClient):
 	i_by_list = await api_client.get('protected/identities')
 	i_by_list.raise_for_status()
@@ -29,6 +32,7 @@ async def test_get_default(api_client: AsyncClient):
 	assert i_by_list.json()[0] == i_by_default.json() == i_by_name.json()
 
 
+@requires_test_env('full')
 async def test_add_another(api_client: AsyncClient):
 	response = await api_client.put('protected/identities', json={
 		'name': 'I2',
@@ -40,6 +44,7 @@ async def test_add_another(api_client: AsyncClient):
 	assert len(response.json()) == 2
 
 
+@requires_test_env('full')
 async def test_update(api_client: AsyncClient):
 	response = await api_client.get('protected/identities/default')
 	response.raise_for_status()
@@ -57,6 +62,7 @@ async def test_update(api_client: AsyncClient):
 	assert response.json()[0]['name'] == 'Portal Owner'
 
 
+@requires_test_env('full')
 async def test_make_default(api_client: AsyncClient):
 	response = await api_client.get('protected/identities/default')
 	response.raise_for_status()
@@ -78,6 +84,7 @@ async def test_make_default(api_client: AsyncClient):
 	assert response.json()['id'] == second_identity['id']
 
 
+@requires_test_env('full')
 async def test_invalid_email(api_client: AsyncClient):
 	response = await api_client.get('protected/identities/default')
 	response.raise_for_status()

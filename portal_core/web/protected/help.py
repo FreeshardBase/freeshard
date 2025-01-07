@@ -1,13 +1,13 @@
 import logging
-from enum import Enum
 from typing import List
 
 from fastapi import APIRouter, status, HTTPException
 from fastapi.responses import Response
-from pydantic import BaseModel
-from tinydb import Query
+from sqlalchemy.exc import NoResultFound
+from sqlmodel import select, delete
 
-from portal_core.old_database.database import tours_table
+from portal_core.database.database import session
+from portal_core.database.models import Tour
 
 log = logging.getLogger(__name__)
 
@@ -20,41 +20,34 @@ tour_router = APIRouter(
 )
 
 
-class TourStatus(str, Enum):
-	SEEN = 'seen'
-	UNSEEN = 'unseen'
-
-
-class Tour(BaseModel):
-	name: str
-	status: TourStatus
-
-
 @tour_router.put('', status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def put_tour(tour: Tour):
-	with tours_table() as tours:  # type: Table
-		tours.upsert(tour.dict(), Query().name == tour.name)
+	with session() as session_:
+		session_.merge(tour)
+		session_.commit()
 
 
 @tour_router.get('/{name}', response_model=Tour)
 def get_tour(name: str):
-	with tours_table() as tours:  # type: Table
-		if tour := tours.get(Query().name == name):
-			return Tour(**tour)
-		else:
+	with session() as session_:
+		try:
+			return session_.exec(select(Tour).where(Tour.name == name)).one()
+		except NoResultFound:
 			raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
 
 @tour_router.get('', response_model=List[Tour])
 def list_tours():
-	with tours_table() as tours:  # type: Table
-		return [Tour(**t) for t in tours]
+	with session() as session_:
+		tours = session_.exec(select(Tour)).all()
+		return tours
 
 
 @tour_router.delete('', status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def reset_tours():
-	with tours_table() as tours:  # type: Table
-		tours.truncate()
+	with session() as session_:
+		session_.exec(delete(Tour))
+		session_.commit()
 
 
 router.include_router(tour_router)
