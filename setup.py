@@ -36,7 +36,6 @@ setup(
 		'croniter',
 		'azure-storage-blob',
 		'asgi-lifespan==2.*',
-		'yappi',
 		'python-multipart',
 		'aiofiles',
 		'httpx',

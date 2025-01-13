@@ -9,7 +9,7 @@ from typing import List
 from requests import ConnectionError, HTTPError
 
 import gconf
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI
 
 from .database import database
 from .service import app_installation, identity, app_lifecycle, peer, \
@@ -17,7 +17,6 @@ from .service import app_installation, identity, app_lifecycle, peer, \
 from .service.app_tools import docker_stop_all_apps, docker_shutdown_all_apps, docker_prune_images
 from .service.backup import start_backup
 from .util.async_util import PeriodicTask, BackgroundTask, CronTask
-from .util.misc import profile, log_request_and_response
 from .web import internal, public, protected, management
 
 log = logging.getLogger(__name__)
@@ -48,13 +47,6 @@ def create_app():
 	app.include_router(protected.router)
 	app.include_router(management.router)
 
-	if gconf.get('log.requests', default=False):
-		@app.middleware('http')
-		async def log_http(request: Request, call_next):
-			response: Response = await call_next(request)
-			log_request_and_response(request, response, log)
-			return response
-
 	return app
 
 
@@ -70,19 +62,18 @@ def configure_logging():
 
 @asynccontextmanager
 async def lifespan(_):
-	with profile('lifespan_start'):
-		await app_installation.login_docker_registries()
-		await migration.migrate()
-		await app_installation.refresh_init_apps()
-		backup.ensure_packup_passphrase()
-		try:
-			await portal_controller.refresh_profile()
-		except (ConnectionError, HTTPError) as e:
-			log.error(f'could not refresh profile: {e}')
+	await app_installation.login_docker_registries()
+	await migration.migrate()
+	await app_installation.refresh_init_apps()
+	backup.ensure_packup_passphrase()
+	try:
+		await portal_controller.refresh_profile()
+	except (ConnectionError, HTTPError) as e:
+		log.error(f'could not refresh profile: {e}')
 
-		background_tasks = make_background_tasks()
-		for t in background_tasks:
-			t.start()
+	background_tasks = make_background_tasks()
+	for t in background_tasks:
+		t.start()
 
 	log.info('Startup complete')
 	yield  # === run app ===

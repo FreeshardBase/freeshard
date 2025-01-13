@@ -47,6 +47,3 @@ log:
   levels:
     portal_core: info
     gunicorn: warning
-  profiling:
-    enabled: false
-    path: core/profiling/
