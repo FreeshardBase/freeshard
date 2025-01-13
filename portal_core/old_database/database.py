@@ -4,11 +4,9 @@ import time
 import traceback
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
 
 import gconf
 from tinydb import TinyDB, Query, JSONStorage
-from tinydb.table import Table
 from tinydb_serialization import SerializationMiddleware
 from tinydb_serialization.serializers import DateTimeSerializer
 
@@ -51,12 +49,6 @@ def get_db() -> TinyDB:
 				f'waiting for db_lock for {wait_time - start_time :.3f}s, '
 				f'operation took {end_time - wait_time :.3f}s')
 			log.debug('Stacktrace:\n' + ''.join(traceback.format_stack()))
-
-
-@contextmanager
-def backups_table() -> Iterator[Table]:
-	with get_db() as db:
-		yield db.table('backups')
 
 
 def get_value(key: str):

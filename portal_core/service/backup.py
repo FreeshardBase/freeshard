@@ -9,10 +9,12 @@ from typing import List
 
 import gconf
 from requests import HTTPError
+from sqlmodel import select
 
+from portal_core.database.database import session
+from portal_core.database.models import BackupReport, BackupStats
+from portal_core.model.backup import BackupPassphraseLastAccessInfoDB
 from portal_core.old_database import database as old_database
-from portal_core.old_database.database import backups_table
-from portal_core.model.backup import BackupReport, BackupStats, BackupPassphraseLastAccessInfoDB
 from portal_core.service.portal_controller import get_backup_sas_url
 from portal_core.util import passphrase as passphrase_util, signals
 
@@ -98,12 +100,14 @@ async def backup_directories(directories: List[Path], container_name: str, sas_t
 
 		overall_end_time = datetime.datetime.now(datetime.timezone.utc)
 		report = BackupReport(
-			directories=dir_stats,
+			backup_stats=dir_stats,
 			startTime=overall_start_time,
 			endTime=overall_end_time,
 		)
-		with backups_table() as table:
-			table.insert(report.dict())
+		with session() as session_:
+			session_.add(report)
+			session_.commit()
+
 		log.info('Backup done')
 
 
@@ -147,10 +151,9 @@ def _get_relative_directory(directory: Path) -> Path:
 
 
 def get_latest_backup_report() -> BackupReport | None:
-	with backups_table() as table:
-		latest_stats = max(table.all(), key=lambda x: x['endTime'], default=None)
-	return BackupReport.parse_obj(latest_stats) if latest_stats else None
-
+	with session() as session_:
+		latest_stats = session_.exec(select(BackupReport).order_by(BackupReport.endTime.desc())).first()
+		return latest_stats
 
 def ensure_packup_passphrase():
 	try:

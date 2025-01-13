@@ -7,7 +7,7 @@ from common_py import crypto
 from common_py import human_encoding
 from common_py.crypto import PublicKey
 from pydantic import computed_field, field_validator, model_validator
-from sqlmodel import SQLModel, Field, Column
+from sqlmodel import SQLModel, Field, Column, Relationship
 
 from portal_core.database.util import UTCTimestamp
 from portal_core.model.peer import InputPeer
@@ -167,3 +167,40 @@ class AppUsageTrack(SQLModel, table=True):
 	id: int | None = Field(default=None, primary_key=True)
 	timestamp: date = Field(index=True)
 	installed_app: str
+
+
+class BackupReport(SQLModel, table=True):
+	id: int | None = Field(default=None, primary_key=True)
+	startTime: datetime = Field(sa_column=Column(UTCTimestamp))
+	endTime: datetime = Field(sa_column=Column(UTCTimestamp))
+
+	backup_stats: typing.List['BackupStats'] = Relationship(back_populates='backup_report')
+
+
+class BackupStats(SQLModel, table=True):
+	id: int | None = Field(default=None, primary_key=True)
+	directory: str
+	startTime: datetime
+	endTime: datetime
+	bytes: int | None
+	checks: int | None
+	deletedDirs: int | None
+	deletes: int | None
+	elapsedTime: float | None
+	errors: int | None
+	fatalError: bool | None
+	renames: int | None
+	retryError: bool | None
+	serverSideCopies: int | None
+	serverSideCopyBytes: int | None
+	serverSideMoveBytes: int | None
+	serverSideMoves: int | None
+	speed: int | None
+	totalBytes: int | None
+	totalChecks: int | None
+	totalTransfers: int | None
+	transferTime: float | None
+	transfers: int | None
+
+	backup_report_id: int = Field(foreign_key='backupreport.id')
+	backup_report: BackupReport = Relationship(back_populates='backup_stats')
