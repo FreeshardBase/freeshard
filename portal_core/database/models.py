@@ -1,5 +1,5 @@
 import typing
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from enum import Enum
 
 import gconf
@@ -161,3 +161,9 @@ class TourStatus(str, Enum):
 class Tour(SQLModel, table=True):
 	name: str = Field(primary_key=True)
 	status: TourStatus = TourStatus.UNSEEN
+
+
+class AppUsageTrack(SQLModel, table=True):
+	id: int | None = Field(default=None, primary_key=True)
+	timestamp: date = Field(index=True)
+	installed_app: str
