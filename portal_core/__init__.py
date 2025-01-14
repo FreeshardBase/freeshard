@@ -1,17 +1,15 @@
 import logging
 import os
-import shutil
 import sys
 from contextlib import asynccontextmanager
 from importlib.metadata import metadata
 from pathlib import Path
 from typing import List
 
-import jinja2
-from requests import ConnectionError, HTTPError
-
 import gconf
+import jinja2
 from fastapi import FastAPI
+from requests import ConnectionError, HTTPError
 
 from .database import database
 from .service import app_installation, identity, app_lifecycle, peer, \

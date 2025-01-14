@@ -35,6 +35,7 @@ setup(
 		'aiozipstream',
 		'email_validator',
 		'croniter',
+		'bitstring',
 		'azure-storage-blob',
 		'asgi-lifespan==2.*',
 		'python-multipart',
