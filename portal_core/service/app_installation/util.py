@@ -59,9 +59,9 @@ async def app_exists_in_store(name: str) -> bool:
 async def render_docker_compose_template(app: InstalledApp):
 	log.debug(f'creating docker-compose.yml for app {app.name}')
 	fs = {
-		'app_data': f'/home/portal/user_data/app_data/{app.name}',
-		'all_app_data': '/home/portal/user_data/app_data',
-		'shared': '/home/portal/user_data/shared',
+		'app_data': f'{gconf.get("path_root_host")}/user_data/app_data/{app.name}',
+		'all_app_data': f'{gconf.get("path_root_host")}/user_data/app_data',
+		'sfhared': f'{gconf.get("path_root_host")}/user_data/shared',
 	}
 
 	with identities_table() as identities:

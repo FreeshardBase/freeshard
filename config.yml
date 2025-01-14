@@ -1,4 +1,5 @@
 path_root: "/"
+path_root_host: "/home/portal"
 
 dns:
   zone: p.getportal.org
