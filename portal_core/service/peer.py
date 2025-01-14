@@ -3,7 +3,6 @@ import logging
 
 import httpx
 import requests
-from common_py.crypto import PublicKey
 from fastapi.requests import Request
 from http_message_signatures import HTTPSignatureKeyResolver, algorithms
 from requests_http_signature import HTTPSignatureAuth
@@ -12,6 +11,7 @@ from tinydb import Query
 from portal_core.database.database import peers_table
 from portal_core.model.identity import OutputIdentity
 from portal_core.model.peer import Peer
+from portal_core.service.crypto import PublicKey
 from portal_core.util import signals
 
 log = logging.getLogger(__name__)

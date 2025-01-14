@@ -1,5 +1,5 @@
 from portal_core.model.identity import OutputIdentity
-from common_py.crypto import PublicKey
+from portal_core.service.crypto import PublicKey
 
 from tests.conftest import requires_test_env
 from tests.util import verify_signature_auth

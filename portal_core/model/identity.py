@@ -1,11 +1,11 @@
 from typing import Optional
 
 import gconf
-from common_py import crypto
 from email_validator import validate_email, EmailNotValidError
 from pydantic import validator, BaseModel
 
 from portal_core.model.util import PropertyBaseModel
+from portal_core.service import crypto
 
 
 class Identity(PropertyBaseModel):

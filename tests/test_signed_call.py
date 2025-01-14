@@ -1,5 +1,5 @@
 import pytest
-from common_py.crypto import PublicKey
+from portal_core.service.crypto import PublicKey
 from http_message_signatures import InvalidSignature
 from httpx import AsyncClient
 

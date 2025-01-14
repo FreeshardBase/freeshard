@@ -30,6 +30,7 @@ setup(
 		'blinker',
 		'requests',
 		'aiohttp',
+		'cryptography',
 		'requests-http-signature',
 		'aiozipstream',
 		'email_validator',
@@ -39,7 +40,6 @@ setup(
 		'python-multipart',
 		'aiofiles',
 		'httpx',
-		'common_py @ git+https://app_controller:MzJwN_VwwEyVmtj22LXx@gitlab.com/ptl/common_py.git',
 	],
 	extras_require={
 		'dev': [

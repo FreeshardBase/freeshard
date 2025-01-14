@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Callable
 from urllib.parse import urlparse
 
-from common_py.crypto import PublicKey
+from portal_core.service.crypto import PublicKey
 from fastapi import Response
 from fastapi import status
 from http_message_signatures import HTTPSignatureKeyResolver, algorithms, VerifyResult

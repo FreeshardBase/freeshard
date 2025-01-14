@@ -1,6 +1,6 @@
 from typing import Optional
 
-from common_py.crypto import PublicKey
+from portal_core.service.crypto import PublicKey
 from pydantic import BaseModel, validator, root_validator
 
 
