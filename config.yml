@@ -16,6 +16,9 @@ services:
       - core/**/*
       - user_data/**/*
 
+traefik:
+  acme_email: contact@getportal.org
+
 apps:
   app_store:
     base_url: "https://storageaccountportab0da.blob.core.windows.net"

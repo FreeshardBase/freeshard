@@ -6,6 +6,8 @@ from contextlib import asynccontextmanager
 from importlib.metadata import metadata
 from pathlib import Path
 from typing import List
+
+import jinja2
 from requests import ConnectionError, HTTPError
 
 import gconf
@@ -118,6 +120,12 @@ def make_background_tasks() -> List[BackgroundTask]:
 
 def _copy_traefik_static_config():
 	source = Path.cwd() / 'data' / 'traefik.yml'
+	with open(source, 'r') as f:
+		template = jinja2.Template(f.read())
+
+	result = template.render({'acme_email': gconf.get('traefik.acme_email')})
+
 	root = Path(gconf.get('path_root'))
 	target = root / 'core' / 'traefik.yml'
-	shutil.copy(source, target)
+	with open(target, 'w') as f:
+		f.write(result)
