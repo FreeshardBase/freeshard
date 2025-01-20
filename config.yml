@@ -21,9 +21,6 @@ apps:
     base_url: "https://storageaccountportab0da.blob.core.windows.net"
     container_name: "app-store"
   registries:
-    - uri: registry.gitlab.com
-      username: portal-apps-repo
-      password: glpat-rLmGFxqeZ8kusdD-2AsL
     - uri: portalapps.azurecr.io
       username: 0e4000f7-41b1-45d6-9f2f-7e4a952a19b0
       password: bk11Ws.8OGakl-~t.7bKh5l9EYXTbHw.0T
