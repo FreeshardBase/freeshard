@@ -12,6 +12,12 @@ services:
       - "80:80"
       - "443:443"
       - "8883:8883"
+    #environment:
+      #- AZURE_CLIENT_ID=todo
+      #- AZURE_CLIENT_SECRET=todo
+      #- AZURE_SUBSCRIPTION_ID=todo
+      #- AZURE_TENANT_ID=todo
+      #- AZURE_RESOURCE_GROUP=todo
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./traefik.yml:/etc/traefik/traefik.yml
@@ -34,7 +40,7 @@ services:
       - portal
     environment:
       - GCONF_DNS_ZONE=localhost
-      - GCONF_TRAEFIK_ACME_EMAIL=contact@getportal.org
+      - GCONF_TRAEFIK_ACME_EMAIL=user@example.com # todo: change this
 
   web-terminal:
     image: registry.gitlab.com/ptl/web-terminal:0.34.0
