@@ -61,7 +61,7 @@ async def render_docker_compose_template(app: InstalledApp):
 	fs = {
 		'app_data': f'{gconf.get("path_root_host")}/user_data/app_data/{app.name}',
 		'all_app_data': f'{gconf.get("path_root_host")}/user_data/app_data',
-		'sfhared': f'{gconf.get("path_root_host")}/user_data/shared',
+		'shared': f'{gconf.get("path_root_host")}/user_data/shared',
 	}
 
 	with identities_table() as identities:

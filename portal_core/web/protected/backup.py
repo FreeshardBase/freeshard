@@ -1,12 +1,7 @@
 import logging
-from datetime import datetime
-from pathlib import Path
 
-import gconf
 from fastapi import Header, HTTPException, APIRouter, status
-from starlette.responses import StreamingResponse
 from tinydb import Query
-from zipstream import ZipStream
 
 from portal_core.database import database
 from portal_core.database.database import terminals_table
@@ -14,7 +9,6 @@ from portal_core.model.backup import BackupPassphraseResponse, BackupInfoRespons
 	BackupPassphraseLastAccessInfoResponse
 from portal_core.model.terminal import Terminal
 from portal_core.service import backup
-from portal_core.service.identity import get_default_identity
 
 log = logging.getLogger(__name__)
 
@@ -61,38 +55,3 @@ async def start_backup():
 		await backup.start_backup()
 	except backup.BackupStartFailedError as e:
 		raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get('/export')
-def export_backup():
-	log.info('exporting full backup')
-	zs = ZipStream(content_generator())
-	return StreamingResponse(
-		zs.stream(),
-		media_type='application/zip',
-		headers={'Content-Disposition': f'attachment; filename={get_filename()}'}
-	)
-
-
-def get_filename():
-	default_identity_id = get_default_identity().short_id
-	formatted_now = datetime.now().strftime("%Y-%m-%d %H-%M")
-	filename = f'Backup of Portal {default_identity_id} - {formatted_now}.zip'
-	return filename
-
-
-def content_generator():
-	yield from included_dirs()
-
-
-def included_dirs():
-	path_root = Path(gconf.get('path_root'))
-	globs = gconf.get('services.backup.included_globs')
-	for glob in globs:
-		for path in path_root.glob(glob):
-			if path.is_file():
-				yield {
-					'file': str(path),
-					'name': str(path.relative_to(path_root)),
-					'compression': 'deflate',
-				}
