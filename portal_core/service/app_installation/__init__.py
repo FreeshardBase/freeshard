@@ -5,7 +5,7 @@ import gconf
 from portal_core.database.database import installed_apps_table
 from portal_core.model.app_meta import InstallationReason, InstalledApp, Status
 from portal_core.util import signals
-from portal_core.util.subprocess import subprocess
+from portal_core.util.subprocess import subprocess, SubprocessError
 from . import util, worker
 from .exceptions import AppAlreadyInstalled, AppDoesNotExist, AppNotInstalled
 
@@ -111,5 +111,9 @@ async def refresh_init_apps():
 async def login_docker_registries():
 	registries = gconf.get('apps.registries')
 	for r in registries:
-		await subprocess('docker', 'login', '-u', r['username'], '-p', r['password'], r['uri'])
-		log.debug(f'logged in to registry {r["uri"]}')
+		try:
+			await subprocess('docker', 'login', '-u', r['username'], '-p', r['password'], r['uri'])
+		except SubprocessError as e:
+			log.error(f'could not log in to registry {r["uri"]}: {e}')
+		else:
+			log.debug(f'logged in to registry {r["uri"]}')

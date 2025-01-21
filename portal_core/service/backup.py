@@ -152,7 +152,7 @@ def get_latest_backup_report() -> BackupReport | None:
 	return BackupReport.parse_obj(latest_stats) if latest_stats else None
 
 
-def ensure_packup_passphrase():
+def ensure_backup_passphrase():
 	try:
 		database.get_value(STORE_KEY_BACKUP_PASSPHRASE)
 	except KeyError:
