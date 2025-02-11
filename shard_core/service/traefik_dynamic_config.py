@@ -33,24 +33,24 @@ def compile_config(apps: List[AppInfo], portal: SafeIdentity) -> t.Model:
 
 def _add_http_section(model: t.Model, portal: SafeIdentity):
 	_routers = {
-		'portal_core_public': t.HttpRouter(
+		'shard_core_public': t.HttpRouter(
 			rule='PathPrefix(`/core/public`)',
 			entryPoints=['https'],
-			service='portal_core',
+			service='shard_core',
 			middlewares=['strip', 'auth-public'],
 			tls=make_cert_resolver(portal),
 		),
-		'portal_core_private': t.HttpRouter(
+		'shard_core_private': t.HttpRouter(
 			rule='PathPrefix(`/core/protected`)',
 			entryPoints=['https'],
-			service='portal_core',
+			service='shard_core',
 			middlewares=['strip', 'auth-private'],
 			tls=make_cert_resolver(portal),
 		),
-		'portal_core_management': t.HttpRouter(
+		'shard_core_management': t.HttpRouter(
 			rule='PathPrefix(`/core/management`)',
 			entryPoints=['https'],
-			service='portal_core',
+			service='shard_core',
 			middlewares=['strip', 'auth-management'],
 			tls=make_cert_resolver(portal),
 		),
@@ -81,7 +81,7 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
 		'auth-private': t.HttpMiddleware(
 			__root__=t.HttpMiddlewareItem9(
 				forwardAuth=t.ForwardAuthMiddleware(
-					address='http://portal_core/internal/authenticate_terminal',
+					address='http://shard_core/internal/authenticate_terminal',
 					authResponseHeaders=[
 						'X-Ptl-Client-Type',
 						'X-Ptl-Client-Id',
@@ -93,7 +93,7 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
 		'auth-management': t.HttpMiddleware(
 			__root__=t.HttpMiddlewareItem9(
 				forwardAuth=t.ForwardAuthMiddleware(
-					address='http://portal_core/internal/authenticate_management'
+					address='http://shard_core/internal/authenticate_management'
 				)
 			)
 		),
@@ -111,7 +111,7 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
 		'auth': t.HttpMiddleware(
 			__root__=t.HttpMiddlewareItem9(
 				forwardAuth=t.ForwardAuthMiddleware(
-					address='http://portal_core/internal/auth',
+					address='http://shard_core/internal/auth',
 					authResponseHeadersRegex='^X-Ptl-.*'
 				)
 			)
@@ -120,18 +120,18 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
 			__root__=t.HttpMiddlewareItem8(
 				errors=t.ErrorsMiddleware(
 					status=['500-599', '400-499'],
-					service='portal_core',
+					service='shard_core',
 					query='/internal/app_error/{status}'
 				)
 			)
 		)
 	}
 	_services = {
-		'portal_core': t.HttpService(
+		'shard_core': t.HttpService(
 			__root__=t.HttpServiceItem(
 				loadBalancer=t.HttpLoadBalancerService(
 					servers=[
-						t.Server(url='http://portal_core:80/')
+						t.Server(url='http://shard_core:80/')
 					]
 				)
 			)

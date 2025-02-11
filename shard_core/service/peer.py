@@ -32,7 +32,7 @@ async def update_all_peer_pubkeys():
 
 
 async def update_peer_meta(peer: Peer):
-	url = f'https://{peer.short_id}.p.getportal.org/core/public/meta/whoareyou'
+	url = f'https://{peer.short_id}.freeshard.cloud/core/public/meta/whoareyou'
 
 	def do_request():
 		return requests.get(url=url)

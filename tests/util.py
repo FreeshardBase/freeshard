@@ -128,12 +128,12 @@ def modify_request_like_traefik_forward_auth(request: PreparedRequest) -> Reques
 
 
 @asynccontextmanager
-async def docker_network_shard():
-	await subprocess('docker', 'network', 'create', 'shard')
+async def docker_network_portal():
+	await subprocess('docker', 'network', 'create', 'portal')
 	try:
 		yield
 	finally:
-		await subprocess('docker', 'network', 'rm', 'shard')
+		await subprocess('docker', 'network', 'rm', 'portal')
 
 
 async def retry_async(f: Callable, timeout: int = 90, frequency: int = 3, retry_errors=None):

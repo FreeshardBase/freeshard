@@ -55,7 +55,7 @@ def get_splash_behaviour(request: Request):
 		behaviour.do_reload = False
 	if not size_is_compatible(app_meta.minimum_portal_size):
 		display_size = app_meta.minimum_portal_size.value.upper()
-		behaviour.display_status = f'Portal too small, need at least {display_size}'
+		behaviour.display_status = f'VM too small, need at least {display_size}'
 		behaviour.do_reload = False
 	if status_code == 401:
 		behaviour.display_status = 'Access Denied'

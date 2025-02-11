@@ -27,8 +27,8 @@ class Profile(BaseModel):
 			time_created=portal.time_created,
 			time_assigned=portal.time_assigned,
 			delete_after=portal.delete_after,
-			portal_size=portal.size,
-			max_portal_size=portal.max_size,
+			vm_size=VMSize(portal.size),
+			max_vm_size=VMSize(portal.max_size),
 		)
 
 

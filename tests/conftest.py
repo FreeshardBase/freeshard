@@ -30,7 +30,7 @@ from shard_core.model.profile import Profile
 from shard_core.service import websocket, app_installation
 from shard_core.service.app_tools import get_installed_apps_path
 from shard_core.web.internal.call_peer import _get_app_for_ip_address
-from tests.util import docker_network_shard, wait_until_all_apps_installed, \
+from tests.util import docker_network_portal, wait_until_all_apps_installed, \
 	mock_app_store_path
 
 pytest_plugins = ('pytest_asyncio',)
@@ -77,7 +77,7 @@ async def api_client(mocker, event_loop) -> AsyncClient:
 
 	mocker.patch('shard_core.service.app_installation.login_docker_registries', noop)
 
-	async with docker_network_shard():
+	async with docker_network_portal():
 		app = shard_core.create_app()
 		# for the LifeSpanManager, see: https://github.com/encode/httpx/issues/1024
 		async with LifespanManager(app, startup_timeout=20), \

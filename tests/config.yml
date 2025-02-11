@@ -14,6 +14,7 @@ apps:
 
 log:
   levels:
+    shard_core: info
     'shard_core.service.app_installation': debug
     'shard_core.service.portal_controller': debug
     'shard_core.service.app_usage_reporting': error
