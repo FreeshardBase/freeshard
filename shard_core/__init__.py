@@ -65,7 +65,7 @@ async def lifespan(_):
 	await app_installation.login_docker_registries()
 	await migration.migrate()
 	await app_installation.refresh_init_apps()
-	backup.ensure_packup_passphrase()
+	backup.ensure_backup_passphrase()
 	try:
 		await portal_controller.refresh_profile()
 	except (ConnectionError, HTTPError) as e:
