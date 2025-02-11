@@ -1,13 +1,14 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="management_mock" type="PythonConfigurationType" factoryName="Python">
     <module name="portal_core" />
+    <option name="ENV_FILES" value="" />
     <option name="INTERPRETER_OPTIONS" value="" />
     <option name="PARENT_ENVS" value="true" />
     <envs>
       <env name="PYTHONUNBUFFERED" value="1" />
     </envs>
     <option name="SDK_HOME" value="$PROJECT_DIR$/venv/bin/python" />
-    <option name="SDK_NAME" value="Python 3.11 (portal_core)" />
+    <option name="SDK_NAME" value="Python 3.12 (portal_core)" />
     <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
     <option name="IS_MODULE_SDK" value="false" />
     <option name="ADD_CONTENT_ROOTS" value="true" />
