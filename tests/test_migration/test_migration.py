@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from portal_core.model.app_meta import Status
-from portal_core.service.migration import migrate
+from shard_core.model.app_meta import Status
+from shard_core.service.migration import migrate
 from tests.conftest import requires_test_env
 from tests.util import retry_async
 
@@ -13,7 +13,7 @@ from tests.util import retry_async
 @pytest.fixture
 def init_db_file(tmp_path):
 	init_db_file = Path(__file__).parent / 'init_db.json'
-	dest = tmp_path / 'path_root' / 'core' / 'portal_core_db.json'
+	dest = tmp_path / 'path_root' / 'core' / 'shard_core_db.json'
 	dest.parent.mkdir(parents=True, exist_ok=True)
 	dest.touch()
 	shutil.copy(init_db_file, dest)
@@ -31,7 +31,7 @@ async def test_migration(init_db_file, api_client, tmp_path):
 
 	await retry_async(assert_status_down)
 
-	with open(tmp_path / 'path_root' / 'core' / 'portal_core_db.json') as f:
+	with open(tmp_path / 'path_root' / 'core' / 'shard_core_db.json') as f:
 		db = json.load(f)
 	assert 'apps' not in db
 
@@ -39,7 +39,7 @@ async def test_migration(init_db_file, api_client, tmp_path):
 @pytest.fixture
 def init_db_file_nonexisting_app(tmp_path):
 	init_db_file = Path(__file__).parent / 'init_db_nonexisting_app.json'
-	dest = tmp_path / 'path_root' / 'core' / 'portal_core_db.json'
+	dest = tmp_path / 'path_root' / 'core' / 'shard_core_db.json'
 	dest.parent.mkdir(parents=True, exist_ok=True)
 	dest.touch()
 	shutil.copy(init_db_file, dest)
@@ -57,7 +57,7 @@ async def test_migration_nonexisting_app(
 
 	await retry_async(assert_status_down)
 
-	with open(tmp_path / 'path_root' / 'core' / 'portal_core_db.json') as f:
+	with open(tmp_path / 'path_root' / 'core' / 'shard_core_db.json') as f:
 		db = json.load(f)
 	assert 'apps' not in db
 
@@ -65,7 +65,7 @@ async def test_migration_nonexisting_app(
 @pytest.fixture
 def init_db_file_incomplete_migration(tmp_path):
 	init_db_file = Path(__file__).parent / 'init_db_incomplete_migration.json'
-	dest = tmp_path / 'path_root' / 'core' / 'portal_core_db.json'
+	dest = tmp_path / 'path_root' / 'core' / 'shard_core_db.json'
 	dest.parent.mkdir(parents=True, exist_ok=True)
 	dest.touch()
 	shutil.copy(init_db_file, dest)
@@ -75,7 +75,7 @@ def init_db_file_incomplete_migration(tmp_path):
 async def test_migration_incomplete_migration(
 		init_db_file_incomplete_migration, tmp_path):
 	await migrate()
-	with open(tmp_path / 'path_root' / 'core' / 'portal_core_db.json') as f:
+	with open(tmp_path / 'path_root' / 'core' / 'shard_core_db.json') as f:
 		db = json.load(f)
 	assert 'apps' not in db
 	assert 'installed_apps' in db

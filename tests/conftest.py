@@ -22,15 +22,15 @@ from httpx import AsyncClient, ASGITransport
 from requests import PreparedRequest
 from responses import RequestsMock
 
-import portal_core
-from portal_core.model.app_meta import PortalSize
-from portal_core.model.backend.portal_meta import PortalMetaExt, Size
-from portal_core.model.identity import OutputIdentity, Identity
-from portal_core.model.profile import Profile
-from portal_core.service import websocket, app_installation
-from portal_core.service.app_tools import get_installed_apps_path
-from portal_core.web.internal.call_peer import _get_app_for_ip_address
-from tests.util import docker_network_portal, wait_until_all_apps_installed, \
+import shard_core
+from shard_core.model.app_meta import VMSize
+from shard_core.model.backend.portal_meta import PortalMetaExt, Size
+from shard_core.model.identity import OutputIdentity, Identity
+from shard_core.model.profile import Profile
+from shard_core.service import websocket, app_installation
+from shard_core.service.app_tools import get_installed_apps_path
+from shard_core.web.internal.call_peer import _get_app_for_ip_address
+from tests.util import docker_network_shard, wait_until_all_apps_installed, \
 	mock_app_store_path
 
 pytest_plugins = ('pytest_asyncio',)
@@ -75,10 +75,10 @@ async def api_client(mocker, event_loop) -> AsyncClient:
 	async def noop():
 		pass
 
-	mocker.patch('portal_core.service.app_installation.login_docker_registries', noop)
+	mocker.patch('shard_core.service.app_installation.login_docker_registries', noop)
 
-	async with docker_network_portal():
-		app = portal_core.create_app()
+	async with docker_network_shard():
+		app = shard_core.create_app()
 		# for the LifeSpanManager, see: https://github.com/encode/httpx/issues/1024
 		async with LifespanManager(app, startup_timeout=20), \
 				AsyncClient(transport=ASGITransport(app=app), base_url='https://init', timeout=20) as client:
@@ -92,17 +92,17 @@ async def api_client(mocker, event_loop) -> AsyncClient:
 
 
 mock_profile = Profile(
-	vm_id='portal_foobar',
+	vm_id='shard_foobar',
 	owner='test owner',
 	owner_email='testowner@foobar.com',
 	time_created=datetime.now() - timedelta(days=2),
 	time_assigned=datetime.now() - timedelta(days=1),
-	portal_size=PortalSize.XS,
-	max_portal_size=PortalSize.M,
+	vm_size=VMSize.XS,
+	max_vm_size=VMSize.M,
 )
 
 mock_meta = PortalMetaExt(
-	id='portal_foobar',
+	id='shard_foobar',
 	owner='test owner',
 	owner_email='testowner@foobar.com',
 	time_created=datetime.now() - timedelta(days=2),
@@ -164,7 +164,7 @@ def requests_mock():
 
 @pytest.fixture
 def peer_mock_requests(mocker):
-	mocker.patch('portal_core.web.internal.call_peer._get_app_for_ip_address',
+	mocker.patch('shard_core.web.internal.call_peer._get_app_for_ip_address',
 				 lambda x: 'mock_app')
 	_get_app_for_ip_address.cache_clear()
 	peer_identity = Identity.create('mock peer')
@@ -198,7 +198,7 @@ def mock_app_store(mocker):
 		return target_zip
 
 	mocker.patch(
-		'portal_core.service.app_installation.worker._download_app_zip',
+		'shard_core.service.app_installation.worker._download_app_zip',
 		mock_download_app_zip
 	)
 
@@ -207,7 +207,7 @@ def mock_app_store(mocker):
 		return source_zip.exists()
 
 	mocker.patch(
-		'portal_core.service.app_installation.util.app_exists_in_store',
+		'shard_core.service.app_installation.util.app_exists_in_store',
 		mock_app_exists_in_store
 	)
 

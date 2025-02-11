@@ -1,6 +1,6 @@
 from httpx import AsyncClient
 
-from portal_core.model.profile import Profile
+from shard_core.model.profile import Profile
 from tests import conftest
 from tests.conftest import requires_test_env
 

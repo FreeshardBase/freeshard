@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from portal_core.service import crypto
+from shard_core.service import crypto
 
 
 def test_sign():

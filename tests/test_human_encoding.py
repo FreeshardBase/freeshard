@@ -1,6 +1,6 @@
 import pytest
 
-from portal_core.service import human_encoding as he
+from shard_core.service import human_encoding as he
 
 
 def test_coding_without_init():

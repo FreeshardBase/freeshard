@@ -1,4 +1,4 @@
-from portal_core.model.app_meta import AppMeta, Lifecycle, PortalSize
+from shard_core.model.app_meta import AppMeta, Lifecycle, VMSize
 from tests.conftest import requires_test_env
 
 
@@ -13,7 +13,7 @@ def test_migrate_1_0_to_1_2():
 		entrypoints=[],
 		paths={},
 		lifecycle=Lifecycle(always_on=False, idle_time_for_shutdown=60),
-		minimum_portal_size=PortalSize.XS,
+		minimum_portal_size=VMSize.XS,
 		store_info=None,
 	)
 	app_meta_in_json = app_meta_in.dict(exclude={'pretty_name'})

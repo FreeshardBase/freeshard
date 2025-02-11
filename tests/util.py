@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Callable
 from urllib.parse import urlparse
 
-from portal_core.service.crypto import PublicKey
+from shard_core.service.crypto import PublicKey
 from fastapi import Response
 from fastapi import status
 from http_message_signatures import HTTPSignatureKeyResolver, algorithms, VerifyResult
@@ -14,8 +14,8 @@ from httpx import URL, Request
 from requests import PreparedRequest
 from requests_http_signature import HTTPSignatureAuth
 
-from portal_core.model.app_meta import InstalledApp, Status
-from portal_core.util.subprocess import subprocess
+from shard_core.model.app_meta import InstalledApp, Status
+from shard_core.util.subprocess import subprocess
 
 WAITING_DOCKER_IMAGE = 'nginx:alpine'
 
@@ -128,12 +128,12 @@ def modify_request_like_traefik_forward_auth(request: PreparedRequest) -> Reques
 
 
 @asynccontextmanager
-async def docker_network_portal():
-	await subprocess('docker', 'network', 'create', 'portal')
+async def docker_network_shard():
+	await subprocess('docker', 'network', 'create', 'shard')
 	try:
 		yield
 	finally:
-		await subprocess('docker', 'network', 'rm', 'portal')
+		await subprocess('docker', 'network', 'rm', 'shard')
 
 
 async def retry_async(f: Callable, timeout: int = 90, frequency: int = 3, retry_errors=None):

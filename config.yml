@@ -1,8 +1,8 @@
 path_root: "/"
-path_root_host: "/home/portal"
+path_root_host: "/home/shard"
 
 dns:
-  zone: p.getportal.org
+  zone: freeshard.cloud
   prefix length: 6
 
 services:
@@ -18,7 +18,7 @@ services:
       - user_data/**/*
 
 traefik:
-  acme_email: contact@getportal.org
+  acme_email: contact@freeshard.net
 
 apps:
   app_store:
@@ -49,5 +49,4 @@ portal_controller:
 
 log:
   levels:
-    portal_core: info
     gunicorn: warning

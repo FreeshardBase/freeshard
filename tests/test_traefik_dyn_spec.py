@@ -17,11 +17,11 @@ async def test_template_is_written(api_client):
 		assert 'authResponseHeadersRegex' in out_middlewares['auth']['forwardAuth']
 
 		out_services_http: dict = output['http']['services']
-		assert set(out_services_http.keys()) == {'portal_core', 'web-terminal', 'filebrowser_http'}
+		assert set(out_services_http.keys()) == {'shard_core', 'web-terminal', 'filebrowser_http'}
 		assert out_services_http['filebrowser_http']['loadBalancer']['servers'] == [{'url': 'http://filebrowser:80'}]
 
 		out_routers_http: dict = output['http']['routers']
 		assert set(out_routers_http.keys()) == {
-			'portal_core_private', 'portal_core_public', 'portal_core_management', 'web-terminal', 'traefik',
+			'shard_core_private', 'shard_core_public', 'shard_core_management', 'web-terminal', 'traefik',
 			'filebrowser_http'}
 		assert out_routers_http['filebrowser_http']['service'] == 'filebrowser_http'

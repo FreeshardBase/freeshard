@@ -95,7 +95,7 @@ async def test_uninstall_running_app(api_client: AsyncClient):
 
 	# Start the app
 	response = await api_client.get('internal/auth', headers={
-		'X-Forwarded-Host': f'{app_name}.myportal.org',
+		'X-Forwarded-Host': f'{app_name}.myshard.org',
 		'X-Forwarded-Uri': '/pub'
 	})
 	response.raise_for_status()

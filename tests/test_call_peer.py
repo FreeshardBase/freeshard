@@ -1,11 +1,11 @@
-from portal_core.service.crypto import PublicKey
+from shard_core.service.crypto import PublicKey
 from fastapi import status
 from http_message_signatures import algorithms
 from httpx import AsyncClient
 from requests import PreparedRequest, Request
 from requests_http_signature import HTTPSignatureAuth
 
-from portal_core.model.identity import OutputIdentity
+from shard_core.model.identity import OutputIdentity
 from tests.conftest import requires_test_env
 from tests.util import verify_signature_auth, modify_request_like_traefik_forward_auth
 
@@ -13,8 +13,8 @@ from tests.util import verify_signature_auth, modify_request_like_traefik_forwar
 @requires_test_env('full')
 async def test_call_peer_from_app_basic(peer_mock_requests, api_client):
 	whoareyou = await api_client.get('public/meta/whoareyou')
-	portal_identity = OutputIdentity(**whoareyou.json())
-	pubkey = PublicKey(portal_identity.public_key_pem)
+	identity = OutputIdentity(**whoareyou.json())
+	pubkey = PublicKey(identity.public_key_pem)
 
 	path = '/foo/bar'
 	response = await api_client.get(f'internal/call_peer/{peer_mock_requests.identity.short_id}{path}')
@@ -22,15 +22,15 @@ async def test_call_peer_from_app_basic(peer_mock_requests, api_client):
 
 	received_request = peer_mock_requests.mock.calls[0].request
 	v = verify_signature_auth(received_request, pubkey)
-	assert portal_identity.id.startswith(v.parameters['keyid'])
+	assert identity.id.startswith(v.parameters['keyid'])
 	assert received_request.path_url == path
 
 
 @requires_test_env('full')
 async def test_call_peer_from_app_post(peer_mock_requests, api_client):
 	wouareyou = await api_client.get('public/meta/whoareyou')
-	portal_identity = OutputIdentity(**wouareyou.json())
-	pubkey = PublicKey(portal_identity.public_key_pem)
+	identity = OutputIdentity(**wouareyou.json())
+	pubkey = PublicKey(identity.public_key_pem)
 
 	path = '/foo/bar'
 	response = await api_client.post(
@@ -40,7 +40,7 @@ async def test_call_peer_from_app_post(peer_mock_requests, api_client):
 
 	received_request: PreparedRequest = peer_mock_requests.mock.calls[0].request
 	v = verify_signature_auth(received_request, pubkey)
-	assert portal_identity.id.startswith(v.parameters['keyid'])
+	assert identity.id.startswith(v.parameters['keyid'])
 	assert received_request.path_url == path
 	assert received_request.body == b'foo data bar'
 

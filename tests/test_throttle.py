@@ -1,6 +1,6 @@
 import time
 
-from portal_core.util.misc import throttle
+from shard_core.util.misc import throttle
 from tests.conftest import requires_test_env
 
 

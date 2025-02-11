@@ -4,9 +4,9 @@ from httpx import AsyncClient
 from starlette import status
 from tinydb.operations import delete
 
-from portal_core.database.database import terminals_table
-from portal_core.model.backend.portal_meta import PortalMetaExt
-from portal_core.model.terminal import Terminal, Icon
+from shard_core.database.database import terminals_table
+from shard_core.model.backend.portal_meta import PortalMetaExt
+from shard_core.model.terminal import Terminal, Icon
 from tests.conftest import requests_mock_context, mock_meta, requires_test_env
 from tests.util import get_pairing_code, add_terminal, pair_new_terminal
 
@@ -204,7 +204,7 @@ async def test_last_connection(api_client: AsyncClient):
 	sleep(0.1)
 
 	assert (await api_client.get('internal/auth', headers={
-		'X-Forwarded-Host': 'mock_app.myportal.org',
+		'X-Forwarded-Host': 'mock_app.myshard.org',
 		'X-Forwarded-Uri': '/foo'
 	})).status_code == status.HTTP_200_OK
 	last_connection_1 = Terminal(
@@ -220,7 +220,7 @@ async def test_last_connection(api_client: AsyncClient):
 	sleep(0.1)
 
 	assert (await api_client.get('internal/auth', headers={
-		'X-Forwarded-Host': 'mock_app.myportal.org',
+		'X-Forwarded-Host': 'mock_app.myshard.org',
 		'X-Forwarded-Uri': '/foo'
 	})).status_code == status.HTTP_200_OK
 	last_connection_3 = Terminal(
@@ -240,7 +240,7 @@ async def test_pairing_with_profile_missing_owner(
 
 		response = await api_client.get('protected/identities/default')
 		assert response.status_code == status.HTTP_200_OK
-		assert response.json()['name'] == 'Portal Owner'
+		assert response.json()['name'] == 'Shard Owner'
 		assert response.json()['email'] == 'testowner@foobar.com'
 
 

@@ -1,10 +1,10 @@
 import pytest
-from portal_core.service.crypto import PublicKey
+from shard_core.service.crypto import PublicKey
 from http_message_signatures import InvalidSignature
 from httpx import AsyncClient
 
-from portal_core.model.identity import Identity, OutputIdentity
-from portal_core.model.profile import Profile
+from shard_core.model.identity import Identity, OutputIdentity
+from shard_core.model.profile import Profile
 from tests import conftest
 from tests.conftest import requires_test_env
 from tests.util import verify_signature_auth
@@ -12,14 +12,14 @@ from tests.util import verify_signature_auth
 
 @requires_test_env('full')
 async def test_call_management_api_verified(requests_mock, api_client: AsyncClient):
-	portal_identity = OutputIdentity(**(await api_client.get('public/meta/whoareyou')).json())
-	pubkey = PublicKey(portal_identity.public_key_pem)
+	identity = OutputIdentity(**(await api_client.get('public/meta/whoareyou')).json())
+	pubkey = PublicKey(identity.public_key_pem)
 	profile_response = await api_client.get('protected/management/profile')
 	profile_response.raise_for_status()
 	assert Profile.parse_obj(profile_response.json()) == Profile.from_portal(conftest.mock_meta)
 
 	v = verify_signature_auth(requests_mock.calls[0].request, pubkey)
-	assert portal_identity.id.startswith(v.parameters['keyid'])
+	assert identity.id.startswith(v.parameters['keyid'])
 
 
 @requires_test_env('full')

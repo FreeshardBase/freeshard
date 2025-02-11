@@ -14,6 +14,6 @@ apps:
 
 log:
   levels:
-    'portal_core.service.app_installation': debug
-    'portal_core.service.portal_controller': debug
-    'portal_core.service.app_usage_reporting': error
+    'shard_core.service.app_installation': debug
+    'shard_core.service.portal_controller': debug
+    'shard_core.service.app_usage_reporting': error
