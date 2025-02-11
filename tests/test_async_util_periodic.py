@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from portal_core.util.async_util import PeriodicTask, CronTask
+from shard_core.util.async_util import PeriodicTask, CronTask
 from tests.conftest import requires_test_env
 
 

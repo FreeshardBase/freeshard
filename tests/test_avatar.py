@@ -4,7 +4,7 @@ import gconf
 from fastapi import status
 from httpx import AsyncClient
 
-from portal_core.model.identity import OutputIdentity
+from shard_core.model.identity import OutputIdentity
 from tests.conftest import requires_test_env
 
 

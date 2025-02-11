@@ -4,8 +4,8 @@ from typing import Optional
 
 from tinydb import Query
 
-from portal_core.database.database import installed_apps_table
-from portal_core.model.app_meta import InstalledApp
+from shard_core.database.database import installed_apps_table
+from shard_core.model.app_meta import InstalledApp
 from tests.conftest import requires_test_env
 
 
@@ -14,7 +14,7 @@ async def test_app_last_access_is_set(api_client):
 	assert _get_last_access_time_delta('filebrowser') is None
 
 	response = await api_client.get('internal/auth', headers={
-		'X-Forwarded-Host': 'filebrowser.myportal.org',
+		'X-Forwarded-Host': 'filebrowser.myshard.org',
 		'X-Forwarded-Uri': '/share/foo'
 	})
 	response.raise_for_status()
@@ -25,7 +25,7 @@ async def test_app_last_access_is_set(api_client):
 @requires_test_env('full')
 async def test_app_last_access_is_debounced(api_client):
 	await api_client.get('internal/auth', headers={
-		'X-Forwarded-Host': 'filebrowser.myportal.org',
+		'X-Forwarded-Host': 'filebrowser.myshard.org',
 		'X-Forwarded-Uri': '/share/foo'
 	})
 
@@ -34,7 +34,7 @@ async def test_app_last_access_is_debounced(api_client):
 
 	time.sleep(0.1)
 	await api_client.get('internal/auth', headers={
-		'X-Forwarded-Host': 'filebrowser.myportal.org',
+		'X-Forwarded-Host': 'filebrowser.myshard.org',
 		'X-Forwarded-Uri': '/share/foo'
 	})
 
@@ -42,7 +42,7 @@ async def test_app_last_access_is_debounced(api_client):
 
 	time.sleep(3)
 	await api_client.get('internal/auth', headers={
-		'X-Forwarded-Host': 'filebrowser.myportal.org',
+		'X-Forwarded-Host': 'filebrowser.myshard.org',
 		'X-Forwarded-Uri': '/share/foo'
 	})
 

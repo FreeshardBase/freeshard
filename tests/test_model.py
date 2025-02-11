@@ -1,7 +1,7 @@
 import pytest
 
-from portal_core.model.app_meta import Lifecycle, PortalSize
-from portal_core.model.util import PropertyBaseModel
+from shard_core.model.app_meta import Lifecycle, VMSize
+from shard_core.model.util import PropertyBaseModel
 from tests.conftest import requires_test_env
 
 
@@ -42,14 +42,14 @@ def test_lifecycle():
 
 
 @requires_test_env('full')
-def test_portal_size():
-	assert PortalSize.XS < PortalSize.S
-	assert PortalSize.S < PortalSize.M
-	assert PortalSize.M < PortalSize.L
-	assert PortalSize.L < PortalSize.XL
+def test_vm_size():
+	assert VMSize.XS < VMSize.S
+	assert VMSize.S < VMSize.M
+	assert VMSize.M < VMSize.L
+	assert VMSize.L < VMSize.XL
 
-	assert PortalSize.L == PortalSize.L
-	assert PortalSize.L >= PortalSize.L
-	assert PortalSize.L <= PortalSize.L
-	assert PortalSize.L > PortalSize.S
-	assert PortalSize.L >= PortalSize.S
+	assert VMSize.L == VMSize.L
+	assert VMSize.L >= VMSize.L
+	assert VMSize.L <= VMSize.L
+	assert VMSize.L > VMSize.S
+	assert VMSize.L >= VMSize.S

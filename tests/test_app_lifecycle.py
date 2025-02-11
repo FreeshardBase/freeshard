@@ -1,7 +1,7 @@
 import docker
 from fastapi import status
 
-from portal_core.model.app_meta import InstalledApp, Status
+from shard_core.model.app_meta import InstalledApp, Status
 from tests.conftest import requires_test_env
 from tests.util import retry_async, wait_until_app_installed, install_app
 
@@ -20,7 +20,7 @@ async def test_app_starts_and_stops(requests_mock, api_client):
 	assert InstalledApp.parse_obj((await api_client.get(f'protected/apps/{app_name}')).json()).status == Status.STOPPED
 
 	response = await api_client.get('internal/auth', headers={
-		'X-Forwarded-Host': f'{app_name}.myportal.org',
+		'X-Forwarded-Host': f'{app_name}.myshard.org',
 		'X-Forwarded-Uri': '/pub'
 	})
 	response.raise_for_status()
@@ -39,7 +39,7 @@ async def test_app_starts_and_stops(requests_mock, api_client):
 	await retry_async(assert_app_exited, timeout=15, retry_errors=[AssertionError])
 
 	response = await api_client.get('internal/auth', headers={
-		'X-Forwarded-Host': f'{app_name}.myportal.org',
+		'X-Forwarded-Host': f'{app_name}.myshard.org',
 		'X-Forwarded-Uri': '/pub'
 	})
 	response.raise_for_status()
@@ -75,8 +75,8 @@ async def test_large_app_does_not_start(api_client):
 
 	response = await api_client.get(
 		'internal/app_error/502',
-		headers={'host': f'{app_name}.myportal.org', 'X-Forwarded-Uri': '/pub'})
+		headers={'host': f'{app_name}.myshard.org', 'X-Forwarded-Uri': '/pub'})
 	assert response.status_code == status.HTTP_502_BAD_GATEWAY
-	assert 'Portal too small' in response.text
+	assert 'VM too small' in response.text
 
 # todo: test app with size comparison

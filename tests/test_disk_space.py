@@ -3,7 +3,7 @@ from shutil import _ntuple_diskusage
 
 from fastapi import status
 
-from portal_core.service.disk import DiskUsage
+from shard_core.service.disk import DiskUsage
 from tests.conftest import requires_test_env
 
 
@@ -19,7 +19,7 @@ async def test_disk_space_is_reported(api_client):
 
 @requires_test_env('full')
 async def test_disk_space_is_low(mocker, api_client):
-	mocker.patch('portal_core.service.disk.shutil.disk_usage', lambda _: _ntuple_diskusage(1024 ** 3, 0, 0))
+	mocker.patch('shard_core.service.disk.shutil.disk_usage', lambda _: _ntuple_diskusage(1024 ** 3, 0, 0))
 	# wait till the disk space is updated after the patch takes effect
 	await sleep(4)
 

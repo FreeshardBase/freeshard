@@ -1,7 +1,8 @@
 path_root: "/"
+path_root_host: "/home/shard"
 
 dns:
-  zone: p.getportal.org
+  zone: freeshard.cloud
   prefix length: 6
 
 services:
@@ -16,6 +17,9 @@ services:
       - core/**/*
       - user_data/**/*
 
+traefik:
+  acme_email: contact@freeshard.net
+
 apps:
   app_store:
     base_url: "https://storageaccountportab0da.blob.core.windows.net"
@@ -23,7 +27,7 @@ apps:
   registries:
     - uri: portalapps.azurecr.io
       username: 0e4000f7-41b1-45d6-9f2f-7e4a952a19b0
-      password: bk11Ws.8OGakl-~t.7bKh5l9EYXTbHw.0T
+      password: bk11Ws.8OGakl-~t.7bKh5l9EYXTbHw.0T  # todo: allow anonymous pull
   lifecycle:
     refresh_interval: 10
   initial_apps:
@@ -45,8 +49,4 @@ portal_controller:
 
 log:
   levels:
-    portal_core: info
     gunicorn: warning
-  profiling:
-    enabled: false
-    path: core/profiling/

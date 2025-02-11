@@ -2,6 +2,6 @@ path_root: "run/"
 
 log:
   levels:
-    portal_core: debug
-    'portal_core.service.app_usage_reporting': error
-    'portal_core.service.websocket': error
+    shard_core: debug
+    'shard_core.service.app_usage_reporting': error
+    'shard_core.service.websocket': error
