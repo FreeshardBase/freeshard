@@ -1,8 +1,10 @@
+<p align="center">
 <picture>
     <source media="(prefers-color-scheme: dark)" srcset="readme/Freeshard_logo_for_dark.png">
     <source media="(prefers-color-scheme: light)" srcset="readme/Freeshard_logo_for_light.png">
-    <img alt="Freeshard Logo" src="readme/Freeshard_logo_for_light.png">
+    <img alt="Freeshard Logo" src="readme/Freeshard_logo_for_light.png" width="300">
 </picture>
+</p>
 
 # Shard Core
 
