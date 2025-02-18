@@ -9,14 +9,14 @@
       <env name="CONFIG" value="config.yml,local_config.yml" />
     </envs>
     <option name="SDK_HOME" value="$PROJECT_DIR$/venv/bin/python" />
-    <option name="SDK_NAME" value="Python 3.12 (portal_core)" />
+    <option name="SDK_NAME" value="Python 3.13 (shard_core) (2)" />
     <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
     <option name="IS_MODULE_SDK" value="false" />
     <option name="ADD_CONTENT_ROOTS" value="true" />
     <option name="ADD_SOURCE_ROOTS" value="true" />
     <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
     <option name="SCRIPT_NAME" value="uvicorn" />
-    <option name="PARAMETERS" value="portal_core:create_app --factory --no-access-log" />
+    <option name="PARAMETERS" value="shard_core:create_app --factory --no-access-log" />
     <option name="SHOW_COMMAND_LINE" value="false" />
     <option name="EMULATE_TERMINAL" value="false" />
     <option name="MODULE_MODE" value="true" />
