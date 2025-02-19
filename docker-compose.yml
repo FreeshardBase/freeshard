@@ -26,7 +26,7 @@ services:
     networks:
       - portal
     depends_on:
-      - portal_core
+      - shard_core
 
   shard_core:
     image: registry.gitlab.com/ptl/portal_core:0.30.0
