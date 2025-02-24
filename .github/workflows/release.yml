@@ -15,6 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     container: ghcr.io/freeshardbase/cicd-image:1.0.3
     needs: test
+    permissions:
+      packages: write
     steps:
       - name: Inject enhanced GitHub environment variables
         uses: rlespinasse/github-slug-action@v5
