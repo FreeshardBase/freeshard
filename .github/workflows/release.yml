@@ -4,9 +4,6 @@ run-name: Release ${{ github.event.release.tag_name }}
 on:
   release:
     types: [created]
-  push:
-    branches:
-      - feature/cicd
 
 jobs:
   test:
@@ -16,6 +13,7 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    container: ghcr.io/freeshardbase/cicd-image:1.0.3
     needs: test
     steps:
       - uses: actions/checkout@v3
@@ -32,7 +30,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ github.repository }}:${{ github.event.release.tag_name }}
+          tags: ghcr.io/${{ env.GITHUB_REPOSITORY_OWNER_PART_SLUG }}/${{ env.GITHUB_REPOSITORY_NAME_PART_SLUG }}:${{ github.event.release.tag_name }}
 
   pages:
     runs-on: ubuntu-latest
