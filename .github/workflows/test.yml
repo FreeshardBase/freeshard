@@ -3,9 +3,9 @@ name: Lint and Test
 on:
   workflow_call:
     inputs:
-      sparse:
+      full:
         type: boolean
-        default: false
+        required: true
 
 jobs:
   ruff:
@@ -42,7 +42,7 @@ jobs:
       - name: Run Pytest
         env:
           CONFIG: tests/config.yml
-          TEST_ENV: ${{ github.event.inputs.sparse && 'sparse' ||'full' }}
+          TEST_ENV: ${{ inputs.full && 'full' || 'sparse' }}
         run: |
           source venv/bin/activate
           pytest tests

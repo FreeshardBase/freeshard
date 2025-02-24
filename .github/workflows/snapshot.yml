@@ -1,4 +1,5 @@
 name: Snapshot
+run-name: Snapshot ${{ github.ref_name }}
 
 on:
   push:
@@ -12,7 +13,7 @@ jobs:
   test:
     uses: ./.github/workflows/test.yml
     with:
-      sparse: true
+      full: false
 
   build:
     runs-on: ubuntu-latest
