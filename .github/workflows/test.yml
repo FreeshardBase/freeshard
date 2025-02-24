@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       sparse:
-        types: [boolean]
+        type: boolean
         default: false
 
 jobs:
