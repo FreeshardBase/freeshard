@@ -1,0 +1,51 @@
+name: Lint and Test
+
+on:
+  workflow_call:
+    inputs:
+      full:
+        type: boolean
+        required: true
+
+jobs:
+  ruff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install ".[dev]"
+      - name: Run Ruff
+        run: |
+          source venv/bin/activate
+          ruff check .
+
+  unittest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: KengoTODA/actions-setup-docker-compose@v1
+        with:
+          version: '2.14.2' # the full version of `docker-compose` command
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install ".[dev]"
+      - name: Run Pytest
+        env:
+          CONFIG: tests/config.yml
+          TEST_ENV: ${{ inputs.full && 'full' || 'sparse' }}
+        run: |
+          source venv/bin/activate
+          pytest tests
