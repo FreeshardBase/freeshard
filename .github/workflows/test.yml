@@ -29,6 +29,9 @@ jobs:
   unittest:
     runs-on: ubuntu-latest
     steps:
+      - uses: KengoTODA/actions-setup-docker-compose@v1
+        with:
+          version: '2.14.2' # the full version of `docker-compose` command
       - uses: actions/checkout@v3
       - name: Set up Python
         uses: actions/setup-python@v4
