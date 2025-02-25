@@ -4,6 +4,9 @@ run-name: Release ${{ github.event.release.tag_name }}
 on:
   release:
     types: [created]
+  push:
+    branches:
+      - feature/workflow
 
 jobs:
   test:
@@ -20,7 +23,9 @@ jobs:
       - name: Inject enhanced GitHub environment variables
         uses: rlespinasse/github-slug-action@v5
       - name: Output
-        run: echo "ghcr.io/${{ env.GITHUB_REPOSITORY_OWNER_PART_SLUG }}/${{ env.GITHUB_REPOSITORY_NAME_PART_SLUG }}:${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+        # run: echo "ghcr.io/${{ env.GITHUB_REPOSITORY_OWNER_PART_SLUG }}/${{ env.GITHUB_REPOSITORY_NAME_PART_SLUG }}:${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+        run: echo "ghcr.io/${{ env.GITHUB_REPOSITORY_OWNER_PART_SLUG }}/${{ env.GITHUB_REPOSITORY_NAME_PART_SLUG }}:${{ env.GITHUB_REF_NAME_SLUG }}" >> "$GITHUB_OUTPUT"
+      - run: echo $GITHUB_OUTPUT
 
   build:
     runs-on: ubuntu-latest
@@ -43,7 +48,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ job.needs.prepare.outputs.SHARD_CORE_DOCKER_TAG }}
+          tags: ${{ needs.prepare.outputs.SHARD_CORE_DOCKER_TAG }}
 
   pages:
     runs-on: ubuntu-latest
@@ -52,7 +57,7 @@ jobs:
       - build
     services:
       shard_core:
-        image: ${{ job.needs.prepare.outputs.SHARD_CORE_DOCKER_TAG }}
+        image: ${{ needs.prepare.outputs.SHARD_CORE_DOCKER_TAG }}
         ports:
           - 8000
     steps:
