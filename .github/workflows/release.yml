@@ -24,7 +24,7 @@ jobs:
         uses: rlespinasse/github-slug-action@v5
       - name: Output
         # run: echo "ghcr.io/${{ env.GITHUB_REPOSITORY_OWNER_PART_SLUG }}/${{ env.GITHUB_REPOSITORY_NAME_PART_SLUG }}:${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
-        run: echo "ghcr.io/${{ env.GITHUB_REPOSITORY_OWNER_PART_SLUG }}/${{ env.GITHUB_REPOSITORY_NAME_PART_SLUG }}:${{ env.GITHUB_REF_NAME_SLUG }}" >> "$GITHUB_OUTPUT"
+        run: echo "SHARD_CORE_DOCKER_TAG=ghcr.io/${{ env.GITHUB_REPOSITORY_OWNER_PART_SLUG }}/${{ env.GITHUB_REPOSITORY_NAME_PART_SLUG }}:${{ env.GITHUB_REF_NAME_SLUG }}" >> "$GITHUB_OUTPUT"
       - run: echo $GITHUB_OUTPUT
 
   build:
