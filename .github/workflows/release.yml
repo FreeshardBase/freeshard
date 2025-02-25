@@ -5,24 +5,30 @@ on:
   release:
     types: [created]
 
-env:
-  SHARD_CORE_DOCKER_TAG: ghcr.io/${{ env.GITHUB_REPOSITORY_OWNER_PART_SLUG }}/${{ env.GITHUB_REPOSITORY_NAME_PART_SLUG }}:${{ github.event.release.tag_name }}
-
 jobs:
   test:
     uses: ./.github/workflows/test.yml
     with:
       full: false
 
-  build:
+  prepare:
     runs-on: ubuntu-latest
-    container: ghcr.io/freeshardbase/cicd-image:1.0.3
     needs: test
-    permissions:
-      packages: write
+    outputs:
+      SHARD_CORE_DOCKER_TAG: ${{ steps.Output.outputs.SHARD_CORE_DOCKER_TAG }}
     steps:
       - name: Inject enhanced GitHub environment variables
         uses: rlespinasse/github-slug-action@v5
+      - name: Output
+        run: echo "ghcr.io/${{ env.GITHUB_REPOSITORY_OWNER_PART_SLUG }}/${{ env.GITHUB_REPOSITORY_NAME_PART_SLUG }}:${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+
+  build:
+    runs-on: ubuntu-latest
+    container: ghcr.io/freeshardbase/cicd-image:1.0.3
+    needs: prepare
+    permissions:
+      packages: write
+    steps:
       - uses: actions/checkout@v3
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
@@ -37,14 +43,16 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ env.SHARD_CORE_DOCKER_TAG }}
+          tags: ${{ job.needs.prepare.outputs.SHARD_CORE_DOCKER_TAG }}
 
   pages:
     runs-on: ubuntu-latest
-    needs: build
+    needs:
+      - prepare
+      - build
     services:
       shard_core:
-        image: ${{ env.SHARD_CORE_DOCKER_TAG }}
+        image: ${{ job.needs.prepare.outputs.SHARD_CORE_DOCKER_TAG }}
         ports:
           - 8000
     steps:
