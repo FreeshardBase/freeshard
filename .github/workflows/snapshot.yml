@@ -37,4 +37,4 @@ jobs:
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ env.GITHUB_REPOSITORY_OWNER_PART_SLUG }}/${{ env.GITHUB_REPOSITORY_NAME_PART_SLUG }}:${{ env.GITHUB_REF_NAME_SLUG }}
+          tags: ghcr.io/freeshardbase/freeshard:${{ env.GITHUB_REF_NAME_SLUG }}
