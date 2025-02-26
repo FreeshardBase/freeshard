@@ -13,7 +13,7 @@ jobs:
   test:
     uses: ./.github/workflows/test.yml
     with:
-      full: false
+      full: ${{ github.event_name == 'pull_request' }}
 
   build:
     runs-on: ubuntu-latest
