@@ -9,7 +9,7 @@ services:
     container_name: traefik
     restart: always
     ports:
-      - "80:80"
+      - "8080:80"
       - "443:443"
       - "8883:8883"
     #environment:
@@ -39,7 +39,7 @@ services:
     networks:
       - portal
     environment:
-      - GCONF_DNS_ZONE=localhost
+      - GCONF_DNS_ZONE=localhost # todo: set this to your domain - your Shard will be available at <shard_id>.<GCONF_DNS_ZONE>
       - GCONF_TRAEFIK_ACME_EMAIL=user@example.com # todo: change this
 
   web-terminal:

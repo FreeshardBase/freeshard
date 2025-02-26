@@ -76,11 +76,22 @@ All communication is encrypted and authenticated using the shard IDs as trust an
 The Shard Core can be hosted on any machine that has access to the internet.
 It is recommended to use a machine that is always on, e.g. a virtual private server (VPS).
 
-You should be able to start the Shard Core with the following steps:
+Some tools that help you run a shard are in the `deploy_tools` directory.
 
-1. Get the `docker-compose.yml` from this repository.
-2. Fill in your information where it says `todo`.
-3. Start the Shard Core with `docker-compose up -d`.
+* `docker-compose.yml` - A docker-compose file that starts the Shard Core as well as the web terminal and a traefik reverse proxy.
+* `bootstrap.sh` - A script that creates needed files and sets access rights.
+* `get-pairing-code.sh` - A script that gets a pairing code from a running Shard Core; needed to pair the first terminal.
+* `reset.sh` - A script that removes all files that were created by the bootstrap script; in case you want to start over.
+
+You should be able to start the Shard Core on localhost with the following steps:
+
+1. Get files mentioned above.
+2. Modify the `docker-compose.yml` and in your information where it says `todo`. (Leave the DNS zone as it is for now.)
+3. Start the Shard Core with `docker-compose up`.
+4. Open `localhost:8080` in your browser and continue past the security warning; you are redirected to the public view of the Shard.
+5. Make note of the Shard ID in the bottom left corner. Then, open `<shard_id>.localhost:8080` in your browser. This is needed so the JWT cookie actually works.
+6. Use the `get-pairing-code.sh` script to get a pairing code.
+7. Click on `Pair` and enter the pairing code.
 
 ### Let's Encrypt
 
