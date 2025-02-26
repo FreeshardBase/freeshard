@@ -6,7 +6,7 @@ log = logging.getLogger(__name__)
 
 setup(
 	name='shard_core',
-	version='1.0.0',
+	version='0.32.0',
 	packages=find_packages(),
 	url='https://github.com/FreeshardBase/shard_core',
 	author='Max von Tettenborn',
