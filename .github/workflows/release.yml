@@ -9,7 +9,7 @@ jobs:
   test:
     uses: ./.github/workflows/test.yml
     with:
-      full: false
+      full: true
 
   build:
     runs-on: ubuntu-latest

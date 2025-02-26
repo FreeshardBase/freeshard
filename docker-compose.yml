@@ -29,7 +29,7 @@ services:
       - shard_core
 
   shard_core:
-    image: registry.gitlab.com/ptl/portal_core:0.30.0
+    image: ghcr.io/freeshardbase/freeshard:0.32.0
     container_name: shard_core
     restart: always
     volumes:
@@ -43,7 +43,7 @@ services:
       - GCONF_TRAEFIK_ACME_EMAIL=user@example.com # todo: change this
 
   web-terminal:
-    image: registry.gitlab.com/ptl/web-terminal:0.34.0
+    image: ghcr.io/freeshardbase/web-terminal:0.36.0
     container_name: web-terminal
     restart: always
     networks:
