@@ -4,9 +4,6 @@ run-name: Release ${{ github.event.release.tag_name }}
 on:
   release:
     types: [created]
-  push:
-    branches:
-      - feature/workflow
 
 jobs:
   test:
