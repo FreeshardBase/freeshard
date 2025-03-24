@@ -10,7 +10,7 @@ from typing import List
 import gconf
 from requests import HTTPError
 
-from shard_core import database
+from shard_core.database import database
 from shard_core.database.database import backups_table
 from shard_core.model.backup import BackupReport, BackupStats, BackupPassphraseLastAccessInfoDB
 from shard_core.service.portal_controller import get_backup_sas_url

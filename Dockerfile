@@ -1,5 +1,5 @@
 # Use a Python image with uv pre-installed
-FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
+FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS build
 
 # Install packages required for the project
 RUN apt-get update && apt-get install --no-install-recommends -y \
@@ -32,11 +32,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Place executables in the environment at the front of the path
 ENV PATH="/.venv/bin:$PATH"
 
-# Reset the entrypoint, don't invoke `uv`
-ENTRYPOINT []
-
 HEALTHCHECK --start-period=5s CMD curl -f localhost/public/health || exit 1
 
-ENV FLASK_APP=shard_core
+#ENV FLASK_APP=shard_core
 EXPOSE 80
-CMD [ "uvicorn", "shard_core:create_app", "--factory", "--host", "0.0.0.0", "--port", "80", "--no-access-log" ]
+CMD ["fastapi", "run", "--port", "80", "shard_core/app.py"]

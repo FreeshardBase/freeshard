@@ -22,7 +22,7 @@ from httpx import AsyncClient, ASGITransport
 from requests import PreparedRequest
 from responses import RequestsMock
 
-import shard_core
+from shard_core import app_factory
 from shard_core.model.app_meta import VMSize
 from shard_core.model.backend.portal_meta import PortalMetaExt, Size
 from shard_core.model.identity import OutputIdentity, Identity
@@ -78,7 +78,7 @@ async def api_client(mocker, event_loop) -> AsyncClient:
 	mocker.patch('shard_core.service.app_installation.login_docker_registries', noop)
 
 	async with docker_network_portal():
-		app = shard_core.create_app()
+		app = app_factory.create_app()
 		# for the LifeSpanManager, see: https://github.com/encode/httpx/issues/1024
 		async with LifespanManager(app, startup_timeout=20), \
 				AsyncClient(transport=ASGITransport(app=app), base_url='https://init', timeout=20) as client:
