@@ -1,15 +1,8 @@
 # Use a Python image with uv pre-installed
 FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS build
 
-# Install packages required for the project
-RUN apt-get update && apt-get install --no-install-recommends -y \
-    docker.io \
-    docker-compose \
-    rclone \
-    && apt-get clean
-
 # Install the project into `/app`
-#WORKDIR /app
+WORKDIR /app
 
 # Enable bytecode compilation
 ENV UV_COMPILE_BYTECODE=1
@@ -25,12 +18,27 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # Then, add the rest of the project source code and install it
 # Installing separately from its dependencies allows optimal layer caching
-ADD . /
+ADD . .
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
+FROM python:3.13-slim-bookworm AS runtime
+
+# Install packages required for the project
+RUN apt-get update && apt-get install --no-install-recommends -y \
+    docker.io \
+    docker-compose \
+    rclone \
+    && apt-get clean
+
+# Copy the installed dependencies from the build stage
+COPY --from=build /app /app
+
+# Install the project into `/app`
+WORKDIR /app
+
 # Place executables in the environment at the front of the path
-ENV PATH="/.venv/bin:$PATH"
+ENV PATH="/app/.venv/bin:$PATH"
 
 HEALTHCHECK --start-period=5s CMD curl -f localhost/public/health || exit 1
 
