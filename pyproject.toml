@@ -58,5 +58,15 @@ dev = [
     "datamodel-code-generator[http]"
 ]
 
-[tool.setuptools.package-data]
-"shard_core" = ["config.yml", "data/*"]
+[tool.setuptools]
+py-modules = []
+package-data = { "shard_core" = ["config.yml", "data/*"] }
+
+[tool.ruff]
+line-length = 120
+
+[tool.pytest.ini_options]
+log_cli = true
+asyncio_mode = "auto"
+# https://github.com/pytest-dev/pytest-asyncio/issues/924
+asyncio_default_fixture_loop_scope = "function"
