@@ -76,21 +76,14 @@ All communication is encrypted and authenticated using the shard IDs as trust an
 The Shard Core can be hosted on any machine that has access to the internet.
 It is recommended to use a machine that is always on, e.g. a virtual private server (VPS).
 
-Some tools that help you run a shard are in the `deploy_tools` directory.
-
-* `docker-compose.yml` - A docker-compose file that starts the Shard Core as well as the web terminal and a traefik reverse proxy.
-* `bootstrap.sh` - A script that creates needed files and sets access rights.
-* `get-pairing-code.sh` - A script that gets a pairing code from a running Shard Core; needed to pair the first terminal.
-* `reset.sh` - A script that removes all files that were created by the bootstrap script; in case you want to start over.
-
 You should be able to start the Shard Core on localhost with the following steps:
 
-1. Get files mentioned above.
-2. Modify the `docker-compose.yml` and in your information where it says `todo`. (Leave the DNS zone as it is for now.)
+1. Get the `docker-compose.yml`.
+2. Modify the `docker-compose.yml` by providing your information where it says `todo`. (Leave the DNS zone as it is for now.)
 3. Start the Shard Core with `docker-compose up`.
 4. Open `localhost:8080` in your browser and continue past the security warning; you are redirected to the public view of the Shard.
-5. Make note of the Shard ID in the bottom left corner. Then, open `<shard_id>.localhost:8080` in your browser. This is needed so the JWT cookie actually works.
-6. Use the `get-pairing-code.sh` script to get a pairing code.
+5. Make note of the Shard ID in the bottom left corner. Then, open `<shard_id>.localhost:8080` in your browser. This is needed so the authentication cookie actually works.
+6. Run this command to get a pairing code: `docker run --rm -it --network portal curlimages/curl "http://shard_core/protected/terminals/pairing-code"`
 7. Click on `Pair` and enter the pairing code.
 
 ### Let's Encrypt
@@ -114,14 +107,14 @@ You can modify the `local_config.yml` to your needs, e.g. to set different log l
 
 Run development server with 
 ```shell
-venv/bin/uvicorn shard_core:create_app --reload --factory
+fastapi dev --port 8080 shard_core/app.py
 ```
-If you are using PyCharm, you can use the run configuration that is part of the project.
 
-Then, access API-doc at [http://localhost:8000/redoc](http://localhost:8000/redoc)
+Or - if you use [Just](https://just.systems/) - run `just run-dev`.
 
-If you need to test features requiring the management backend, you can start a mock with
-```
-venv/bin/uvicorn shard_core:create_app management_mock:app --port 8090
-```
-The development server is configured to use this mock.
+Then, access API-doc at [http://localhost:8080/docs](http://localhost:8080/docs)
+
+If you also want to run the web UI locally, pull it from [here](https://github.com/FreeshardBase/web-terminal) and follow the instructions in its README.
+
+> [!NOTE]
+> When developing, you will typically run backend and frontend locally and without a reverse proxy. This means that you will not be able to start apps, since they rely on being accessed through the reverse proxy.
