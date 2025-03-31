@@ -26,6 +26,7 @@ FROM python:3.13-slim-bookworm AS runtime
 
 # Install packages required for the project
 RUN apt-get update && apt-get install --no-install-recommends -y \
+    curl \
     docker.io \
     docker-compose \
     rclone \
@@ -40,7 +41,7 @@ WORKDIR /app
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
 
-HEALTHCHECK --start-period=5s CMD curl -f localhost/public/health || exit 1
+HEALTHCHECK --start-period=5s --interval=30s --timeout=5s CMD curl -f http://localhost/public/health
 
 #ENV FLASK_APP=shard_core
 EXPOSE 80

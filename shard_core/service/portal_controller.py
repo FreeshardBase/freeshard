@@ -1,4 +1,5 @@
 import logging
+from requests.exceptions import HTTPError
 
 import gconf
 
@@ -17,9 +18,17 @@ async def call_portal_controller(path: str, method: str = 'GET', body: bytes = N
 	return await signed_request(method, url, data=body)
 
 
-async def refresh_profile() -> profile.Profile:
+async def refresh_profile() -> profile.Profile | None:
 	response = await call_portal_controller('portals/self')
-	response.raise_for_status()
+	try:
+		response.raise_for_status()
+	except HTTPError:
+		if response.status_code == 401:
+			log.warning('profile not found, setting to None')
+			profile.set_profile(None)
+			return None
+		else:
+			raise
 	meta = PortalMetaExt.parse_obj(response.json())
 	profile_ = profile.Profile.from_portal(meta)
 	profile.set_profile(profile_)

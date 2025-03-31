@@ -15,3 +15,6 @@ get-types:
     touch shard_core/model/backend/__init__.py
     cp -r {{DIRECTORY}}/* shard_core/model/backend
     sed -i '1s/^/# DO NOT MODIFY - copied from portal_controller\n\n/' $(find shard_core/model/backend/ -type f)
+
+run-dev:
+    CONFIG=config.yml,local_config.yml fastapi dev --port 8080 shard_core/app.py

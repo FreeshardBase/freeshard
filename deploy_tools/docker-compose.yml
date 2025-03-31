@@ -12,7 +12,8 @@ services:
       - "8080:80"
       - "443:443"
       - "8883:8883"
-    #environment:
+    environment:
+      - XDG_CONFIG_HOME=/core
       #- AZURE_CLIENT_ID=todo
       #- AZURE_CLIENT_SECRET=todo
       #- AZURE_SUBSCRIPTION_ID=todo
@@ -20,20 +21,19 @@ services:
       #- AZURE_RESOURCE_GROUP=todo
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./traefik.yml:/etc/traefik/traefik.yml
-      - ./traefik_dyn/:/traefik_dyn/
-      - ./acme.json:/acme.json
+      - ./core:/core
     networks:
       - portal
     depends_on:
-      - shard_core
+      shard_core:
+        condition: service_healthy
 
   shard_core:
-    image: ghcr.io/freeshardbase/freeshard:0.32.0
+    image: shard_core_local
     container_name: shard_core
     restart: always
     volumes:
-      - .:/core
+      - ./core:/core
       - ./user_data:/user_data
       - /var/run/docker.sock:/var/run/docker.sock
     networks:

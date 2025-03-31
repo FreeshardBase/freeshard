@@ -1,5 +1,8 @@
 path_root: "run/"
 
+dns:
+  zone: localhost
+
 log:
   levels:
     shard_core: debug
