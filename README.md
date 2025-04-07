@@ -76,17 +76,34 @@ All communication is encrypted and authenticated using the shard IDs as trust an
 The Shard Core can be hosted on any machine that has access to the internet.
 It is recommended to use a machine that is always on, e.g. a virtual private server (VPS).
 
-You should be able to start the Shard Core on localhost with the following steps:
+In order to test Freeshard, you might want to launch it on localhost first. Follow these steps.
 
-1. Get the `docker-compose.yml`.
-2. Modify the `docker-compose.yml` by providing your information where it says `todo`. (Leave the DNS zone as it is for now.)
+1. Get the `docker-compose.yml` and the `.env.template`.
+2. Copy the `.env.template` to `.env` and fill in your information.
+   - `FREESHARD_DIR` is the directory where all data will be stored - internal data for freeshard to function and all user data.
+   - `DNS_ZONE` is the domain name of your Shard. Leave it at `localhost` for now.
+   - `EMAIL` is the email address that will be used to request SSL certificates.
 3. Start the Shard Core with `docker-compose up`.
-4. Open `localhost:8080` in your browser and continue past the security warning; you are redirected to the public view of the Shard.
-5. Make note of the Shard ID in the bottom left corner. Then, open `<shard_id>.localhost:8080` in your browser. This is needed so the authentication cookie actually works.
-6. Run this command to get a pairing code: `docker run --rm -it --network portal curlimages/curl "http://shard_core/protected/terminals/pairing-code"`
-7. Click on `Pair` and enter the pairing code.
+4. Look up the shard's URL in the logs right below where the logo is printed. It should be in the format `<shard_id>.localhost`. Open it in your browser.
+5. From the CLI run this command to get a pairing code: `docker run --rm -it --network portal curlimages/curl "http://shard_core/protected/terminals/pairing-code"`
+6. In the Freeshard UI click on `Pair` and enter the pairing code.
+
+For a full server deployment, follow these steps.
+
+1. Use a server that can be reached with a domain name.
+2. Copy the `docker-compose.yml` and the `.env.template` on your server into a directory of your choice.
+2. Copy the `.env.template` to `.env` and fill in your information.
+    - `FREESHARD_DIR` is the directory where all data will be stored - internal data for freeshard to function and all user data.
+    - `DNS_ZONE` is the domain name of your Shard. Enter the domain name of your server here. Your Shard will be accessible at `https://<shard_id>.<DNS_ZONE>`.
+    - `EMAIL` is the email address that will be used to request SSL certificates.
+3. Provide the environment variables for your DNS provider to the Traefik service in the `docker-compose.yml` file. [Here is a list of providers](https://doc.traefik.io/traefik/https/acme/#providers) and the required variables. See [Let's Encrypt](#letsencrypt) for why this is necessary.
+3. Start the Shard Core with `docker-compose up -d`.
+4. Look up the shard's URL in the logs right below where the logo is printed. It should be in the format `<shard_id>.<DNS_ZONE>`. Open it in your browser.
+5. From the CLI run this command to get a pairing code: `docker run --rm -it --network portal curlimages/curl "http://shard_core/protected/terminals/pairing-code"`
+6. In the Freeshard UI click on `Pair` and enter the pairing code.
 
 ### Let's Encrypt
+<a name="letsencrypt"></a>
 
 Shard Core uses Traefik as a reverse proxy.
 This is a fixed part of the setup and cannot be changed.

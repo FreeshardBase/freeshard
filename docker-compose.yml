@@ -21,7 +21,7 @@ services:
       #- AZURE_RESOURCE_GROUP=todo
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./core:/core
+      - ${FREESHARD_DIR:?}/core:/core
     networks:
       - portal
     depends_on:
@@ -33,17 +33,18 @@ services:
     container_name: shard_core
     restart: always
     volumes:
-      - ./core:/core
-      - ./user_data:/user_data
+      - ${FREESHARD_DIR:?}/core:/core
+      - ${FREESHARD_DIR:?}/user_data:/user_data
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - portal
     environment:
-      - GCONF_DNS_ZONE=localhost # todo: set this to your domain - your Shard will be available at <shard_id>.<GCONF_DNS_ZONE>
-      - GCONF_TRAEFIK_ACME_EMAIL=user@example.com # todo: change this
+      - GCONF_DNS_ZONE=${DNS_ZONE:?}
+      - GCONF_TRAEFIK_ACME_EMAIL=user@example.com
+      - GCONF_PATH_ROOT_HOST=${FREESHARD_DIR:?}
 
   web-terminal:
-    image: ghcr.io/freeshardbase/web-terminal:0.36.0
+    image: ghcr.io/freeshardbase/web-terminal:feature-misc
     container_name: web-terminal
     restart: always
     networks:

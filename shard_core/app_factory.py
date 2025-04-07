@@ -76,6 +76,7 @@ async def lifespan(_):
 		t.start()
 
 	log.info('Startup complete')
+	print_welcome_log()
 	yield  # === run app ===
 	log.info('Shutting down')
 
@@ -127,3 +128,17 @@ def _copy_traefik_static_config():
 	target = root / 'core' / 'traefik.yml'
 	with open(target, 'w') as f:
 		f.write(result)
+
+
+def print_welcome_log():
+	i = identity.get_default_identity()
+
+	with open(Path.cwd() / 'data' / 'freeshard_ascii', 'r') as f:
+		welcome_log_template = jinja2.Template(f.read())
+
+	welcome_log = welcome_log_template.render({
+		'shard_id': i.short_id,
+		'shard_url': i.domain,
+	})
+
+	log.info(welcome_log)

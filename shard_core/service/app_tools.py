@@ -89,9 +89,12 @@ def get_app_metadata(app_name: str) -> AppMeta:
 
 def size_is_compatible(app_size) -> bool:
 	try:
-		vm_size = shard_core.model.profile.get_profile().vm_size
+		profile = shard_core.model.profile.get_profile()
 	except KeyError:
 		return False
+	if profile is None:
+		return True
+	vm_size = profile.vm_size
 	return vm_size >= app_size
 
 
