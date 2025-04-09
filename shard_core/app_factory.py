@@ -141,4 +141,4 @@ def print_welcome_log():
 		'shard_url': i.domain,
 	})
 
-	log.info(welcome_log)
+	print(welcome_log)
