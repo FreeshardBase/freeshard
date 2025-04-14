@@ -9,7 +9,7 @@ import jwt
 from pydantic import BaseModel
 from tinydb import Query
 
-from shard_core import database
+from shard_core.database import database
 from shard_core.database.database import terminals_table
 from shard_core.model.terminal import Terminal
 

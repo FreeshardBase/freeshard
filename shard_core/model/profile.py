@@ -32,9 +32,10 @@ class Profile(BaseModel):
 		)
 
 
-def set_profile(profile: Profile):
-	set_value('profile', profile.dict())
+def set_profile(profile: Profile | None):
+	set_value('profile', profile.dict() if profile else 'None')
 
 
-def get_profile() -> Profile:
-	return Profile.parse_obj(get_value('profile'))
+def get_profile() -> Profile | None:
+	value = get_value('profile')
+	return None if value == 'None' else Profile.parse_obj(value)

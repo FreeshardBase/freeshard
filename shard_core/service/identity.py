@@ -1,6 +1,5 @@
 import logging
 
-from requests import HTTPError
 from tinydb import Query
 
 from shard_core.database.database import identities_table
@@ -49,10 +48,9 @@ def get_default_identity() -> Identity:
 
 @async_on_first_terminal_add.connect
 async def enrich_identity_from_profile(_):
-	try:
-		profile = await refresh_profile()
-	except HTTPError as e:
-		log.error(f'Could not enrich default identity from profile because profile could not be obtained: {e}')
+	profile = await refresh_profile()
+	if not profile:
+		log.warning('Could not enrich default identity from profile because profile could not be obtained.')
 		return
 
 	with identities_table() as identities:  # type: Table

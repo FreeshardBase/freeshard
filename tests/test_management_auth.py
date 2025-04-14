@@ -1,7 +1,7 @@
 import pytest
 from httpx import AsyncClient
 
-from shard_core import database
+from shard_core.database import database
 from shard_core.service import management
 from shard_core.service.management import STORE_KEY_MANAGEMENT_SHARED_KEY
 from tests.conftest import requires_test_env

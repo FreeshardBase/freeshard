@@ -44,6 +44,8 @@ async def docker_stop_app(name: str, set_status: bool = True):
 			with installed_apps_table() as installed_apps:
 				installed_apps.update({'status': Status.STOPPED}, Query().name == name)
 		signals.on_apps_update.send()
+	else:
+		log.debug(f'app {name=} has {app_status=}, skipping stop')
 
 
 async def docker_shutdown_app(name: str, set_status: bool = True, force: bool = False):
@@ -56,6 +58,8 @@ async def docker_shutdown_app(name: str, set_status: bool = True, force: bool = 
 			with installed_apps_table() as installed_apps:
 				installed_apps.update({'status': Status.DOWN}, Query().name == name)
 		signals.on_apps_update.send()
+	else:
+		log.debug(f'app {name=} has {app_status=}, skipping shutdown')
 
 
 async def docker_stop_all_apps():
@@ -89,9 +93,12 @@ def get_app_metadata(app_name: str) -> AppMeta:
 
 def size_is_compatible(app_size) -> bool:
 	try:
-		vm_size = shard_core.model.profile.get_profile().vm_size
+		profile = shard_core.model.profile.get_profile()
 	except KeyError:
 		return False
+	if profile is None:
+		return True
+	vm_size = profile.vm_size
 	return vm_size >= app_size
 
 

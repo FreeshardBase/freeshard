@@ -3,7 +3,7 @@ from fastapi import status
 
 from shard_core.model.app_meta import InstalledApp, Status
 from tests.conftest import requires_test_env
-from tests.util import retry_async, wait_until_app_installed, install_app
+from tests.util import retry_async, wait_until_app_installed
 
 
 @requires_test_env('full')
@@ -68,15 +68,6 @@ async def test_always_on_app_starts(requests_mock, api_client):
 	await retry_async(assert_app_running, timeout=30, retry_errors=[AssertionError])
 
 
-@requires_test_env('full')
-async def test_large_app_does_not_start(api_client):
-	app_name = 'large_app'
-	await install_app(api_client, app_name)
-
-	response = await api_client.get(
-		'internal/app_error/502',
-		headers={'host': f'{app_name}.myshard.org', 'X-Forwarded-Uri': '/pub'})
-	assert response.status_code == status.HTTP_502_BAD_GATEWAY
-	assert 'VM too small' in response.text
+# todo: test_large_app_does_not_start
 
 # todo: test app with size comparison

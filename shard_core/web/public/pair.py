@@ -34,6 +34,7 @@ async def add_terminal(code: str, terminal: InputTerminal, response: Response):
 
 	jwt = pairing.create_terminal_jwt(new_terminal.id)
 	response.set_cookie('authorization', jwt,
+		# We need to explicitly set the domain in order for the cookie to be valid for subdomains.
 		domain=default_identity.domain,
 		secure=True, httponly=True, expires=60 * 60 * 24 * 356 * 10)
 

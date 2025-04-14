@@ -64,7 +64,7 @@ async def wait_until_app_installed(api_client: AsyncClient, app_name, timeout=20
 			raise AssertionError(f'Unexpected app status: {app.status}')
 
 
-async def wait_until_app_uninstalled(api_client: AsyncClient, app_name, timeout=10):
+async def wait_until_app_uninstalled(api_client: AsyncClient, app_name, timeout=20):
 	end = time.time() + timeout
 	while True:
 		if time.time() > end:

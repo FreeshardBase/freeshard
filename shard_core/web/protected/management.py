@@ -22,7 +22,10 @@ async def get_profile(refresh: bool = False):
 			p = profile.get_profile()
 		except KeyError:
 			p = await portal_controller.refresh_profile()
-	return p
+	if p:
+		return p
+	else:
+		return Response(status_code=404, content='profile not found')
 
 
 @router.api_route('/{rest:path}', methods=ALL_HTTP_METHODS)
