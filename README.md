@@ -92,15 +92,15 @@ For a full server deployment, follow these steps.
 
 1. Use a server that can be reached with a domain name.
 2. Copy the `docker-compose.yml` and the `.env.template` on your server into a directory of your choice.
-2. Copy the `.env.template` to `.env` and fill in your information.
+3. Copy the `.env.template` to `.env` and fill in your information.
     - `FREESHARD_DIR` is the directory where all data will be stored - internal data for freeshard to function and all user data.
     - `DNS_ZONE` is the domain name of your Shard. Enter the domain name of your server here. Your Shard will be accessible at `https://<shard_id>.<DNS_ZONE>`.
     - `EMAIL` is the email address that will be used to request SSL certificates.
-3. Provide the environment variables for your DNS provider to the Traefik service in the `docker-compose.yml` file. [Here is a list of providers](https://doc.traefik.io/traefik/https/acme/#providers) and the required variables. See [Let's Encrypt](#letsencrypt) for why this is necessary.
-3. Start the Shard Core with `docker-compose up -d`.
-4. Look up the shard's URL in the logs right below where the logo is printed. It should be in the format `<shard_id>.<DNS_ZONE>`. Open it in your browser.
-5. From the CLI run this command to get a pairing code: `docker run --rm -it --network portal curlimages/curl "http://shard_core/protected/terminals/pairing-code"`
-6. In the freeshard UI click on `Pair` and enter the pairing code.
+4. Provide the environment variables for your DNS provider to the Traefik service in the `docker-compose.yml` file. [Here is a list of providers](https://doc.traefik.io/traefik/https/acme/#providers) and the required variables. See [Let's Encrypt](#letsencrypt) for why this is necessary.
+5. Start the Shard Core with `docker-compose up -d`.
+6. Look up the shard's URL in the logs right below where the logo is printed. It should be in the format `<shard_id>.<DNS_ZONE>`. Open it in your browser.
+7. From the CLI run this command to get a pairing code: `docker run --rm -it --network portal curlimages/curl "http://shard_core/protected/terminals/pairing-code"`
+8. In the freeshard UI click on `Pair` and enter the pairing code.
 
 ### Let's Encrypt
 <a name="letsencrypt"></a>
