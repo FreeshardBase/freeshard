@@ -18,6 +18,6 @@
 
                 Welcome to your shard!
               This shard's ID is {{ shard_id }}
-           Your can reach it at {{ shard_url }}
+           You can reach it at https://{{ shard_url }}
 
 
