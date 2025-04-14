@@ -18,3 +18,5 @@ log:
     'shard_core.service.app_installation': debug
     'shard_core.service.portal_controller': debug
     'shard_core.service.app_usage_reporting': error
+    'shard_core.util.subprocess': debug
+    'shard_core.service.app_tools': debug

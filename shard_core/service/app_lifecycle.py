@@ -12,7 +12,7 @@ from shard_core.util import signals
 log = logging.getLogger(__name__)
 
 last_access_dict: Dict[str, float] = dict()
-
+background_tasks = set()
 
 @signals.on_request_to_app.connect
 def ensure_app_is_running(app: InstalledApp):
@@ -22,7 +22,9 @@ def ensure_app_is_running(app: InstalledApp):
 	if size_is_compatible(app_meta.minimum_portal_size):
 		global last_access_dict
 		last_access_dict[app.name] = time.time()
-		asyncio.create_task(docker_start_app(app.name), name=f'ensure {app.name} is running')
+		task = asyncio.create_task(docker_start_app(app.name), name=f'ensure {app.name} is running')
+		background_tasks.add(task)
+		task.add_done_callback(background_tasks.discard)
 
 
 async def control_apps():

@@ -115,8 +115,8 @@ async def _uninstall_app(app_name: str):
 		log.warning(f'during uninstallation of {app_name}: app not found in database')
 
 	try:
-		await docker_stop_app(app_name, set_status=False)
-		await docker_shutdown_app(app_name, set_status=False)
+		await docker_stop_app(app_name)
+		await docker_shutdown_app(app_name)
 	except Exception as e:
 		log.error(f'Error while shutting down app {app_name}: {e:!r}')
 
