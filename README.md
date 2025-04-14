@@ -12,7 +12,7 @@
 
 # Shard Core
 
-This is the core application of the Freeshard project. A machine running it (virtual or physical) is called a Shard.
+This is the core application of the freeshard project. A machine running it (virtual or physical) is called a Shard.
 
 The overall documentation of the project (under its old name _Portal_) can be found at [docs.getportal.org](https://docs.getportal.org/).
 
@@ -76,7 +76,7 @@ All communication is encrypted and authenticated using the shard IDs as trust an
 The Shard Core can be hosted on any machine that has access to the internet.
 It is recommended to use a machine that is always on, e.g. a virtual private server (VPS).
 
-In order to test Freeshard, you might want to launch it on localhost first. Follow these steps.
+In order to test freeshard, you might want to launch it on localhost first. Follow these steps.
 
 1. Get the `docker-compose.yml` and the `.env.template`.
 2. Copy the `.env.template` to `.env` and fill in your information.
@@ -84,9 +84,9 @@ In order to test Freeshard, you might want to launch it on localhost first. Foll
    - `DNS_ZONE` is the domain name of your Shard. Leave it at `localhost` for now.
    - `EMAIL` is the email address that will be used to request SSL certificates.
 3. Start the Shard Core with `docker-compose up`.
-4. Look up the shard's URL in the logs right below where the logo is printed. It should be in the format `<shard_id>.localhost`. Open it in your browser.
+4. Look up the shard's URL in the logs right below where the logo is printed. It should be in the format `<shard_id>.localhost`. Open it in your browser and resume past the security warning.
 5. From the CLI run this command to get a pairing code: `docker run --rm -it --network portal curlimages/curl "http://shard_core/protected/terminals/pairing-code"`
-6. In the Freeshard UI click on `Pair` and enter the pairing code.
+6. In the freeshard UI click on `Pair` and enter the pairing code.
 
 For a full server deployment, follow these steps.
 
@@ -100,7 +100,7 @@ For a full server deployment, follow these steps.
 3. Start the Shard Core with `docker-compose up -d`.
 4. Look up the shard's URL in the logs right below where the logo is printed. It should be in the format `<shard_id>.<DNS_ZONE>`. Open it in your browser.
 5. From the CLI run this command to get a pairing code: `docker run --rm -it --network portal curlimages/curl "http://shard_core/protected/terminals/pairing-code"`
-6. In the Freeshard UI click on `Pair` and enter the pairing code.
+6. In the freeshard UI click on `Pair` and enter the pairing code.
 
 ### Let's Encrypt
 <a name="letsencrypt"></a>

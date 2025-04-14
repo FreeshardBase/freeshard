@@ -29,7 +29,7 @@ services:
         condition: service_healthy
 
   shard_core:
-    image: shard_core_local
+    image: ghcr.io/freeshardbase/freeshard:0.33.0
     container_name: shard_core
     restart: always
     volumes:
@@ -44,7 +44,7 @@ services:
       - GCONF_PATH_ROOT_HOST=${FREESHARD_DIR:?}
 
   web-terminal:
-    image: ghcr.io/freeshardbase/web-terminal:feature-misc
+    image: ghcr.io/freeshardbase/web-terminal:0.37.0
     container_name: web-terminal
     restart: always
     networks:
