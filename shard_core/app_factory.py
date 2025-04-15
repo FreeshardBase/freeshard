@@ -14,6 +14,7 @@ from requests import ConnectionError, HTTPError
 from .database import database
 from .service import app_installation, identity, app_lifecycle, peer, \
 	app_usage_reporting, websocket, migration, portal_controller, backup, disk
+from .service.app_installation.util import write_traefik_dyn_config
 from .service.app_tools import docker_stop_all_apps, docker_shutdown_all_apps, docker_prune_images
 from .service.backup import start_backup
 from .util.async_util import PeriodicTask, BackgroundTask, CronTask
@@ -62,6 +63,7 @@ def configure_logging():
 
 @asynccontextmanager
 async def lifespan(_):
+	await write_traefik_dyn_config()
 	await app_installation.login_docker_registries()
 	await migration.migrate()
 	await app_installation.refresh_init_apps()
@@ -118,7 +120,8 @@ def make_background_tasks() -> List[BackgroundTask]:
 
 
 def _copy_traefik_static_config():
-	source = Path.cwd() / 'data' / 'traefik.yml'
+	traefik_yml = 'traefik_no_ssl.yml' if gconf.get('traefik.disable_ssl', default=False) else 'traefik.yml'
+	source = Path.cwd() / 'data' / traefik_yml
 	with open(source, 'r') as f:
 		template = jinja2.Template(f.read())
 
@@ -132,13 +135,14 @@ def _copy_traefik_static_config():
 
 def print_welcome_log():
 	i = identity.get_default_identity()
+	protocol = 'http' if gconf.get('traefik.disable_ssl', default=False) else 'https'
 
 	with open(Path.cwd() / 'data' / 'freeshard_ascii', 'r') as f:
 		welcome_log_template = jinja2.Template(f.read())
 
 	welcome_log = welcome_log_template.render({
 		'shard_id': i.short_id,
-		'shard_url': i.domain,
+		'shard_url': f'{protocol}://{i.domain}',
 	})
 
 	print(welcome_log)

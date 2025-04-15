@@ -1,0 +1,16 @@
+entryPoints:
+  http:
+    address: ":80"
+  mqtt:
+    address: ":8883"
+
+providers:
+  file:
+    directory: "/core/traefik_dyn"
+    watch: true
+  docker:
+    exposedByDefault: false
+
+api:
+  dashboard: true
+  insecure: true
