@@ -9,7 +9,7 @@ services:
     container_name: traefik
     restart: always
     ports:
-      - "8080:80"
+      - "80:80"
       - "443:443"
       - "8883:8883"
     environment:
@@ -29,7 +29,7 @@ services:
         condition: service_healthy
 
   shard_core:
-    image: ghcr.io/freeshardbase/freeshard:0.33.0
+    image: shard_core_local
     container_name: shard_core
     restart: always
     volumes:
@@ -41,10 +41,11 @@ services:
     environment:
       - GCONF_DNS_ZONE=${DNS_ZONE:?}
       - GCONF_TRAEFIK_ACME_EMAIL=user@example.com
+      - GCONF_TRAEFIK_DISABLE_SSL=${DISABLE_SSL}
       - GCONF_PATH_ROOT_HOST=${FREESHARD_DIR:?}
 
   web-terminal:
-    image: ghcr.io/freeshardbase/web-terminal:0.37.0
+    image: web_terminal_local
     container_name: web-terminal
     restart: always
     networks:
