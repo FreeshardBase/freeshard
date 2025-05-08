@@ -48,7 +48,7 @@ Freeshard is a personal cloud computer that a consumer can rent for a small mont
 
 This is the core application of the freeshard project. A machine running it (virtual or physical) is called a Shard.
 
-The overall documentation of the project (under its old name _Portal_) can be found at [docs.getportal.org](https://docs.getportal.org/).
+The overall documentation of the project can be found at [docs.freeshard.net](https://docs.freeshard.net/).
 
 ## Overview
 
