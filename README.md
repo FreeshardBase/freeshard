@@ -10,6 +10,40 @@
 > Freeshard used to be called _Portal_. Don't be confused if you see the old name in the code or documentation.
 > Our goal is to update everything as soon as possible.
 
+# Freeshard
+
+Freeshard is a personal cloud computer that a consumer can rent for a small monthly fee (or selfhost) and which is as simple to use as a smartphone. Its aim is to restore people's sovereignty regarding the data they consume and produce - to give them a home on the internet.
+
+<div align="center">
+    <a href="readme/gallery/pairing.png" target="_blank">
+        <img src="readme/gallery/pairing.png" alt="Image 1" width="150">
+    </a>
+    <a href="readme/gallery/welcome.png" target="_blank">
+        <img src="readme/gallery/welcome.png" alt="Image 2" width="150">
+    </a>
+    <a href="readme/gallery/home.png" target="_blank">
+        <img src="readme/gallery/home.png" alt="Image 3" width="150">
+    </a>
+    <a href="readme/gallery/appstore.png" target="_blank">
+        <img src="readme/gallery/appstore.png" alt="Image 3" width="150">
+    </a>
+    <a href="readme/gallery/app.png" target="_blank">
+        <img src="readme/gallery/app.png" alt="Image 3" width="150">
+    </a>
+    <a href="readme/gallery/devices.png" target="_blank">
+        <img src="readme/gallery/devices.png" alt="Image 3" width="150">
+    </a>
+    <a href="readme/gallery/pairnew.png" target="_blank">
+        <img src="readme/gallery/pairnew.png" alt="Image 3" width="150">
+    </a>
+    <a href="readme/gallery/public.png" target="_blank">
+        <img src="readme/gallery/public.png" alt="Image 3" width="150">
+    </a>
+    <a href="readme/gallery/settings.png" target="_blank">
+        <img src="readme/gallery/settings.png" alt="Image 3" width="150">
+    </a>
+</div>
+
 # Shard Core
 
 This is the core application of the freeshard project. A machine running it (virtual or physical) is called a Shard.
