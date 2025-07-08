@@ -24,7 +24,8 @@ certificatesResolvers:
       email: "{{ acme_email }}"
       storage: "/core/acme.json"
       caServer: "https://acme-v02.api.letsencrypt.org/directory"
-      tlsChallenge: {}
+      dnsChallenge:
+        provider: azure
 
 
 api:
