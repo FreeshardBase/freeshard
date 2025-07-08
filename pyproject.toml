@@ -14,7 +14,7 @@ authors = [
 urls = { "Homepage" = "https://github.com/FreeshardBase/shard_core" }
 requires-python = ">=3.13"
 dependencies = [
-    "gconf",
+    "gconf~=0.9.3",
     "tinydb",
     "tinydb-serialization",
     "uvicorn",

@@ -18,12 +18,14 @@ from .service.app_installation.util import write_traefik_dyn_config
 from .service.app_tools import docker_stop_all_apps, docker_shutdown_all_apps, docker_prune_images
 from .service.backup import start_backup
 from .util.async_util import PeriodicTask, BackgroundTask, CronTask
+from .util.misc import str_to_bool
 from .web import internal, public, protected, management
 
 log = logging.getLogger(__name__)
 
 
 def create_app():
+	gconf.set_env_prefix('FREESHARD')
 	if 'CONFIG' in os.environ:
 		for c in os.environ['CONFIG'].split(','):
 			gconf.load(c)
@@ -120,7 +122,11 @@ def make_background_tasks() -> List[BackgroundTask]:
 
 
 def _copy_traefik_static_config():
-	traefik_yml = 'traefik_no_ssl.yml' if gconf.get('traefik.disable_ssl', default=False) else 'traefik.yml'
+	_disable_ssl = str_to_bool(gconf.get('traefik.disable_ssl', default='false'))
+	traefik_yml = 'traefik_no_ssl.yml' if _disable_ssl else 'traefik.yml'
+	if _disable_ssl:
+		log.warning('SSL disabled')
+
 	source = Path.cwd() / 'data' / traefik_yml
 	with open(source, 'r') as f:
 		template = jinja2.Template(f.read())
