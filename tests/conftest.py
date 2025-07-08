@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from logging import LogRecord
 from pathlib import Path
-from typing import List
+from typing import List, AsyncGenerator
 
 import gconf
 import pytest
@@ -64,7 +64,7 @@ def config_override(tmp_path, request):
 
 
 @pytest_asyncio.fixture
-async def api_client(mocker, event_loop) -> AsyncClient:
+async def api_client(mocker) -> AsyncGenerator[AsyncClient]:
 	# Modules that define some global state need to be reloaded
 	importlib.reload(websocket)
 	importlib.reload(app_installation.worker)
