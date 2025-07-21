@@ -11,7 +11,7 @@ from tests.util import verify_signature_auth, modify_request_like_traefik_forwar
 
 
 @requires_test_env('full')
-async def test_call_peer_from_app_basic(peer_mock_requests, api_client):
+async def test_call_peer_from_app_basic(api_client, peer_mock_requests):
 	whoareyou = await api_client.get('public/meta/whoareyou')
 	identity = OutputIdentity(**whoareyou.json())
 	pubkey = PublicKey(identity.public_key_pem)
@@ -27,7 +27,7 @@ async def test_call_peer_from_app_basic(peer_mock_requests, api_client):
 
 
 @requires_test_env('full')
-async def test_call_peer_from_app_post(peer_mock_requests, api_client):
+async def test_call_peer_from_app_post(api_client, peer_mock_requests):
 	wouareyou = await api_client.get('public/meta/whoareyou')
 	identity = OutputIdentity(**wouareyou.json())
 	pubkey = PublicKey(identity.public_key_pem)
@@ -46,7 +46,7 @@ async def test_call_peer_from_app_post(peer_mock_requests, api_client):
 
 
 @requires_test_env('full')
-async def test_peer_auth_basic(peer_mock_requests, api_client: AsyncClient):
+async def test_peer_auth_basic(api_client: AsyncClient, peer_mock_requests):
 	response = await api_client.post('protected/apps/mock_app')
 	response.raise_for_status()
 

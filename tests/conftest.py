@@ -88,7 +88,8 @@ async def api_client(mocker) -> AsyncGenerator[AsyncClient]:
 			# This way, the TestClient remembers cookies
 			client.base_url = f'https://{whoareyou["domain"]}'
 			await wait_until_all_apps_installed(client)
-			yield client
+			with requests_mock_context():
+				yield client
 
 
 mock_profile = Profile(
@@ -117,11 +118,11 @@ mock_meta = PortalMetaExt(
 @contextmanager
 def requests_mock_context(*, meta: PortalMetaExt = None, profile: Profile = None):
 	management_api = 'https://management-mock'
-	controller_base_url = 'https://portal-controller-mock'
+	controller_base_url = 'https://freeshard-controller-mock'
 
 	config_override = {
 		'management': {'api_url': management_api},
-		'portal_controller': {'base_url': controller_base_url}
+		'freeshard_controller': {'base_url': controller_base_url}
 	}
 	management_shared_secret = 'constantSharedSecret'
 	with (

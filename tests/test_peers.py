@@ -23,7 +23,7 @@ async def test_add_and_delete(peer_mock_requests, api_client: AsyncClient):
 
 
 @requires_test_env('full')
-async def test_info_is_resolved(peer_mock_requests, api_client: AsyncClient):
+async def test_info_is_resolved(api_client: AsyncClient, peer_mock_requests):
 	response = await api_client.put('protected/peers', json={
 		'id': peer_mock_requests.identity.short_id,
 	})
@@ -51,7 +51,7 @@ async def test_add_invalid_id(api_client: AsyncClient):
 
 
 @requires_test_env('full')
-async def test_update_with_real_name(peer_mock_requests, api_client: AsyncClient):
+async def test_update_with_real_name(api_client: AsyncClient, peer_mock_requests):
 	response = await api_client.put('protected/peers', json={
 		'id': peer_mock_requests.identity.short_id,
 		'name': 'foo',
