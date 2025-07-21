@@ -28,10 +28,13 @@ async def docker_start_app(name: str):
 		app_status = installed_apps.get(Query().name == name)['status']
 
 	if app_status in [Status.STOPPED, Status.RUNNING, Status.DOWN]:
+		log.debug(f'starting app {name=}')
 		await subprocess('docker-compose', 'up', '-d', cwd=get_installed_apps_path() / name)
 		with installed_apps_table() as installed_apps:
 			installed_apps.update({'status': Status.RUNNING}, Query().name == name)
 		signals.on_apps_update.send()
+	else:
+		log.debug(f'app {name=} has status {app_status}, skipping start')
 
 
 async def docker_stop_app(name: str, set_status: bool = True):

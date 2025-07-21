@@ -6,7 +6,7 @@ from tests.conftest import requires_test_env
 
 
 @requires_test_env('full')
-async def test_profile(requests_mock, api_client: AsyncClient):
+async def test_profile(api_client: AsyncClient, requests_mock):
 	response = await api_client.get('protected/management/profile')
 	response.raise_for_status()
 	assert len(requests_mock.calls) == 1  # 1 during app startup

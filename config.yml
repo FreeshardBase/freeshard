@@ -47,6 +47,9 @@ management:
 portal_controller:
   base_url: https://portal-aca.purplemoss-96f7db40.westeurope.azurecontainerapps.io
 
+freeshard_controller:
+  base_url: https://controller.freeshard.net
+
 log:
   levels:
     gunicorn: warning
