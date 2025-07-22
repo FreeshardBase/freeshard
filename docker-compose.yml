@@ -39,10 +39,10 @@ services:
     networks:
       - portal
     environment:
-      - GCONF_DNS_ZONE=${DNS_ZONE:?}
-      - GCONF_TRAEFIK_ACME_EMAIL=user@example.com
-      - GCONF_TRAEFIK_DISABLE_SSL=${DISABLE_SSL}
-      - GCONF_PATH_ROOT_HOST=${FREESHARD_DIR:?}
+      - FREESHARD_DNS_ZONE=${DNS_ZONE:?}
+      - FREESHARD_TRAEFIK_ACME_EMAIL=user@example.com
+      - FREESHARD_TRAEFIK_DISABLE_SSL=${DISABLE_SSL}
+      - FREESHARD_PATH_ROOT_HOST=${FREESHARD_DIR:?}
 
   web-terminal:
     image: ghcr.io/freeshardbase/web-terminal:0.37.1

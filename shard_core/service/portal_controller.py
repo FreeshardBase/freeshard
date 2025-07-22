@@ -19,7 +19,7 @@ async def _call_freeshard_controller(path: str, method: str = 'GET', body: bytes
 
 
 async def refresh_profile() -> profile.Profile | None:
-	response = await _call_freeshard_controller('portals/self')
+	response = await _call_freeshard_controller('shards/self')
 	try:
 		response.raise_for_status()
 	except HTTPError:
