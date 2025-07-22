@@ -142,7 +142,7 @@ def requests_mock_context(*, meta: PortalMetaExt = None, profile: Profile = None
 			body=json.dumps({'shared_secret': management_shared_secret}),
 		)
 		rsps.get(
-			f'{controller_base_url}/api/portals/self',
+			f'{controller_base_url}/api/shards/self',
 			body=(meta or mock_meta).json(),
 		)
 		rsps.add_passthru('')

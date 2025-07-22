@@ -11,7 +11,7 @@ async def test_call_backend_from_app_basic(requests_mock, api_client):
 	identity = OutputIdentity(**whoareyou.json())
 	pubkey = PublicKey(identity.public_key_pem)
 
-	path = '/api/portals/self'
+	path = '/api/shards/self'
 	response = await api_client.get(f'internal/call_backend{path}')
 	assert response.status_code == 200
 
