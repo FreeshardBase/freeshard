@@ -7,58 +7,58 @@ from fastapi import Cookie
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from shard_core.model.auth import AuthState
-from shard_core.model.identity import OutputIdentity
+from shard_core.data_model.auth import AuthState
+from shard_core.data_model.identity import OutputIdentity
 from shard_core.service import pairing, identity, avatar
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(
-	prefix='/meta',
+    prefix="/meta",
 )
 
 
-@router.get('/whoareyou', response_model=OutputIdentity)
+@router.get("/whoareyou", response_model=OutputIdentity)
 def who_are_you():
-	return identity.get_default_identity()
+    return identity.get_default_identity()
 
 
-@router.get('/avatar')
+@router.get("/avatar")
 def get_default_avatar():
-	default_id = identity.get_default_identity()
+    default_id = identity.get_default_identity()
 
-	try:
-		avatar_file = avatar.find_avatar_file(default_id.id)
-	except FileNotFoundError:
-		raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    try:
+        avatar_file = avatar.find_avatar_file(default_id.id)
+    except FileNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
-	with open(avatar_file, 'rb') as icon_file:
-		buffer = io.BytesIO(icon_file.read())
-	return StreamingResponse(buffer, media_type=mimetypes.guess_type(avatar_file)[0])
+    with open(avatar_file, "rb") as icon_file:
+        buffer = io.BytesIO(icon_file.read())
+    return StreamingResponse(buffer, media_type=mimetypes.guess_type(avatar_file)[0])
 
 
 class OutputWhoAmI(BaseModel):
-	type: AuthState.ClientType
-	id: str = None
-	name: str = None
+    type: AuthState.ClientType
+    id: str = None
+    name: str = None
 
-	@classmethod
-	def anonymous(cls):
-		return cls(type=AuthState.ClientType.ANONYMOUS, id=None, name=None)
+    @classmethod
+    def anonymous(cls):
+        return cls(type=AuthState.ClientType.ANONYMOUS, id=None, name=None)
 
 
-@router.get('/whoami', response_model=OutputWhoAmI)
+@router.get("/whoami", response_model=OutputWhoAmI)
 def who_am_i(authorization: str = Cookie(None)):
-	if not authorization:
-		return OutputWhoAmI.anonymous()
+    if not authorization:
+        return OutputWhoAmI.anonymous()
 
-	try:
-		terminal = pairing.verify_terminal_jwt(authorization)
-	except pairing.InvalidJwt:
-		return OutputWhoAmI.anonymous()
-	else:
-		return OutputWhoAmI(
-			type=AuthState.ClientType.TERMINAL,
-			id=terminal.id,
-			name=terminal.name,
-		)
+    try:
+        terminal = pairing.verify_terminal_jwt(authorization)
+    except pairing.InvalidJwt:
+        return OutputWhoAmI.anonymous()
+    else:
+        return OutputWhoAmI(
+            type=AuthState.ClientType.TERMINAL,
+            id=terminal.id,
+            name=terminal.name,
+        )

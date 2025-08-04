@@ -5,11 +5,11 @@ from pydantic import BaseModel
 
 
 class AppUsageTrack(BaseModel):
-	timestamp: datetime.datetime
-	installed_apps: List[str]
+    timestamp: datetime.datetime
+    installed_apps: List[str]
 
 
 class AppUsageReport(BaseModel):
-	year: int
-	month: int
-	usage: Dict[str, float]
+    year: int
+    month: int
+    usage: Dict[str, float]

@@ -6,14 +6,14 @@ from pydantic import BaseModel
 log = logging.getLogger(__name__)
 
 router = APIRouter(
-	prefix='/health',
+    prefix="/health",
 )
 
 
 class Health(BaseModel):
-	status: str
+    status: str
 
 
-@router.get('', response_model=Health)
+@router.get("", response_model=Health)
 def health():
-	return Health(status='ok')
+    return Health(status="ok")

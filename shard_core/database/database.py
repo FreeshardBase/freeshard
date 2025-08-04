@@ -18,100 +18,104 @@ global_db_lock = threading.RLock()
 
 
 def init_database():
-	file = Path(gconf.get('path_root')) / 'core' / 'shard_core_db.json'
-	if file.is_dir():
-		raise Exception(f'{file} is a directory, should be a file or not existing')
-	if not file.exists():
-		file.parent.mkdir(parents=True, exist_ok=True)
-		file.touch()
-		log.info(f'initialized database at {file}')
-	else:
-		log.debug(f'database already exists at {file}')
+    file = Path(gconf.get("path_root")) / "core" / "shard_core_db.json"
+    if file.is_dir():
+        raise Exception(f"{file} is a directory, should be a file or not existing")
+    if not file.exists():
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.touch()
+        log.info(f"initialized database at {file}")
+    else:
+        log.debug(f"database already exists at {file}")
 
 
 @contextmanager
 def get_db() -> TinyDB:
-	serialization = SerializationMiddleware(JSONStorage)
-	serialization.register_serializer(DateTimeSerializer(), 'TinyDate')
+    serialization = SerializationMiddleware(JSONStorage)
+    serialization.register_serializer(DateTimeSerializer(), "TinyDate")
 
-	start_time = time.monotonic()
-	with global_db_lock:
-		wait_time = time.monotonic()
-		with TinyDB(
-				Path(gconf.get('path_root')) / 'core' / 'shard_core_db.json',
-				storage=serialization,
-				sort_keys=True,
-				indent=2,
-				create_dirs=True,
-		) as db_:
-			yield db_
-		end_time = time.monotonic()
-		if end_time - start_time > 1:
-			log.debug(
-				f'waiting for db_lock for {wait_time - start_time :.3f}s, '
-				f'operation took {end_time - wait_time :.3f}s')
-			log.debug('Stacktrace:\n' + ''.join(traceback.format_stack()))
+    start_time = time.monotonic()
+    with global_db_lock:
+        wait_time = time.monotonic()
+        with TinyDB(
+            Path(gconf.get("path_root")) / "core" / "shard_core_db.json",
+            storage=serialization,
+            sort_keys=True,
+            indent=2,
+            create_dirs=True,
+        ) as db_:
+            yield db_
+        end_time = time.monotonic()
+        if end_time - start_time > 1:
+            log.debug(
+                f"waiting for db_lock for {wait_time - start_time :.3f}s, "
+                f"operation took {end_time - wait_time :.3f}s"
+            )
+            log.debug("Stacktrace:\n" + "".join(traceback.format_stack()))
 
 
 @contextmanager
 def installed_apps_table() -> Iterator[Table]:
-	with get_db() as db:
-		yield db.table('installed_apps')
+    with get_db() as db:
+        yield db.table("installed_apps")
 
 
 @contextmanager
 def identities_table() -> Iterator[Table]:
-	with get_db() as db:
-		yield db.table('identities')
+    with get_db() as db:
+        yield db.table("identities")
 
 
 @contextmanager
 def terminals_table() -> Iterator[Table]:
-	with get_db() as db:
-		yield db.table('terminals')
+    with get_db() as db:
+        yield db.table("terminals")
 
 
 @contextmanager
 def peers_table() -> Iterator[Table]:
-	with get_db() as db:
-		yield db.table('peers')
+    with get_db() as db:
+        yield db.table("peers")
 
 
 @contextmanager
 def backups_table() -> Iterator[Table]:
-	with get_db() as db:
-		yield db.table('backups')
+    with get_db() as db:
+        yield db.table("backups")
 
 
 @contextmanager
 def tours_table() -> Iterator[Table]:
-	with get_db() as db:
-		yield db.table('tours')
+    with get_db() as db:
+        yield db.table("tours")
 
 
 @contextmanager
 def app_usage_track_table() -> Iterator[Table]:
-	with get_db() as db:
-		yield db.table('app_usage_track')
+    with get_db() as db:
+        yield db.table("app_usage_track")
 
 
 def get_value(key: str):
-	with get_db() as db:
-		if result := db.get(Query().key == key):
-			return result['value']
-		else:
-			raise KeyError(key)
+    with get_db() as db:
+        if result := db.get(Query().key == key):
+            return result["value"]
+        else:
+            raise KeyError(key)
 
 
 def set_value(key: str, value):
-	with get_db() as db:
-		db.upsert({
-			'key': key,
-			'value': value,
-		}, Query().key == key)
+    with get_db() as db:
+        db.upsert(
+            {
+                "key": key,
+                "value": value,
+            },
+            Query().key == key,
+        )
 
 
 def remove_value(key: str):
-	with get_db() as db:
-		removed_ids = db.remove(Query().key == key)
-	return len(removed_ids) > 0
+    with get_db() as db:
+        removed_ids = db.remove(Query().key == key)
+    return len(removed_ids) > 0
