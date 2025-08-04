@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from fastapi import FastAPI, Request
 from starlette import status
 
-from shard_core.model.profile import Profile
+from shard_core.data_model.profile import Profile
 
 app = FastAPI()
 

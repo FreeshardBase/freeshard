@@ -1,14 +1,14 @@
 class AppAlreadyInstalled(Exception):
-	pass
+    pass
 
 
 class AppDoesNotExist(Exception):
-	pass
+    pass
 
 
 class AppNotInstalled(Exception):
-	pass
+    pass
 
 
 class AppInIllegalStatus(Exception):
-	pass
+    pass

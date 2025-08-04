@@ -5,16 +5,17 @@ run-from-backup backup-file:
     rm -rf run
     unzip "{{backup-file}}" -d run
 
-DIRECTORY := "../portal_controller/portal_controller_backend/portal_controller/types"
+SOURCE_DIR := "../freeshard-controller/freeshard-controller-backend/freeshard_controller/data_model"
+TARGET_DIR := "shard_core/data_model/backend"
 get-types:
-    if [ ! -d {{DIRECTORY}} ]; then \
-      echo "{{DIRECTORY}} does not exist. You need to clone portal_controller first."; exit 1; \
+    if [ ! -d {{SOURCE_DIR}} ]; then \
+      echo "{{SOURCE_DIR}} does not exist. You need to clone freeshard-controller first."; exit 1; \
     fi
-    rm -rf shard_core/model/backend
-    mkdir -p shard_core/model/backend
-    touch shard_core/model/backend/__init__.py
-    cp -r {{DIRECTORY}}/* shard_core/model/backend
-    sed -i '1s/^/# DO NOT MODIFY - copied from portal_controller\n\n/' $(find shard_core/model/backend/ -type f)
+    rm -rf {{TARGET_DIR}}
+    mkdir -p {{TARGET_DIR}}
+    touch {{TARGET_DIR}}/__init__.py
+    cp -r {{SOURCE_DIR}}/* {{TARGET_DIR}}
+    sed -i '1s/^/# DO NOT MODIFY - copied from freeshard-controller\n\n/' $(find {{TARGET_DIR}}/ -type f)
 
 run-dev:
     CONFIG=config.yml,local_config.yml fastapi dev --port 8080 shard_core/app.py
