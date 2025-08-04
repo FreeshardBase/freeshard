@@ -28,7 +28,7 @@ class Profile(BaseModel):
             time_assigned=shard.time_assigned,
             delete_after=shard.delete_after,
             vm_size=VMSize(shard.vm_size.value.lower()),
-            max_vm_size=VMSize(shard.max_vm_size.value.lower()),
+            max_vm_size=VMSize(shard.max_vm_size.value.lower()) if shard.max_vm_size else None,
         )
 
 
