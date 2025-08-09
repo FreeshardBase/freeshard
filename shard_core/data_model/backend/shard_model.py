@@ -1,7 +1,7 @@
 # DO NOT MODIFY - copied from freeshard-controller
 
 from datetime import datetime
-from enum import Enum, StrEnum, auto
+from enum import StrEnum, auto
 
 from pydantic import BaseModel
 
@@ -23,12 +23,12 @@ class ShardStatus(StrEnum):
     ERROR = auto()
 
 
-class VmSize(str, Enum):
-    XS = "XS"
-    S = "S"
-    M = "M"
-    L = "L"
-    XL = "XL"
+class VmSize(StrEnum):
+    XS = auto()
+    S = auto()
+    M = auto()
+    L = auto()
+    XL = auto()
 
 
 class ShardBase(PermissionHolder, BaseModel):
@@ -72,6 +72,14 @@ class ShardUpdate(BaseModel):
     owner: str | None = None
     max_size: VmSize | None = None
     delete_after: datetime | None = None
+
+
+class ShardCreateDb(BaseModel):
+    machine_id: str
+    from_image: str
+    status: ShardStatus
+    vm_size: VmSize
+    time_created: datetime
 
 
 class ShardUpdateDb(BaseModel):

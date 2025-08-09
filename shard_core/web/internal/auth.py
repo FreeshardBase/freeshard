@@ -14,7 +14,7 @@ from shard_core.data_model.auth import AuthState
 from shard_core.data_model.identity import Identity, SafeIdentity
 from shard_core.service import pairing, peer as peer_service
 from shard_core.service.app_tools import get_app_metadata
-from shard_core.service.management import validate_shared_secret, SharedSecretInvalid
+from shard_core.service.freeshard_controller import validate_shared_secret, SharedSecretInvalid
 from shard_core.util.signals import on_terminal_auth, on_request_to_app, on_peer_auth
 
 log = logging.getLogger(__name__)

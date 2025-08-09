@@ -18,4 +18,7 @@ get-types:
     sed -i '1s/^/# DO NOT MODIFY - copied from freeshard-controller\n\n/' $(find {{TARGET_DIR}}/ -type f)
 
 run-dev:
-    CONFIG=config.yml,local_config.yml fastapi dev --port 8080 shard_core/app.py
+    PYTHONUNBUFFERED=1 CONFIG=config.yml,local_config.yml ./.venv/bin/fastapi dev --port 8080 shard_core/app.py
+
+run-dev-for-freeshard-controller:
+    PYTHONUNBUFFERED=1 CONFIG=config.yml,local_config.yml UVICORN_PORT=8001 FREESHARD_FREESHARD_CONTROLLER_BASE_URL=http://127.0.0.1:8080 ./.venv/bin/fastapi dev --port 8081 shard_core/app.py

@@ -122,6 +122,7 @@ mock_shard = ShardDb(
     max_vm_size=VmSize.M,
     from_image="mock_image",
     status=ShardStatus.ASSIGNED,
+    shared_secret="foosecretbar"
 )
 
 
@@ -141,7 +142,7 @@ def requests_mock_context(*, shard: ShardDb = None, profile: Profile = None):
     ):
         rsps.add_callback(
             responses.PUT,
-            f"{management_api}/resize",
+            f"{controller_base_url}/resize",
             callback=requests_mock_resize,
         )
         rsps.post(

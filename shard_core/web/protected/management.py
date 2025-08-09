@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, Response, Request
 
 from shard_core.data_model import profile
-from shard_core.service import management as mngt_service, portal_controller
+from shard_core.service import freeshard_controller as mngt_service, portal_controller
 from shard_core.web.util import ALL_HTTP_METHODS
 
 log = logging.getLogger(__name__)
@@ -31,5 +31,5 @@ async def get_profile(refresh: bool = False):
 @router.api_route("/{rest:path}", methods=ALL_HTTP_METHODS)
 async def call_management(rest: str, request: Request):
     body = await request.body()
-    response = await mngt_service.call_management(rest, request.method, body=body)
+    response = await mngt_service.call_freeshard_controller(rest, request.method, body=body)
     return Response(status_code=response.status_code, content=response.content)
