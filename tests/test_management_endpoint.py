@@ -2,8 +2,7 @@ from httpx import AsyncClient
 
 from shard_core.service.pairing import PairingCode
 from tests.conftest import requires_test_env
-from tests.util import wait_until_app_installed
-from util import add_terminal
+from tests.util import wait_until_app_installed, add_terminal
 
 
 @requires_test_env("full")
