@@ -3,7 +3,9 @@ from httpx import AsyncClient
 
 from shard_core.database import database
 from shard_core.service import freeshard_controller
-from shard_core.service.freeshard_controller import STORE_KEY_FREESHARD_CONTROLLER_SHARED_KEY
+from shard_core.service.freeshard_controller import (
+    STORE_KEY_FREESHARD_CONTROLLER_SHARED_KEY,
+)
 from tests.conftest import requires_test_env
 
 

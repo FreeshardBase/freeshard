@@ -122,7 +122,7 @@ mock_shard = ShardDb(
     max_vm_size=VmSize.M,
     from_image="mock_image",
     status=ShardStatus.ASSIGNED,
-    shared_secret="foosecretbar"
+    shared_secret="foosecretbar",
 )
 
 

@@ -1,6 +1,11 @@
 default:
     just --list
 
+cleanup:
+    ruff check . --fix
+    black shard_core
+    black tests
+
 run-from-backup backup-file:
     rm -rf run
     unzip "{{backup-file}}" -d run

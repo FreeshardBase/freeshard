@@ -1,6 +1,15 @@
+import importlib
+
 import pytest
 
 from shard_core.service import human_encoding as he
+
+
+@pytest.fixture(autouse=True)
+def reload_human_encoding_module():
+    # we call the he.init() method during the tests. This is to restore the original initialization after each test.
+    yield
+    importlib.reload(he)
 
 
 def test_coding_without_init():
