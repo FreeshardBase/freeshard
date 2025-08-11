@@ -31,7 +31,9 @@ async def validate_shared_secret(secret: str):
         raise SharedSecretInvalid
 
     try:
-        expected_shared_secret = database.get_value(STORE_KEY_FREESHARD_CONTROLLER_SHARED_KEY)
+        expected_shared_secret = database.get_value(
+            STORE_KEY_FREESHARD_CONTROLLER_SHARED_KEY
+        )
     except KeyError:
         expected_shared_secret = await refresh_shared_secret()
         if secret != expected_shared_secret:

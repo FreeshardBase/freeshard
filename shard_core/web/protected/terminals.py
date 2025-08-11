@@ -1,15 +1,14 @@
 import logging
-from datetime import datetime
 from typing import List
 
 from fastapi import APIRouter, status, HTTPException
 from fastapi.responses import Response
-from pydantic import BaseModel
 from tinydb import Query
 
 from shard_core.database.database import terminals_table
 from shard_core.data_model.terminal import Terminal, InputTerminal
 from shard_core.service import pairing
+from shard_core.service.pairing import PairingCode
 from shard_core.util.signals import on_terminals_update
 
 log = logging.getLogger(__name__)
@@ -17,12 +16,6 @@ log = logging.getLogger(__name__)
 router = APIRouter(
     prefix="/terminals",
 )
-
-
-class PairingCode(BaseModel):
-    code: str
-    created: datetime
-    valid_until: datetime
 
 
 @router.get("", response_model=List[Terminal])
