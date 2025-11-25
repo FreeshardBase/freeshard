@@ -11,6 +11,7 @@ from shard_core.data_model.app_meta import (
     AppMeta,
 )
 from shard_core.data_model.identity import SafeIdentity
+from shard_core.util.misc import str_to_bool
 
 
 @dataclass
@@ -40,9 +41,7 @@ def compile_config(apps: List[AppInfo], portal: SafeIdentity) -> t.Model:
 
 
 def _add_http_section(model: t.Model, portal: SafeIdentity):
-    http_entrypoint = (
-        "http" if gconf.get("traefik.disable_ssl", default=False) else "https"
-    )
+    http_entrypoint = "http" if _disable_ssl() else "https"
     _routers = {
         "shard_core_public": t.HttpRouter(
             rule="PathPrefix(`/core/public`)",
@@ -166,9 +165,7 @@ def _add_router(
 ):
     ep_value = entrypoint.entrypoint_port.value
     if entrypoint.entrypoint_port == EntrypointPort.HTTPS_443:
-        http_entrypoint = (
-            "http" if gconf.get("traefik.disable_ssl", default=False) else "https"
-        )
+        http_entrypoint = "http" if _disable_ssl() else "https"
         model.http.routers[f"{app.name}_{ep_value}"] = t.HttpRouter(
             rule=f"Host(`{app.name}.{portal.domain}`)",
             entryPoints=[http_entrypoint],
@@ -218,10 +215,14 @@ def _add_service(model: t.Model, entrypoint: Entrypoint, app: InstalledApp):
 
 
 def make_cert_resolver(portal: SafeIdentity):
-    if gconf.get("traefik.disable_ssl", default=False):
+    if _disable_ssl():
         return None
     else:
         return t.Tls1(
             certResolver="letsencrypt",
             domains=[t.Domain(main=portal.domain, sans=[f"*.{portal.domain}"])],
         )
+
+
+def _disable_ssl() -> bool:
+    return str_to_bool(gconf.get("traefik.disable_ssl", default="false"))

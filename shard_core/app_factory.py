@@ -156,7 +156,11 @@ def _copy_traefik_static_config():
 
 def print_welcome_log():
     i = identity.get_default_identity()
-    protocol = "http" if gconf.get("traefik.disable_ssl", default=False) else "https"
+    protocol = (
+        "http"
+        if str_to_bool(gconf.get("traefik.disable_ssl", default="false"))
+        else "https"
+    )
 
     with open(Path.cwd() / "data" / "freeshard_ascii", "r") as f:
         welcome_log_template = jinja2.Template(f.read())

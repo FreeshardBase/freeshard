@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter
 
 from shard_core.service.pairing import PairingCode, make_pairing_code
 
@@ -11,7 +11,7 @@ router = APIRouter(
 )
 
 
-@router.get("", response_model=PairingCode, status_code=status.HTTP_201_CREATED)
+@router.get("", response_model=PairingCode)
 def new_pairing_code(deadline: int = None):
     pairing_code = make_pairing_code(deadline=deadline)
     log.info("created new terminal pairing code by freeshard-controller")

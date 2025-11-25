@@ -2,9 +2,9 @@ default:
     just --list
 
 cleanup:
-    ruff check . --fix
-    black shard_core
-    black tests
+    .venv/bin/ruff check . --fix
+    .venv/bin/black shard_core
+    .venv/bin/black tests
 
 run-from-backup backup-file:
     rm -rf run
