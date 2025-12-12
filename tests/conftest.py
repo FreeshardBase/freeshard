@@ -23,7 +23,7 @@ from requests import PreparedRequest
 from responses import RequestsMock
 
 from shard_core.data_model.app_meta import VMSize
-from shard_core.data_model.backend.shard_model import ShardStatus, VmSize, ShardDb
+from shard_core.data_model.backend.shard_model import ShardStatus, VmSize, ShardDb, Cloud
 from shard_core import app_factory
 from shard_core.data_model.identity import OutputIdentity, Identity
 from shard_core.data_model.profile import Profile
@@ -120,9 +120,9 @@ mock_shard = ShardDb(
     time_assigned=datetime.now() - timedelta(days=1),
     vm_size=VmSize.XS,
     max_vm_size=VmSize.M,
-    from_image="mock_image",
     status=ShardStatus.ASSIGNED,
     shared_secret="foosecretbar",
+    cloud=Cloud.OVHCLOUD
 )
 
 

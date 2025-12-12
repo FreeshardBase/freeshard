@@ -6,6 +6,7 @@ from typing import Set
 from pydantic import BaseModel, Field
 
 
+# Always keep this enum in sync with the SQL enum "permission"
 # noinspection PyEnum
 class Permission(StrEnum):
     LIST_SHARDS = auto()
@@ -17,6 +18,8 @@ class Permission(StrEnum):
     ISSUE_BACKUP_RESTORE_TOKEN = auto()
     CREATE_PROMO_CODE = auto()
     MODIFY_PROMO_CODE = auto()
+    READ_SETTING = auto()
+    MODIFY_SETTING = auto()
 
 
 class PermissionHolder(BaseModel):

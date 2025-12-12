@@ -13,7 +13,6 @@ class ShardStatus(StrEnum):
     BLANK = auto()
     PREPARING = auto()
     PREPARED = auto()
-    IMAGING = auto()
     STOPPING = auto()
     STOPPED = auto()
     STARTING = auto()
@@ -31,11 +30,16 @@ class VmSize(StrEnum):
     XL = auto()
 
 
+class Cloud(StrEnum):
+    DEFAULT = auto()
+    AZURE = auto()
+    OVHCLOUD = auto()
+
+
 class ShardBase(PermissionHolder, BaseModel):
-    machine_id: str
+    machine_id: str | None
     hash_id: str | None = None
     domain: str | None = None
-    from_image: str
     address: str | None = None
     public_key_pem: str | None = None
     status: ShardStatus
@@ -49,6 +53,8 @@ class ShardBase(PermissionHolder, BaseModel):
     expiration_warning_1h_sent: datetime | None = None
     delete_after: datetime | None = None
     shared_secret: str | None = None
+    cloud: Cloud
+    volume_id: str | None = None
 
     @property
     def short_id(self) -> str:
@@ -60,12 +66,15 @@ class ShardDb(ShardBase):
 
 
 class ShardListItem(BaseModel):
-    machine_id: str
+    id: int
+    machine_id: str | None
     hash_id: str | None
     domain: str | None
-    status: str
+    status: ShardStatus
     owner_name: str | None
     owner_email: str | None
+    cloud: Cloud
+    volume_id: str | None = None
 
 
 class ShardUpdate(BaseModel):
@@ -75,14 +84,16 @@ class ShardUpdate(BaseModel):
 
 
 class ShardCreateDb(BaseModel):
-    machine_id: str
-    from_image: str
+    machine_id: str | None
     status: ShardStatus
     vm_size: VmSize
     time_created: datetime
+    delete_after: datetime | None = None
+    cloud: Cloud
 
 
 class ShardUpdateDb(BaseModel):
+    machine_id: str | None = None
     hash_id: str | None = None
     domain: str | None = None
     address: str | None = None
@@ -91,6 +102,7 @@ class ShardUpdateDb(BaseModel):
     delete_after: datetime | None = None
     public_key_pem: str | None = None
     status: ShardStatus | None = None
+    volume_id: str | None = None
 
 
 class AppUsageReport(BaseModel):
@@ -109,3 +121,27 @@ class AppUsageReportUpdate(BaseModel):
 class SasUrlResponse(BaseModel):
     sas_url: str
     container_name: str
+
+
+class AssignShardRequest(BaseModel):
+    promo_code: str | None = None
+    owner_name: str | None = None
+    owner_email: str | None = None
+
+
+class AssignShardResponse(BaseModel):
+    hash_id: str
+    domain: str
+    code: str
+    created: datetime
+    valid_until: datetime
+
+
+class PairingCodeResponse(BaseModel):
+    code: str
+    created: datetime
+    valid_until: datetime
+
+
+class InvalidShardStatus(Exception):
+    pass
