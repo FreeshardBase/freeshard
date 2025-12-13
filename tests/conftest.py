@@ -23,7 +23,12 @@ from requests import PreparedRequest
 from responses import RequestsMock
 
 from shard_core.data_model.app_meta import VMSize
-from shard_core.data_model.backend.shard_model import ShardStatus, VmSize, ShardDb, Cloud
+from shard_core.data_model.backend.shard_model import (
+    ShardStatus,
+    VmSize,
+    ShardDb,
+    Cloud,
+)
 from shard_core import app_factory
 from shard_core.data_model.identity import OutputIdentity, Identity
 from shard_core.data_model.profile import Profile
@@ -69,7 +74,7 @@ def config_override(tmp_path, request):
 
 
 @pytest_asyncio.fixture
-async def api_client(mocker) -> AsyncGenerator[AsyncClient]:
+async def api_client(requests_mock, mocker) -> AsyncGenerator[AsyncClient]:
     # Modules that define some global state need to be reloaded
     importlib.reload(websocket)
     importlib.reload(app_installation.worker)
@@ -97,8 +102,7 @@ async def api_client(mocker) -> AsyncGenerator[AsyncClient]:
             # This way, the TestClient remembers cookies
             client.base_url = f'https://{whoareyou["domain"]}'
             await wait_until_all_apps_installed(client)
-            with requests_mock_context():
-                yield client
+            yield client
 
 
 mock_profile = Profile(
@@ -122,7 +126,7 @@ mock_shard = ShardDb(
     max_vm_size=VmSize.M,
     status=ShardStatus.ASSIGNED,
     shared_secret="foosecretbar",
-    cloud=Cloud.OVHCLOUD
+    cloud=Cloud.OVHCLOUD,
 )
 
 
@@ -156,6 +160,7 @@ def requests_mock_context(*, shard: ShardDb = None, profile: Profile = None):
             f"{controller_base_url}/api/shards/self",
             body=(shard or mock_shard).json(),
         )
+        rsps.get(f"{controller_base_url}/api/foo")
         rsps.add_passthru("")
         yield rsps
 

@@ -18,7 +18,9 @@ async def call_backend(rest: str, request: Request):
     url = f"{base_url}/{rest}"
 
     body = await request.body()
-    response = await signed_request(request.method, url, data=body)
+    response = await signed_request(
+        request.method, url, data=body, params=dict(request.query_params)
+    )
 
     log.debug(f"called backend: {url} -> {response.status_code}")
 

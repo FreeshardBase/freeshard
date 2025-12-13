@@ -80,7 +80,7 @@ async def test_pairing_happy(api_client: AsyncClient, requests_mock):
     assert response.json()["name"] == t_name
 
     # has the default identity been update from the profile?
-    assert len(requests_mock.calls) == 1
+    assert len(requests_mock.calls) == 2
     response = await api_client.get("protected/identities/default")
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["name"] == "test owner"
