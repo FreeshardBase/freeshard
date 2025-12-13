@@ -40,7 +40,7 @@ async def test_app_reporting(api_client, requests_mock: responses.RequestsMock):
 
     await asyncio.sleep(3.5)  # to trigger reporting
     assert len(requests_mock.calls) >= 1
-    report = AppUsageReport.parse_raw(requests_mock.calls[0].request.body)
+    report = AppUsageReport.parse_raw(requests_mock.calls[1].request.body)
 
     assert report.year == track_timestamp.year
     assert report.month == track_timestamp.month
