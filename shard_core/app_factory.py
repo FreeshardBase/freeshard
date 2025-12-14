@@ -9,6 +9,7 @@ from typing import List
 import gconf
 import jinja2
 from fastapi import FastAPI
+from pydantic import ValidationError
 from requests import ConnectionError, HTTPError
 
 from .database import database
@@ -87,7 +88,7 @@ async def lifespan(_):
     backup.ensure_backup_passphrase()
     try:
         await portal_controller.refresh_profile()
-    except (ConnectionError, HTTPError) as e:
+    except (ConnectionError, HTTPError, ValidationError) as e:
         log.error(f"could not refresh profile: {e}")
 
     background_tasks = make_background_tasks()
