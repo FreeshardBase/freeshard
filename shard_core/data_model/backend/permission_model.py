@@ -16,6 +16,7 @@ class Permission(StrEnum):
     READ_REVENUE_SHARE = auto()
     MODIFY_REVENUE_SHARE = auto()
     ISSUE_BACKUP_RESTORE_TOKEN = auto()
+    LIST_PROMO_CODES = auto()
     CREATE_PROMO_CODE = auto()
     MODIFY_PROMO_CODE = auto()
     READ_SETTING = auto()
