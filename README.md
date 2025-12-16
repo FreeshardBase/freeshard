@@ -121,9 +121,8 @@ In order to test freeshard, you might want to launch it on localhost first.
    - `EMAIL` is the email address that will be used to request SSL certificates. You can leave the defalt value for now since we are not using SSL yet. 
    - `DISABLE_SSL` is for local testing only. It prevents certificates from being requested and allows you to use the Shard without SSL. Set it to `true` for now.
 3. Start the Shard Core with `docker-compose up`.
-4. Look up the shard's URL in the logs right below where the logo is printed. It should be in the format `http://<shard_id>.localhost`. Open it in your browser.
-5. From the CLI run this command to get a pairing code: `docker run --rm -it --network portal curlimages/curl "http://shard_core/protected/terminals/pairing-code"`
-6. In the freeshard UI click on `Pair` and enter the pairing code.
+4. Look for the Freeshard logo in the logs for the details of your shard. On first startup, there is a link including a pairing code to pair your first device. Open it in your browser.
+5. You can always get a fresh pairing code by running this command from your CLI: `docker run --rm -it --network portal curlimages/curl "http://shard_core/protected/terminals/pairing-code"`
 
 ### Full Server Deployment
 
@@ -138,9 +137,8 @@ For a full server deployment, follow these steps.
    - `DISABLE_SSL` is for local testing only. Do not use the option in production!
 4. Provide the environment variables for your DNS provider to the Traefik service in the `docker-compose.yml` file. [Here is a list of providers](https://doc.traefik.io/traefik/https/acme/#providers) and the required variables. See [Let's Encrypt](#letsencrypt) for why this is necessary.
 5. Start the Shard Core with `docker-compose up -d`.
-6. Look up the shard's URL in the logs right below where the logo is printed. It should be in the format `https://<shard_id>.<DNS_ZONE>`. Open it in your browser.
-7. From the CLI run this command to get a pairing code: `docker run --rm -it --network portal curlimages/curl "http://shard_core/protected/terminals/pairing-code"`
-8. In the freeshard UI click on `Pair` and enter the pairing code.
+6. Look for the Freeshard logo in the logs for the details of your shard. On first startup, there is a link including a pairing code to pair your first device. Open it in your browser.
+7. You can always get a fresh pairing code by running this command from your CLI: `docker run --rm -it --network portal curlimages/curl "http://shard_core/protected/terminals/pairing-code"`
 
 ### Let's Encrypt
 <a name="letsencrypt"></a>

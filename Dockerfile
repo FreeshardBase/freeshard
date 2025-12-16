@@ -27,10 +27,13 @@ FROM python:3.13-slim-bookworm AS runtime
 # Install packages required for the project
 RUN apt-get update && apt-get install --no-install-recommends -y \
     curl \
-    docker.io \
     docker-compose \
     rclone \
     && apt-get clean
+
+# Install Docker
+RUN curl -fsSL https://get.docker.com -o get-docker.sh
+RUN sh get-docker.sh
 
 # Copy the installed dependencies from the build stage
 COPY --from=build /app /app

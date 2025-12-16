@@ -18,6 +18,12 @@
 
                 Welcome to your shard!
               This shard's ID is {{ shard_id }}
-           You can reach it at {{ shard_url }}
-
+                  You can reach it at:
+{{ shard_url_centered }}
+{% if is_first_start %}
+              Since this is the first start,
+            you need to pair your first device.
+              Use this link (valid for 10min):
+{{ pairing_link_centered }}
+{% endif %}
 
