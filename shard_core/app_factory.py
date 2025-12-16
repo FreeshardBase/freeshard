@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from requests import ConnectionError, HTTPError
 
 from .database import database
+from .database.database import terminals_table
 from .service import (
     app_installation,
     identity,
@@ -31,7 +32,10 @@ from .service.app_tools import (
     docker_shutdown_all_apps,
     docker_prune_images,
 )
+
+from tinydb import Query
 from .service.backup import start_backup
+from .service.pairing import make_pairing_code
 from .util.async_util import PeriodicTask, BackgroundTask, CronTask
 from .util.misc import str_to_bool
 from .web import internal, public, protected, management
@@ -156,21 +160,32 @@ def _copy_traefik_static_config():
 
 
 def print_welcome_log():
+    params = {}
     i = identity.get_default_identity()
     protocol = (
         "http"
         if str_to_bool(gconf.get("traefik.disable_ssl", default="false"))
         else "https"
     )
+    shard_url = f"{protocol}://{i.domain}"
+    params["shard_id"] = i.short_id
+    params["shard_url_centered"] = _center(shard_url)
 
-    with open(Path.cwd() / "data" / "freeshard_ascii", "r") as f:
+    with terminals_table() as terminals:  # type: Table
+        is_first_start = terminals.count(Query().noop()) == 0
+    params["is_first_start"] = is_first_start
+    if is_first_start:
+        pairing_code = make_pairing_code(deadline=10 * 60)
+        pairing_link = f"{shard_url}/#/pair?code={pairing_code.code}"
+        params["pairing_link_centered"] = _center(pairing_link)
+
+    with open(Path.cwd() / "data" / "freeshard_ascii.jinja", "r") as f:
         welcome_log_template = jinja2.Template(f.read())
 
-    welcome_log = welcome_log_template.render(
-        {
-            "shard_id": i.short_id,
-            "shard_url": f"{protocol}://{i.domain}",
-        }
-    )
-
+    welcome_log = welcome_log_template.render(params)
     print(welcome_log)
+
+def _center(text: str) -> str:
+    center_point = 27
+    offset = center_point - len(text) // 2
+    return " " * offset + text
