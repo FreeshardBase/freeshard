@@ -185,6 +185,7 @@ def print_welcome_log():
     welcome_log = welcome_log_template.render(params)
     print(welcome_log)
 
+
 def _center(text: str) -> str:
     center_point = 27
     offset = center_point - len(text) // 2
