@@ -5,7 +5,7 @@ networks:
 services:
 
   traefik:
-    image: traefik:v2.6
+    image: traefik:v3.6
     container_name: traefik
     restart: always
     ports:
@@ -29,7 +29,7 @@ services:
         condition: service_healthy
 
   shard_core:
-    image: ghcr.io/freeshardbase/freeshard:0.35.4
+    image: ghcr.io/freeshardbase/freeshard:0.35.5
     container_name: shard_core
     restart: always
     volumes:
@@ -45,7 +45,7 @@ services:
       - FREESHARD_PATH_ROOT_HOST=${FREESHARD_DIR:?}
 
   web-terminal:
-    image: ghcr.io/freeshardbase/web-terminal:0.37.3
+    image: ghcr.io/freeshardbase/web-terminal:0.37.4
     container_name: web-terminal
     restart: always
     networks:
