@@ -38,6 +38,6 @@ async def refresh_profile() -> profile.Profile | None:
 
 
 async def get_backup_sas_url() -> SasUrlResponse:
-    response = await _call_freeshard_controller("portal_backup/backup_sas_url")
+    response = await _call_freeshard_controller("shard_backup/backup_sas_url")
     response.raise_for_status()
     return SasUrlResponse.parse_obj(response.json())
