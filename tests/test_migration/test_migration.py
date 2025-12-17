@@ -22,7 +22,7 @@ def init_db_file(tmp_path):
 @requires_test_env("full")
 async def test_migration(init_db_file, api_client, tmp_path):
     response = (await api_client.get("protected/apps")).json()
-    assert len(response) == 2
+    assert len(response) == 4
     assert any(app["name"] == "filebrowser" for app in response)
     assert any(app["name"] == "mock_app" for app in response)
 
@@ -50,7 +50,7 @@ async def test_migration_nonexisting_app(
     init_db_file_nonexisting_app, api_client, tmp_path
 ):
     response = (await api_client.get("protected/apps")).json()
-    assert len(response) == 1
+    assert len(response) == 3
     assert any(app["name"] == "filebrowser" for app in response)
 
     async def assert_status_down():

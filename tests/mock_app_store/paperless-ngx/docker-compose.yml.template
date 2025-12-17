@@ -1,0 +1,17 @@
+networks:
+    portal:
+        external: true
+
+services:
+    paperless-ngx:
+        restart: always
+        image: nginx:alpine
+        container_name: paperless-ngx
+        ports:
+        - 80:80
+        volumes:
+        - "{{ fs.app_data }}:/data"
+        - "{{ fs.shared }}:/data/shared"
+        - "/var/run/docker.sock:/var/run/docker.sock:ro"
+        networks:
+        - portal

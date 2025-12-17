@@ -18,8 +18,8 @@ pytestmark = pytest.mark.asyncio
 @requires_test_env("full")
 async def test_get_initial_apps(api_client: AsyncClient):
     response = (await api_client.get("protected/apps")).json()
-    assert len(response) == 1
-    assert response[0]["name"] == "filebrowser"
+    assert len(response) == 3
+    assert "filebrowser" in [e["name"] for e in response]
 
 
 @requires_test_env("full")
@@ -35,7 +35,7 @@ async def test_install_app(api_client: AsyncClient):
     docker_client.containers.get(app_name)
 
     response = (await api_client.get("protected/apps")).json()
-    assert len(response) == 2
+    assert len(response) == 4
 
 
 @requires_test_env("full")
@@ -47,14 +47,14 @@ async def test_reinstall_app(api_client: AsyncClient):
 
     await wait_until_app_installed(api_client, app_name)
     response = (await api_client.get("protected/apps")).json()
-    assert len(response) == 2
+    assert len(response) == 4
 
     response = await api_client.post(f"protected/apps/{app_name}/reinstall")
     assert response.status_code == status.HTTP_201_CREATED
 
     await wait_until_app_installed(api_client, app_name)
     response = (await api_client.get("protected/apps")).json()
-    assert len(response) == 2
+    assert len(response) == 4
 
 
 @requires_test_env("full")
@@ -81,7 +81,7 @@ async def test_uninstall_app(api_client: AsyncClient):
     await wait_until_app_uninstalled(api_client, "filebrowser")
 
     response = (await api_client.get("protected/apps")).json()
-    assert len(response) == 0
+    assert len(response) == 2
 
     with pytest.raises(NotFound):
         docker_client.containers.get("filebrowser")
@@ -113,7 +113,7 @@ async def test_uninstall_running_app(api_client: AsyncClient):
     await wait_until_app_uninstalled(api_client, app_name)
 
     response = (await api_client.get("protected/apps")).json()
-    assert len(response) == 1  # Filebrowser is still installed
+    assert len(response) == 3  # Initial apps are still installed
 
     with pytest.raises(NotFound):
         docker_client.containers.get(app_name)
@@ -138,4 +138,4 @@ async def test_install_custom_app(api_client: AsyncClient):
     docker_client.containers.get(app_name)
 
     response = (await api_client.get("protected/apps")).json()
-    assert len(response) == 2
+    assert len(response) == 4

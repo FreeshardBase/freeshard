@@ -12,7 +12,11 @@ init_app_conf = {"apps": {"initial_apps": ["filebrowser", "mock_app"]}}
 async def test_add_init_app(api_client: AsyncClient):
     response = await api_client.get("/protected/apps")
     response.raise_for_status()
-    assert {j["name"] for j in response.json()} == {"filebrowser"}
+    assert {j["name"] for j in response.json()} == {
+        "filebrowser",
+        "paperless-ngx",
+        "immich",
+    }
 
     with gconf.override_conf(init_app_conf):
         await shard_core.service.app_installation.refresh_init_apps()
@@ -20,4 +24,9 @@ async def test_add_init_app(api_client: AsyncClient):
 
     response = await api_client.get("/protected/apps")
     response.raise_for_status()
-    assert {j["name"] for j in response.json()} == {"filebrowser", "mock_app"}
+    assert {j["name"] for j in response.json()} == {
+        "filebrowser",
+        "paperless-ngx",
+        "immich",
+        "mock_app",
+    }

@@ -1,0 +1,36 @@
+{
+  "v": "1.0",
+  "app_version": "2.19.5",
+  "name": "paperless-ngx",
+  "pretty_name": "Paperless NGX",
+  "icon": "icon.svg",
+  "upstream_repo": "https://github.com/paperless-ngx/paperless-ngx",
+  "entrypoints": [
+    {
+      "container_name": "paperless-ngx",
+      "container_port": 8000,
+      "entrypoint_port": "http"
+    }
+  ],
+  "paths": {
+    "": {
+      "access": "private"
+    },
+    "/share/": {
+      "access": "public"
+    }
+  },
+  "minimum_portal_size": "s",
+  "lifecycle": {
+    "always_on": false,
+    "idle_time_for_shutdown": 300
+  },
+  "store_info": {
+    "description_short": "Scan, index and archive all your physical documents",
+    "description_long": [
+      "Paper is a nightmare. Environmental issues aside, there's no excuse for it in the 21st century. It takes up space, collects dust, doesn't support any form of a search feature, indexing is tedious, it's heavy and prone to damage & loss.",
+      "This software is designed to make \"going paperless\" easier. No more worrying about finding stuff again, feed documents right from the post box into the scanner and then shred them."
+    ],
+    "is_featured": true
+  }
+}

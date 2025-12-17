@@ -29,6 +29,8 @@ async def test_template_is_written(api_client):
             "shard_core",
             "web-terminal",
             "filebrowser_http",
+            "paperless-ngx_http",
+            "immich_http",
         }
         assert out_services_http["filebrowser_http"]["loadBalancer"]["servers"] == [
             {"url": "http://filebrowser:80"}
@@ -42,5 +44,7 @@ async def test_template_is_written(api_client):
             "web-terminal",
             "traefik",
             "filebrowser_http",
+            "paperless-ngx_http",
+            "immich_http",
         }
         assert out_routers_http["filebrowser_http"]["service"] == "filebrowser_http"
