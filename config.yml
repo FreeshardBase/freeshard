@@ -32,6 +32,8 @@ apps:
     refresh_interval: 10
   initial_apps:
     - filebrowser
+    - immich
+    - paperless-ngx
   last_access:
     max_update_frequency: 60
   usage_reporting:
