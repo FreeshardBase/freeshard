@@ -160,6 +160,7 @@ def requests_mock_context(*, shard: ShardDb = None, profile: Profile = None):
             f"{controller_base_url}/api/shards/self",
             body=(shard or mock_shard).json(),
         )
+        rsps.post(f"{controller_base_url}/api/feedback")
         rsps.get(f"{controller_base_url}/api/foo")
         rsps.add_passthru("")
         yield rsps
