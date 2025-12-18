@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "shard_core"
-version = "0.35.7"
+version = "0.35.8"
 description = "Core software stack that manages all aspects of a Shard"
 readme = "README.md"
 license-files = ["LICENSE.md"]
