@@ -29,7 +29,7 @@ services:
         condition: service_healthy
 
   shard_core:
-    image: ghcr.io/freeshardbase/freeshard:0.35.7
+    image: ghcr.io/freeshardbase/freeshard:0.35.8
     container_name: shard_core
     restart: always
     volumes:
