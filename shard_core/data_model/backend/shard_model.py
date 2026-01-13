@@ -65,18 +65,6 @@ class ShardDb(ShardBase):
     id: int
 
 
-class ShardListItem(BaseModel):
-    id: int
-    machine_id: str | None
-    hash_id: str | None
-    domain: str | None
-    status: ShardStatus
-    owner_name: str | None
-    owner_email: str | None
-    cloud: Cloud
-    volume_id: str | None = None
-
-
 class ShardUpdate(BaseModel):
     owner: str | None = None
     max_size: VmSize | None = None
@@ -97,8 +85,11 @@ class ShardUpdateDb(BaseModel):
     hash_id: str | None = None
     domain: str | None = None
     address: str | None = None
-    owner: str | None = None
+    owner_name: str | None = None
+    owner_email: str | None = None
     max_size: VmSize | None = None
+    expiration_warning_24h_sent: datetime | None = None
+    expiration_warning_1h_sent: datetime | None = None
     delete_after: datetime | None = None
     public_key_pem: str | None = None
     status: ShardStatus | None = None

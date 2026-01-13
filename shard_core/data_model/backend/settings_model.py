@@ -11,6 +11,7 @@ from .shard_model import Cloud
 # noinspection PyEnum
 class SettingKey(StrEnum):
     MIN_NR_OF_STANDBY_SHARDS = auto()
+    NEW_INSTANCE_SIZE = auto()
 
 
 class Setting(BaseModel):

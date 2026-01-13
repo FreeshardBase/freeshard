@@ -16,3 +16,6 @@ log:
   levels:
     shard_core: debug
     'shard_core.service.app_usage_reporting': error
+
+telemetry:
+  enabled: true
