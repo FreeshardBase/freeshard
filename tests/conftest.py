@@ -32,7 +32,7 @@ from shard_core.data_model.backend.shard_model import (
 from shard_core import app_factory
 from shard_core.data_model.identity import OutputIdentity, Identity
 from shard_core.data_model.profile import Profile
-from shard_core.service import websocket, app_installation
+from shard_core.service import websocket, app_installation, telemetry
 from shard_core.service.app_tools import get_installed_apps_path
 from shard_core.web.internal.call_peer import _get_app_for_ip_address
 from tests.util import (
@@ -78,6 +78,7 @@ async def api_client(requests_mock, mocker) -> AsyncGenerator[AsyncClient]:
     # Modules that define some global state need to be reloaded
     importlib.reload(websocket)
     importlib.reload(app_installation.worker)
+    importlib.reload(telemetry)
 
     # Mocks must be set up after modules are reloaded or else they will be overwritten
     mock_app_store(mocker)

@@ -25,6 +25,7 @@ from .service import (
     portal_controller,
     backup,
     disk,
+    telemetry,
 )
 from .service.app_installation.util import write_traefik_dyn_config
 from .service.app_tools import (
@@ -95,7 +96,7 @@ async def lifespan(_):
     except (ConnectionError, HTTPError, ValidationError) as e:
         log.error(f"could not refresh profile: {e}")
 
-    background_tasks = make_background_tasks()
+    background_tasks = _make_background_tasks()
     for t in background_tasks:
         t.start()
 
@@ -112,7 +113,7 @@ async def lifespan(_):
     await docker_shutdown_all_apps(force=True)
 
 
-def make_background_tasks() -> List[BackgroundTask]:
+def _make_background_tasks() -> List[BackgroundTask]:
     return [
         app_installation.worker.installation_worker,
         PeriodicTask(
@@ -138,6 +139,9 @@ def make_background_tasks() -> List[BackgroundTask]:
         ),
         PeriodicTask(disk.update_disk_space, 3),
         websocket.ws_worker,
+        PeriodicTask(
+            telemetry.send_telemetry, gconf.get("telemetry.send_interval_seconds")
+        ),
     ]
 
 

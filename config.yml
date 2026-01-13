@@ -43,6 +43,9 @@ apps:
     schedule: '0 4 * * *'
     max_age: 24
 
+telemetry:
+  send_interval_seconds: 300
+
 management:
   api_url: https://ptlfunctionapp.azurewebsites.net/api/management
 
