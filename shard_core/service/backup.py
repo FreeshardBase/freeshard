@@ -11,7 +11,6 @@ import gconf
 from requests import HTTPError
 
 from shard_core.database import database
-from shard_core.database.database import backups_table
 from shard_core.data_model.backup import (
     BackupReport,
     BackupStats,
@@ -24,6 +23,7 @@ log = logging.getLogger(__name__)
 
 STORE_KEY_BACKUP_PASSPHRASE = "backup_passphrase"
 STORE_KEY_BACKUP_PASSPHRASE_LAST_ACCESS = "backup_passphrase_last_access"
+STORE_KEY_BACKUP_REPORTS = "backup_reports"
 BACKUP_IN_PROGESS_LOCK = asyncio.Lock()
 
 COMMAND_TEMPLATE = """
@@ -120,8 +120,16 @@ async def backup_directories(
             startTime=overall_start_time,
             endTime=overall_end_time,
         )
-        with backups_table() as table:
-            table.insert(report.dict())
+        # Store backup report in key-value store
+        try:
+            reports = database.get_value(STORE_KEY_BACKUP_REPORTS)
+        except KeyError:
+            reports = []
+        reports.append(report.dict())
+        # Keep only last 100 reports
+        if len(reports) > 100:
+            reports = reports[-100:]
+        database.set_value(STORE_KEY_BACKUP_REPORTS, reports)
         log.info("Backup done")
 
 
@@ -169,9 +177,14 @@ def _get_relative_directory(directory: Path) -> Path:
 
 
 def get_latest_backup_report() -> BackupReport | None:
-    with backups_table() as table:
-        latest_stats = max(table.all(), key=lambda x: x["endTime"], default=None)
-    return BackupReport.parse_obj(latest_stats) if latest_stats else None
+    try:
+        reports = database.get_value(STORE_KEY_BACKUP_REPORTS)
+        if reports and len(reports) > 0:
+            latest_stats = max(reports, key=lambda x: x["endTime"])
+            return BackupReport.parse_obj(latest_stats)
+    except KeyError:
+        pass
+    return None
 
 
 def ensure_backup_passphrase():

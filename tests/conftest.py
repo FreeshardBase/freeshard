@@ -89,7 +89,7 @@ def config_override(tmp_path, request):
 
 
 @pytest_asyncio.fixture
-async def api_client(requests_mock, mocker) -> AsyncGenerator[AsyncClient]:
+async def api_client(requests_mock, mocker):  # Remove AsyncGenerator type hint for Python 3.12 compatibility
     # Modules that define some global state need to be reloaded
     importlib.reload(websocket)
     importlib.reload(app_installation.worker)
