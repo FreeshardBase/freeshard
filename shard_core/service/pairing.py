@@ -7,10 +7,8 @@ from datetime import datetime, timedelta, timezone
 import gconf
 import jwt
 from pydantic import BaseModel
-from tinydb import Query
 
-from shard_core.database import database
-from shard_core.database.database import terminals_table
+from shard_core.database import database, db_methods
 from shard_core.data_model.terminal import Terminal
 
 STORE_KEY_JWT_SECRET = "terminal_jwt_secret"
@@ -83,11 +81,11 @@ def verify_terminal_jwt(token: str = None):
     except jwt.InvalidTokenError as e:
         raise InvalidJwt from e
 
-    with terminals_table() as terminals:  # type: Table
-        if terminal := terminals.get(Query().id == decoded_token["sub"]):
-            return Terminal(**terminal)
-        else:
-            raise InvalidJwt
+    terminal_data = db_methods.get_terminal_by_id(decoded_token["sub"])
+    if terminal_data:
+        return Terminal(**terminal_data)
+    else:
+        raise InvalidJwt
 
 
 def _ensure_jwt_secret():

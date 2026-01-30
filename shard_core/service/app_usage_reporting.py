@@ -5,9 +5,8 @@ from datetime import datetime, date, timedelta
 import gconf
 from requests import HTTPError
 from starlette import status
-from tinydb import Query
 
-from shard_core.database.database import installed_apps_table, app_usage_track_table
+from shard_core.database import db_methods
 from shard_core.data_model.app_meta import InstalledApp
 from shard_core.data_model.app_usage import AppUsageTrack, AppUsageReport
 from shard_core.service.signed_call import signed_request
@@ -16,13 +15,12 @@ log = logging.getLogger(__name__)
 
 
 async def track_currently_installed_apps():
-    with installed_apps_table() as installed_apps:  # type: Table
-        all_apps = [InstalledApp.parse_obj(a) for a in installed_apps.all()]
+    all_apps_data = db_methods.get_all_installed_apps()
+    all_apps = [InstalledApp.parse_obj(a) for a in all_apps_data]
     track = AppUsageTrack(
         timestamp=datetime.utcnow(), installed_apps=[app.name for app in all_apps]
     )
-    with app_usage_track_table() as tracks:  # type: Table
-        tracks.insert(track.dict())
+    db_methods.insert_app_usage_track(track.dict())
     log.debug(f"created app usage track for {len(track.installed_apps)} apps")
 
 
@@ -36,17 +34,25 @@ async def report_app_usage():
 
     report = AppUsageReport(year=start.year, month=start.month, usage={})
 
-    with app_usage_track_table() as tracks:  # type: Table
-        relevant_tracks = tracks.search(
-            (start <= Query().timestamp) & (Query().timestamp < end)
-        )
+    # Get all tracks and filter in Python
+    all_tracks = db_methods.get_all_app_usage_tracks()
+    relevant_tracks = [
+        t for t in all_tracks 
+        if start <= t['timestamp'] < end
+    ]
 
     if not relevant_tracks:
         log.warning("no app usage tracks found for reporting")
         return
 
     for t in relevant_tracks:
-        for app in AppUsageTrack.parse_obj(t).installed_apps:
+        # Handle both JSON string and list formats
+        installed_apps = t.get('installed_apps', [])
+        if isinstance(installed_apps, str):
+            import json
+            installed_apps = json.loads(installed_apps)
+        
+        for app in installed_apps:
             if app not in report.usage:
                 report.usage[app] = 0
             report.usage[app] += 1
