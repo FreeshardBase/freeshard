@@ -24,7 +24,7 @@ dependencies = [
     "pyyaml",
     "docker",
     "python-gitlab",
-    "psycopg[binary]~=3.2",
+    "psycopg[binary,pool]~=3.2",
     "yoyo-migrations~=9.0",
     "cachetools",
     "blinker",

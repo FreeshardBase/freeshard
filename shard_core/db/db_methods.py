@@ -6,7 +6,7 @@ import logging
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
-from shard_core.database.db_connection import get_cursor
+from shard_core.db.db_connection import get_cursor
 
 log = logging.getLogger(__name__)
 
