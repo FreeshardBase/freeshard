@@ -12,8 +12,7 @@ from fastapi import FastAPI
 from pydantic import ValidationError
 from requests import ConnectionError, HTTPError
 
-from .database import database
-from .database.database import terminals_table
+from .database import database, db_methods
 from .service import (
     app_installation,
     identity,
@@ -34,7 +33,6 @@ from .service.app_tools import (
     docker_prune_images,
 )
 
-from tinydb import Query
 from .service.backup import start_backup
 from .service.pairing import make_pairing_code
 from .util.async_util import PeriodicTask, BackgroundTask, CronTask
@@ -175,8 +173,7 @@ def print_welcome_log():
     params["shard_id"] = i.short_id
     params["shard_url_centered"] = _center(shard_url)
 
-    with terminals_table() as terminals:  # type: Table
-        is_first_start = terminals.count(Query().noop()) == 0
+    is_first_start = db_methods.count_terminals() == 0
     params["is_first_start"] = is_first_start
     if is_first_start:
         pairing_code = make_pairing_code(deadline=10 * 60)
