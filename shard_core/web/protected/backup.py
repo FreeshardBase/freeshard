@@ -2,7 +2,8 @@ import logging
 
 from fastapi import Header, HTTPException, APIRouter, status
 
-from shard_core.database import database, db_methods
+from shard_core.database import database
+from shard_core.db import terminals
 from shard_core.data_model.backup import (
     BackupPassphraseResponse,
     BackupInfoResponse,
@@ -28,7 +29,7 @@ async def get_backup_info():
     except KeyError:
         last_access_info_response = None
     else:
-        terminal_data = db_methods.get_terminal_by_id(last_access_info_db.terminal_id)
+        terminal_data = terminals.get_by_id(last_access_info_db.terminal_id)
         terminal_name = (
             Terminal.parse_obj(terminal_data).name if terminal_data else "Unknown"
         )

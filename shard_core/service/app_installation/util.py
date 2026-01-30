@@ -8,7 +8,7 @@ import jinja2
 import pydantic
 import yaml
 
-from shard_core.database import db_methods
+from shard_core.db import installed_apps, identities
 from shard_core.data_model.app_meta import Status, InstalledApp
 from shard_core.data_model.identity import Identity, SafeIdentity
 from shard_core.service.app_installation.exceptions import AppInIllegalStatus
@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 
 
 def get_app_from_db(app_name: str) -> InstalledApp:
-    app_data = db_methods.get_installed_app_by_name(app_name)
+    app_data = installed_apps.get_by_name(app_name)
     if app_data:
         return InstalledApp.parse_obj(app_data)
     else:
@@ -28,7 +28,7 @@ def get_app_from_db(app_name: str) -> InstalledApp:
 
 
 def app_exists_in_db(app_name: str) -> bool:
-    return db_methods.get_installed_app_by_name(app_name) is not None
+    return installed_apps.get_by_name(app_name) is not None
 
 
 def assert_app_status(installed_app: InstalledApp, *allowed_status: Status):
@@ -39,10 +39,10 @@ def assert_app_status(installed_app: InstalledApp, *allowed_status: Status):
 
 
 def update_app_status(app_name: str, status: Status, message: str | None = None):
-    app_data = db_methods.get_installed_app_by_name(app_name)
+    app_data = installed_apps.get_by_name(app_name)
     if not app_data:
         raise KeyError(app_name)
-    db_methods.update_installed_app(app_name, {"status": status})
+    installed_apps.update(app_name, status=status)
     log.debug(
         f"status of {app_name} updated to {status}"
         + (f": {message}" if message else "")
@@ -66,7 +66,7 @@ async def render_docker_compose_template(app: InstalledApp):
         "shared": f'{gconf.get("path_root_host")}/user_data/shared',
     }
 
-    default_identity_data = db_methods.get_default_identity()
+    default_identity_data = identities.get_default()
     default_identity = Identity(**default_identity_data)
     portal = SafeIdentity.from_identity(default_identity)
 
@@ -82,19 +82,19 @@ async def render_docker_compose_template(app: InstalledApp):
 
 async def write_traefik_dyn_config():
     log.debug("updating traefik dynamic config")
-    all_apps = db_methods.get_all_installed_apps()
-    installed_apps = [
+    all_apps = installed_apps.get_all()
+    installed_apps_list = [
         InstalledApp(**a)
         for a in all_apps
         if a["status"] != Status.INSTALLATION_QUEUED
     ]
     app_infos = [
         AppInfo(get_app_metadata(a.name), installed_app=a)
-        for a in installed_apps
+        for a in installed_apps_list
         if a.status != Status.ERROR
     ]
 
-    default_identity_data = db_methods.get_default_identity()
+    default_identity_data = identities.get_default()
     default_identity = Identity(**default_identity_data)
     portal = SafeIdentity.from_identity(default_identity)
 

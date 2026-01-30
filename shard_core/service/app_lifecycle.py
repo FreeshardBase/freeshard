@@ -3,7 +3,7 @@ import logging
 import time
 from typing import Dict
 
-from shard_core.database import db_methods
+from shard_core.db import installed_apps
 from shard_core.data_model.app_meta import InstalledApp, Status
 from shard_core.service import disk
 from shard_core.service.app_tools import (
@@ -36,13 +36,13 @@ def ensure_app_is_running(app: InstalledApp):
 
 
 async def control_apps():
-    all_apps = db_methods.get_all_installed_apps()
-    installed_apps = [
+    all_apps = installed_apps.get_all()
+    installed_apps_list = [
         InstalledApp.parse_obj(a)
         for a in all_apps
         if a["status"] not in (Status.INSTALLATION_QUEUED, Status.INSTALLING)
     ]
-    tasks = [_control_app(app.name) for app in installed_apps]
+    tasks = [_control_app(app.name) for app in installed_apps_list]
     await asyncio.gather(*tasks)
 
 

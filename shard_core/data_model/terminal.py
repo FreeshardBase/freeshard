@@ -4,7 +4,7 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from shard_core.database import db_methods
+from shard_core.db import terminals
 from shard_core.service import human_encoding
 from shard_core.util.signals import on_terminal_auth
 
@@ -42,8 +42,8 @@ class InputTerminal(BaseModel):
 
 @on_terminal_auth.connect
 def update_terminal_last_connection(terminal: Terminal):
-    existing_terminal_data = db_methods.get_terminal_by_id(terminal.id)
+    existing_terminal_data = terminals.get_by_id(terminal.id)
     if existing_terminal_data:
         existing_terminal = Terminal(**existing_terminal_data)
         existing_terminal.last_connection = datetime.utcnow()
-        db_methods.update_terminal(existing_terminal.id, existing_terminal.dict())
+        terminals.update(existing_terminal.id, name=existing_terminal.name, icon=existing_terminal.icon, last_connection=existing_terminal.last_connection)

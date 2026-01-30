@@ -2,7 +2,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException, status, Response
 
-from shard_core.database import db_methods
+from shard_core.db import terminals, identities
 from shard_core.data_model.identity import Identity
 from shard_core.data_model.terminal import Terminal, InputTerminal
 from shard_core.service import pairing
@@ -28,10 +28,10 @@ async def add_terminal(code: str, terminal: InputTerminal, response: Response):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED) from e
 
     new_terminal = Terminal.create(terminal.name)
-    db_methods.insert_terminal(new_terminal.dict())
-    is_first_terminal = db_methods.count_terminals() == 1
+    terminals.insert(new_terminal.dict())
+    is_first_terminal = terminals.count() == 1
 
-    default_identity_data = db_methods.get_default_identity()
+    default_identity_data = identities.get_default()
     default_identity = Identity(**default_identity_data)
 
     jwt = pairing.create_terminal_jwt(new_terminal.id)

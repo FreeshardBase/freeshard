@@ -12,7 +12,8 @@ from fastapi import FastAPI
 from pydantic import ValidationError
 from requests import ConnectionError, HTTPError
 
-from .database import database, db_methods
+from .db import init_database, migrate
+from .db import identities, terminals, peers, installed_apps, tours, app_usage_track, key_value, util as db_util
 from .service import (
     app_installation,
     identity,
@@ -56,7 +57,8 @@ def create_app():
             gconf.load("config.yml")
     configure_logging()
 
-    database.init_database()
+    init_database()
+    migrate()  # Run database migrations at startup
     identity.init_default_identity()
     _copy_traefik_static_config()
 
@@ -179,7 +181,7 @@ def print_welcome_log():
     params["shard_id"] = i.short_id
     params["shard_url_centered"] = _center(shard_url)
 
-    is_first_start = db_methods.count_terminals() == 0
+    is_first_start = terminals.count() == 0
     params["is_first_start"] = is_first_start
     if is_first_start:
         pairing_code = make_pairing_code(deadline=10 * 60)

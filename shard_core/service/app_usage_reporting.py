@@ -6,7 +6,7 @@ import gconf
 from requests import HTTPError
 from starlette import status
 
-from shard_core.database import db_methods
+from shard_core.db import installed_apps, app_usage_track
 from shard_core.data_model.app_meta import InstalledApp
 from shard_core.data_model.app_usage import AppUsageTrack, AppUsageReport
 from shard_core.service.signed_call import signed_request
@@ -15,12 +15,12 @@ log = logging.getLogger(__name__)
 
 
 async def track_currently_installed_apps():
-    all_apps_data = db_methods.get_all_installed_apps()
+    all_apps_data = installed_apps.get_all()
     all_apps = [InstalledApp.parse_obj(a) for a in all_apps_data]
     track = AppUsageTrack(
         timestamp=datetime.utcnow(), installed_apps=[app.name for app in all_apps]
     )
-    db_methods.insert_app_usage_track(track.dict())
+    app_usage_track.insert(track.dict())
     log.debug(f"created app usage track for {len(track.installed_apps)} apps")
 
 
@@ -35,7 +35,7 @@ async def report_app_usage():
     report = AppUsageReport(year=start.year, month=start.month, usage={})
 
     # Get all tracks and filter in Python
-    all_tracks = db_methods.get_all_app_usage_tracks()
+    all_tracks = app_usage_track.get_all()
     relevant_tracks = [
         t for t in all_tracks 
         if start <= t['timestamp'] < end

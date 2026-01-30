@@ -10,7 +10,7 @@ from typing import List
 import gconf
 from requests import HTTPError
 
-from shard_core.database import database
+from shard_core.db import backup_reports, key_value
 from shard_core.data_model.backup import (
     BackupReport,
     BackupStats,
@@ -23,7 +23,6 @@ log = logging.getLogger(__name__)
 
 STORE_KEY_BACKUP_PASSPHRASE = "backup_passphrase"
 STORE_KEY_BACKUP_PASSPHRASE_LAST_ACCESS = "backup_passphrase_last_access"
-STORE_KEY_BACKUP_REPORTS = "backup_reports"
 BACKUP_IN_PROGESS_LOCK = asyncio.Lock()
 
 COMMAND_TEMPLATE = """
@@ -115,21 +114,15 @@ async def backup_directories(
             )
 
         overall_end_time = datetime.datetime.now(datetime.timezone.utc)
-        report = BackupReport(
-            directories=dir_stats,
-            startTime=overall_start_time,
-            endTime=overall_end_time,
-        )
-        # Store backup report in key-value store
-        try:
-            reports = database.get_value(STORE_KEY_BACKUP_REPORTS)
-        except KeyError:
-            reports = []
-        reports.append(report.dict())
-        # Keep only last 100 reports
-        if len(reports) > 100:
-            reports = reports[-100:]
-        database.set_value(STORE_KEY_BACKUP_REPORTS, reports)
+        
+        # Store backup report for each directory in the database
+        for dir_stat in dir_stats:
+            backup_reports.insert(
+                directory=dir_stat.directory,
+                start_time=dir_stat.startTime,
+                end_time=dir_stat.endTime,
+                stats=dir_stat.dict()
+            )
         log.info("Backup done")
 
 
@@ -164,7 +157,7 @@ async def _backup_directory(
 
 
 async def _get_obscured_passphrase():
-    passphrase = database.get_value(STORE_KEY_BACKUP_PASSPHRASE)
+    passphrase = key_value.get(STORE_KEY_BACKUP_PASSPHRASE)
     obscured_passphrase = subprocess.run(
         ["rclone", "obscure", passphrase], capture_output=True, text=True
     ).stdout.strip()
@@ -177,35 +170,49 @@ def _get_relative_directory(directory: Path) -> Path:
 
 
 def get_latest_backup_report() -> BackupReport | None:
-    try:
-        reports = database.get_value(STORE_KEY_BACKUP_REPORTS)
-        if reports and len(reports) > 0:
-            latest_stats = max(reports, key=lambda x: x["endTime"])
-            return BackupReport.parse_obj(latest_stats)
-    except KeyError:
-        pass
+    latest = backup_reports.get_latest()
+    if latest:
+        # Get all reports with the same end_time to reconstruct the full BackupReport
+        all_reports = backup_reports.get_all()
+        end_time = latest['end_time']
+        
+        # Find all directory reports from the same backup run
+        dir_stats = []
+        start_times = []
+        for report in all_reports:
+            if report['end_time'] == end_time:
+                stats_dict = report['stats']
+                dir_stats.append(BackupStats.parse_obj(stats_dict))
+                start_times.append(report['start_time'])
+        
+        if dir_stats:
+            return BackupReport(
+                directories=dir_stats,
+                startTime=min(start_times),
+                endTime=end_time,
+            )
     return None
 
 
 def ensure_backup_passphrase():
     try:
-        database.get_value(STORE_KEY_BACKUP_PASSPHRASE)
+        key_value.get(STORE_KEY_BACKUP_PASSPHRASE)
     except KeyError:
         passphrase_numbers = passphrase_util.generate_passphrase_numbers(10)
         passphrase = passphrase_util.get_passphrase(passphrase_numbers)
-        database.set_value(STORE_KEY_BACKUP_PASSPHRASE, passphrase)
+        key_value.set(STORE_KEY_BACKUP_PASSPHRASE, passphrase)
         log.info("Generated new backup passphrase")
     else:
         log.info("Backup passphrase already exists")
 
 
 def get_backup_passphrase(terminal_id: str) -> str:
-    passphrase = database.get_value(STORE_KEY_BACKUP_PASSPHRASE)
+    passphrase = key_value.get(STORE_KEY_BACKUP_PASSPHRASE)
     last_access_info = BackupPassphraseLastAccessInfoDB(
         time=datetime.datetime.now(datetime.timezone.utc),
         terminal_id=terminal_id,
     )
-    database.set_value(STORE_KEY_BACKUP_PASSPHRASE_LAST_ACCESS, last_access_info.dict())
+    key_value.set(STORE_KEY_BACKUP_PASSPHRASE_LAST_ACCESS, last_access_info.dict())
     return passphrase
 
 

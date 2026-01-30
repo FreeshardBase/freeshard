@@ -7,7 +7,7 @@ import aiofiles
 from fastapi import APIRouter, status, HTTPException, UploadFile
 from fastapi.responses import Response, StreamingResponse
 
-from shard_core.database import db_methods
+from shard_core.db import installed_apps
 from shard_core.data_model.app_meta import InstalledAppWithMeta, InstalledApp
 from shard_core.service import app_installation
 from shard_core.service.app_installation.exceptions import (
@@ -30,13 +30,13 @@ router = APIRouter(
 
 @router.get("", response_model=List[InstalledAppWithMeta])
 def list_all_apps():
-    apps = [InstalledApp.parse_obj(app) for app in db_methods.get_all_installed_apps()]
+    apps = [InstalledApp.parse_obj(app) for app in installed_apps.get_all()]
     return [enrich_installed_app_with_meta(app) for app in apps]
 
 
 @router.get("/{name}", response_model=InstalledAppWithMeta)
 def get_app(name: str):
-    installed_app_data = db_methods.get_installed_app_by_name(name)
+    installed_app_data = installed_apps.get_by_name(name)
     if installed_app_data:
         return enrich_installed_app_with_meta(InstalledApp.parse_obj(installed_app_data))
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)

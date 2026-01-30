@@ -36,6 +36,3 @@ db-reset:
     -docker rm shard-core-postgres
     just db-start
     sleep 2
-
-db-migrate:
-    .venv/bin/yoyo apply --database postgresql://shard-core:my-password@localhost:5432/shard-core migrations/

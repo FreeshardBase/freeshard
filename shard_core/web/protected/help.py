@@ -6,7 +6,7 @@ from fastapi import APIRouter, status, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from shard_core.database import db_methods
+from shard_core.db import tours
 
 log = logging.getLogger(__name__)
 
@@ -32,12 +32,12 @@ def put_tour(tour: Tour):
     tour_dict = tour.dict()
     tour_dict['id'] = tour.name
     tour_dict['completed'] = (tour.status == TourStatus.SEEN)
-    db_methods.insert_tour(tour_dict)
+    tours.insert(tour_dict)
 
 
 @tour_router.get("/{name}", response_model=Tour)
 def get_tour(name: str):
-    tour_data = db_methods.get_tour_by_id(name)
+    tour_data = tours.get_by_id(name)
     if tour_data:
         return Tour(
             name=tour_data['id'],
@@ -49,7 +49,7 @@ def get_tour(name: str):
 
 @tour_router.get("", response_model=List[Tour])
 def list_tours():
-    all_tours = db_methods.get_all_tours()
+    all_tours = tours.get_all()
     return [
         Tour(
             name=t['id'],
@@ -61,7 +61,7 @@ def list_tours():
 
 @tour_router.delete("", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def reset_tours():
-    db_methods.delete_all_tours()
+    tours.delete_all()
 
 
 router.include_router(tour_router)

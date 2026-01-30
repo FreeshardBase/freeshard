@@ -4,7 +4,7 @@ from typing import List
 from fastapi import APIRouter, status, HTTPException
 from fastapi.responses import Response
 
-from shard_core.database import db_methods
+from shard_core.db import terminals
 from shard_core.data_model.terminal import Terminal, InputTerminal
 from shard_core.service import pairing
 from shard_core.service.pairing import PairingCode
@@ -19,12 +19,12 @@ router = APIRouter(
 
 @router.get("", response_model=List[Terminal])
 def list_all_terminals():
-    return db_methods.get_all_terminals()
+    return terminals.get_all()
 
 
 @router.get("/id/{id_}")
 def get_terminal_by_id(id_: str):
-    terminal_data = db_methods.get_terminal_by_id(id_)
+    terminal_data = terminals.get_by_id(id_)
     if terminal_data:
         return terminal_data
     else:
@@ -33,7 +33,7 @@ def get_terminal_by_id(id_: str):
 
 @router.get("/name/{name}", response_model=Terminal)
 def get_terminal_by_name(name: str):
-    all_terminals = db_methods.get_all_terminals()
+    all_terminals = terminals.get_all()
     for t in all_terminals:
         if t.get('name') == name:
             return t
@@ -42,12 +42,12 @@ def get_terminal_by_name(name: str):
 
 @router.put("/id/{id_}")
 def edit_terminal(id_: str, terminal: InputTerminal):
-    terminal_data = db_methods.get_terminal_by_id(id_)
+    terminal_data = terminals.get_by_id(id_)
     if terminal_data:
         existing_terminal = Terminal(**terminal_data)
         existing_terminal.name = terminal.name
         existing_terminal.icon = terminal.icon
-        db_methods.update_terminal(id_, existing_terminal.dict())
+        terminals.update(id_, name=existing_terminal.name, icon=existing_terminal.icon, last_connection=existing_terminal.last_connection)
         on_terminals_update.send()
     else:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
@@ -57,7 +57,7 @@ def edit_terminal(id_: str, terminal: InputTerminal):
     "/id/{id_}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response
 )
 def delete_terminal_by_id(id_: str):
-    db_methods.delete_terminal(id_)
+    terminals.delete(id_)
     on_terminals_update.send()
 
 

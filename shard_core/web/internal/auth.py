@@ -7,7 +7,7 @@ from fastapi import HTTPException, APIRouter, Cookie, Response, status, Header, 
 from http_message_signatures import InvalidSignature
 from jinja2 import Template
 
-from shard_core.database import db_methods
+from shard_core.db import installed_apps, identities
 from shard_core.data_model.app_meta import InstalledApp, Access, Path
 from shard_core.data_model.auth import AuthState
 from shard_core.data_model.identity import Identity, SafeIdentity
@@ -102,14 +102,14 @@ def _match_app(x_forwarded_host) -> InstalledApp:
 
 @cached(cache=TTLCache(maxsize=8, ttl=gconf.get("tests.cache_ttl", default=3)))
 def _get_identity():
-    default_identity_data = db_methods.get_default_identity()
+    default_identity_data = identities.get_default()
     default_identity = Identity(**default_identity_data)
     return SafeIdentity.from_identity(default_identity)
 
 
 @cached(cache=TTLCache(maxsize=32, ttl=gconf.get("tests.cache_ttl", default=3)))
 def _find_app(app_name) -> Optional[InstalledApp]:
-    app_data = db_methods.get_installed_app_by_name(app_name)
+    app_data = installed_apps.get_by_name(app_name)
     if app_data:
         return InstalledApp(**app_data)
     else:

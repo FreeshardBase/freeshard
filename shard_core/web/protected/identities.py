@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, status
 from fastapi.datastructures import UploadFile
 from fastapi.responses import Response, StreamingResponse
 
-from shard_core.database import db_methods
+from shard_core.db import identities
 from shard_core.data_model.identity import Identity, OutputIdentity, InputIdentity
 from shard_core.service import identity as identity_service, identity
 from shard_core.service.assets import put_asset
@@ -24,7 +24,7 @@ router = APIRouter(
 
 @router.get("", response_model=List[OutputIdentity])
 def list_all_identities(name: str = None):
-    all_identities = db_methods.get_all_identities()
+    all_identities = identities.get_all()
     if name:
         return [i for i in all_identities if name.lower() in i.get('name', '').lower()]
     else:
@@ -38,7 +38,7 @@ def get_default_identity():
 
 @router.get("/{id}", response_model=OutputIdentity)
 def get_identity_by_id(id):
-    identity_data = db_methods.get_identity_by_id(id)
+    identity_data = identities.get_by_id(id)
     if identity_data:
         return identity_data
     else:
@@ -68,16 +68,23 @@ def get_avatar_by_identity(id):
 @router.put("", response_model=OutputIdentity, status_code=status.HTTP_201_CREATED)
 def put_identity(i: InputIdentity):
     if i.id:
-        existing = db_methods.get_identity_by_id(i.id)
+        existing = identities.get_by_id(i.id)
         if existing:
-            db_methods.update_identity(i.id, i.dict(exclude_unset=True))
-            updated = db_methods.get_identity_by_id(i.id)
+            input_dict = i.dict(exclude_unset=True)
+            identities.update(
+                i.id,
+                name=input_dict.get('name'),
+                domain=input_dict.get('domain'),
+                email=input_dict.get('email'),
+                is_default=input_dict.get('is_default')
+            )
+            updated = identities.get_by_id(i.id)
             return OutputIdentity(**updated)
         else:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     else:
         new_identity = Identity.create(**i.dict(exclude_unset=True))
-        db_methods.insert_identity(new_identity.dict())
+        identities.insert(new_identity.dict())
         log.info(f"added {new_identity}")
         return new_identity
 

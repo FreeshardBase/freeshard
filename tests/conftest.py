@@ -80,9 +80,9 @@ def config_override(tmp_path, request):
         yield
     
     # Truncate all tables after each test
-    from shard_core.database import db_methods
+    from shard_core.db import util as db_util
     try:
-        db_methods.truncate_all_tables()
+        db_util.truncate_all_tables()
     except Exception as e:
         # If database is not initialized yet, skip truncation
         print(f"Could not truncate tables: {e}")
