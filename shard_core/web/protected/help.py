@@ -5,9 +5,8 @@ from typing import List
 from fastapi import APIRouter, status, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
-from tinydb import Query
 
-from shard_core.database.database import tours_table
+from shard_core.database import db_methods
 
 log = logging.getLogger(__name__)
 
@@ -30,29 +29,39 @@ class Tour(BaseModel):
 
 @tour_router.put("", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def put_tour(tour: Tour):
-    with tours_table() as tours:  # type: Table
-        tours.upsert(tour.dict(), Query().name == tour.name)
+    tour_dict = tour.dict()
+    tour_dict['id'] = tour.name
+    tour_dict['completed'] = (tour.status == TourStatus.SEEN)
+    db_methods.insert_tour(tour_dict)
 
 
 @tour_router.get("/{name}", response_model=Tour)
 def get_tour(name: str):
-    with tours_table() as tours:  # type: Table
-        if tour := tours.get(Query().name == name):
-            return Tour(**tour)
-        else:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    tour_data = db_methods.get_tour_by_id(name)
+    if tour_data:
+        return Tour(
+            name=tour_data['id'],
+            status=TourStatus.SEEN if tour_data.get('completed') else TourStatus.UNSEEN
+        )
+    else:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
 
 @tour_router.get("", response_model=List[Tour])
 def list_tours():
-    with tours_table() as tours:  # type: Table
-        return [Tour(**t) for t in tours]
+    all_tours = db_methods.get_all_tours()
+    return [
+        Tour(
+            name=t['id'],
+            status=TourStatus.SEEN if t.get('completed') else TourStatus.UNSEEN
+        )
+        for t in all_tours
+    ]
 
 
 @tour_router.delete("", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def reset_tours():
-    with tours_table() as tours:  # type: Table
-        tours.truncate()
+    db_methods.delete_all_tours()
 
 
 router.include_router(tour_router)

@@ -1,9 +1,8 @@
 import logging
 
 from fastapi import APIRouter, HTTPException, status, Response
-from tinydb import Query
 
-from shard_core.database.database import terminals_table, identities_table
+from shard_core.database import db_methods
 from shard_core.data_model.identity import Identity
 from shard_core.data_model.terminal import Terminal, InputTerminal
 from shard_core.service import pairing
@@ -29,14 +28,11 @@ async def add_terminal(code: str, terminal: InputTerminal, response: Response):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED) from e
 
     new_terminal = Terminal.create(terminal.name)
-    with terminals_table() as terminals:  # type: Table
-        terminals.insert(new_terminal.dict())
-        is_first_terminal = terminals.count(Query().noop()) == 1
+    db_methods.insert_terminal(new_terminal.dict())
+    is_first_terminal = db_methods.count_terminals() == 1
 
-    with identities_table() as identities:  # type: Table
-        default_identity = Identity(
-            **identities.get(Query().is_default == True)
-        )  # noqa: E712
+    default_identity_data = db_methods.get_default_identity()
+    default_identity = Identity(**default_identity_data)
 
     jwt = pairing.create_terminal_jwt(new_terminal.id)
     response.set_cookie(

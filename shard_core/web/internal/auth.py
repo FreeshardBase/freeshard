@@ -6,9 +6,8 @@ from cachetools import cached, TTLCache
 from fastapi import HTTPException, APIRouter, Cookie, Response, status, Header, Request
 from http_message_signatures import InvalidSignature
 from jinja2 import Template
-from tinydb import Query
 
-from shard_core.database.database import installed_apps_table, identities_table
+from shard_core.database import db_methods
 from shard_core.data_model.app_meta import InstalledApp, Access, Path
 from shard_core.data_model.auth import AuthState
 from shard_core.data_model.identity import Identity, SafeIdentity
@@ -103,20 +102,18 @@ def _match_app(x_forwarded_host) -> InstalledApp:
 
 @cached(cache=TTLCache(maxsize=8, ttl=gconf.get("tests.cache_ttl", default=3)))
 def _get_identity():
-    with identities_table() as identities:
-        default_identity = Identity(
-            **identities.get(Query().is_default == True)
-        )  # noqa: E712
+    default_identity_data = db_methods.get_default_identity()
+    default_identity = Identity(**default_identity_data)
     return SafeIdentity.from_identity(default_identity)
 
 
 @cached(cache=TTLCache(maxsize=32, ttl=gconf.get("tests.cache_ttl", default=3)))
 def _find_app(app_name) -> Optional[InstalledApp]:
-    with installed_apps_table() as installed_apps:  # type: Table
-        if result := installed_apps.get(Query().name == app_name):
-            return InstalledApp(**result)
-        else:
-            return None
+    app_data = db_methods.get_installed_app_by_name(app_name)
+    if app_data:
+        return InstalledApp(**app_data)
+    else:
+        return None
 
 
 def _match_path(uri, app: InstalledApp) -> Path:

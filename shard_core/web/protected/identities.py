@@ -8,9 +8,8 @@ from typing import List
 from fastapi import APIRouter, HTTPException, status
 from fastapi.datastructures import UploadFile
 from fastapi.responses import Response, StreamingResponse
-from tinydb import Query
 
-from shard_core.database.database import identities_table
+from shard_core.database import db_methods
 from shard_core.data_model.identity import Identity, OutputIdentity, InputIdentity
 from shard_core.service import identity as identity_service, identity
 from shard_core.service.assets import put_asset
@@ -25,11 +24,11 @@ router = APIRouter(
 
 @router.get("", response_model=List[OutputIdentity])
 def list_all_identities(name: str = None):
-    with identities_table() as identities:  # type: Table
-        if name:
-            return identities.search(Query().name.search(name))
-        else:
-            return identities.all()
+    all_identities = db_methods.get_all_identities()
+    if name:
+        return [i for i in all_identities if name.lower() in i.get('name', '').lower()]
+    else:
+        return all_identities
 
 
 @router.get("/default", response_model=OutputIdentity)
@@ -39,11 +38,11 @@ def get_default_identity():
 
 @router.get("/{id}", response_model=OutputIdentity)
 def get_identity_by_id(id):
-    with identities_table() as identities:
-        if i := identities.get(Query().id == id):
-            return i
-        else:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    identity_data = db_methods.get_identity_by_id(id)
+    if identity_data:
+        return identity_data
+    else:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
 
 @router.get("/default/avatar")
@@ -68,18 +67,19 @@ def get_avatar_by_identity(id):
 
 @router.put("", response_model=OutputIdentity, status_code=status.HTTP_201_CREATED)
 def put_identity(i: InputIdentity):
-    with identities_table() as identities:  # type: Table
-        if i.id:
-            if identities.get(Query().id == i.id):
-                identities.update(i.dict(exclude_unset=True), Query().id == i.id)
-                return OutputIdentity(**identities.get(Query().id == i.id))
-            else:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    if i.id:
+        existing = db_methods.get_identity_by_id(i.id)
+        if existing:
+            db_methods.update_identity(i.id, i.dict(exclude_unset=True))
+            updated = db_methods.get_identity_by_id(i.id)
+            return OutputIdentity(**updated)
         else:
-            new_identity = Identity.create(**i.dict(exclude_unset=True))
-            identities.insert(new_identity.dict())
-            log.info(f"added {new_identity}")
-            return new_identity
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    else:
+        new_identity = Identity.create(**i.dict(exclude_unset=True))
+        db_methods.insert_identity(new_identity.dict())
+        log.info(f"added {new_identity}")
+        return new_identity
 
 
 @router.put("/default/avatar")

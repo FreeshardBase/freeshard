@@ -9,9 +9,8 @@ from typing import Literal
 import gconf
 import httpx
 from pydantic import BaseModel
-from tinydb import Query
 
-from shard_core.database.database import installed_apps_table
+from shard_core.database import db_methods
 from shard_core.data_model.app_meta import Status
 from shard_core.service.app_tools import (
     get_installed_apps_path,
@@ -136,8 +135,7 @@ async def _uninstall_app(app_name: str):
     log.debug(f"deleting app data for {app_name}")
     shutil.rmtree(Path(get_installed_apps_path() / app_name), ignore_errors=True)
     log.debug(f"removing app {app_name} from database")
-    with installed_apps_table() as installed_apps:
-        installed_apps.remove(Query().name == app_name)
+    db_methods.delete_installed_app(app_name)
     await write_traefik_dyn_config()
     signals.on_apps_update.send()
     log.info(f"uninstalled {app_name}")

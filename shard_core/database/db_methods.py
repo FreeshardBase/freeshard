@@ -373,6 +373,12 @@ def count_tours() -> int:
         return cur.fetchone()['count']
 
 
+def delete_all_tours() -> None:
+    """Delete all tours"""
+    with get_cursor() as cur:
+        cur.execute("DELETE FROM tours")
+
+
 # ===== App Usage Track methods =====
 
 def get_all_app_usage_tracks() -> List[Dict[str, Any]]:
