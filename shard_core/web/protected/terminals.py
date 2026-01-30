@@ -44,10 +44,7 @@ def get_terminal_by_name(name: str):
 def edit_terminal(id_: str, terminal: InputTerminal):
     terminal_data = terminals.get_by_id(id_)
     if terminal_data:
-        existing_terminal = Terminal(**terminal_data)
-        existing_terminal.name = terminal.name
-        existing_terminal.icon = terminal.icon
-        terminals.update(id_, name=existing_terminal.name, icon=existing_terminal.icon, last_connection=existing_terminal.last_connection)
+        terminals.update(id_, name=terminal.name, icon=terminal.icon, last_connection=terminal_data.get('last_connection'))
         on_terminals_update.send()
     else:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)

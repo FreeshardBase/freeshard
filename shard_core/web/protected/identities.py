@@ -74,7 +74,6 @@ def put_identity(i: InputIdentity):
             identities.update(
                 i.id,
                 name=input_dict.get('name'),
-                domain=input_dict.get('domain'),
                 email=input_dict.get('email'),
                 is_default=input_dict.get('is_default')
             )
