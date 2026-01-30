@@ -36,14 +36,23 @@ def init_database():
         _connection = psycopg.connect(conninfo, autocommit=True, row_factory=dict_row)
         log.info("Database connection established")
     except Exception as e:
-        log.error(f"Failed to connect to database: {e}")
-        raise
+        log.warning(f"Failed to connect to database: {e}. Database will be initialized on first use.")
+        # Don't raise - allow lazy initialization
 
 
 def get_connection() -> Connection:
     """Get the global database connection"""
-    if _connection is None:
-        init_database()
+    global _connection
+    
+    if _connection is None or _connection.closed:
+        try:
+            conninfo = get_connection_string()
+            _connection = psycopg.connect(conninfo, autocommit=True, row_factory=dict_row)
+            log.info("Database connection established")
+        except Exception as e:
+            log.error(f"Failed to connect to database: {e}")
+            raise
+    
     return _connection
 
 

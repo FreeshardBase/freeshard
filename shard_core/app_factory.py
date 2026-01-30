@@ -44,11 +44,16 @@ log = logging.getLogger(__name__)
 
 def create_app():
     gconf.set_env_prefix("FREESHARD")
-    if "CONFIG" in os.environ:
-        for c in os.environ["CONFIG"].split(","):
-            gconf.load(c)
-    else:
-        gconf.load("config.yml")
+    # Only load config if not already loaded (e.g., by test fixtures)
+    try:
+        gconf.get("path_root")
+        log.debug("Config already loaded, skipping config file load")
+    except KeyError:
+        if "CONFIG" in os.environ:
+            for c in os.environ["CONFIG"].split(","):
+                gconf.load(c)
+        else:
+            gconf.load("config.yml")
     configure_logging()
 
     database.init_database()
@@ -157,6 +162,7 @@ def _copy_traefik_static_config():
 
     root = Path(gconf.get("path_root"))
     target = root / "core" / "traefik.yml"
+    target.parent.mkdir(parents=True, exist_ok=True)  # Create directory if not exists
     with open(target, "w") as f:
         f.write(result)
 

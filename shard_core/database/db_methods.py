@@ -245,9 +245,17 @@ def get_installed_app_by_name(app_name: str) -> Optional[Dict[str, Any]]:
 
 def insert_installed_app(app: Dict[str, Any]) -> None:
     """Insert a new installed app"""
+    # Set defaults for optional fields
+    if 'access' not in app or app['access'] is None:
+        app['access'] = 'private'
+    if 'version' not in app or app['version'] is None:
+        app['version'] = None
+    if 'meta' not in app or app['meta'] is None:
+        app['meta'] = None
+    
     # Convert meta dict to JSON if present
-    if 'meta' in app and app['meta'] is not None:
-        app['meta'] = json.dumps(app['meta']) if isinstance(app['meta'], dict) else app['meta']
+    if app['meta'] is not None and isinstance(app['meta'], dict):
+        app['meta'] = json.dumps(app['meta'])
     
     with get_cursor() as cur:
         cur.execute(
