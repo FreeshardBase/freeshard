@@ -1,10 +1,9 @@
 import logging
 
 from fastapi import Header, HTTPException, APIRouter, status
-from tinydb import Query
 
 from shard_core.database import database
-from shard_core.database.database import terminals_table
+from shard_core.db import terminals
 from shard_core.data_model.backup import (
     BackupPassphraseResponse,
     BackupInfoResponse,
@@ -30,10 +29,9 @@ async def get_backup_info():
     except KeyError:
         last_access_info_response = None
     else:
-        with terminals_table() as terminals:
-            terminal_db = terminals.get(Query().id == last_access_info_db.terminal_id)
+        terminal_data = terminals.get_by_id(last_access_info_db.terminal_id)
         terminal_name = (
-            Terminal.parse_obj(terminal_db).name if terminal_db else "Unknown"
+            Terminal.parse_obj(terminal_data).name if terminal_data else "Unknown"
         )
         last_access_info_response = BackupPassphraseLastAccessInfoResponse(
             **last_access_info_db.dict(), terminal_name=terminal_name

@@ -2,7 +2,7 @@ import logging
 
 import gconf
 
-from shard_core.database.database import installed_apps_table
+from shard_core.db import installed_apps
 from shard_core.data_model.app_meta import InstallationReason, InstalledApp, Status
 from shard_core.util import signals
 from shard_core.util.subprocess import subprocess, SubprocessError
@@ -22,13 +22,12 @@ async def install_app_from_store(
     if util.app_exists_in_db(name):
         raise AppAlreadyInstalled(name)
 
-    with installed_apps_table() as installed_apps:
-        installed_app = InstalledApp(
-            name=name,
-            installation_reason=installation_reason,
-            status=Status.INSTALLATION_QUEUED,
-        )
-        installed_apps.insert(installed_app.dict())
+    installed_app = InstalledApp(
+        name=name,
+        installation_reason=installation_reason,
+        status=Status.INSTALLATION_QUEUED,
+    )
+    installed_apps.insert(installed_app.dict())
 
     installation_task = worker.InstallationTask(
         app_name=name,
@@ -45,13 +44,12 @@ async def install_app_from_existing_zip(
     if util.app_exists_in_db(name):
         raise AppAlreadyInstalled(name)
 
-    with installed_apps_table() as installed_apps:
-        installed_app = InstalledApp(
-            name=name,
-            installation_reason=installation_reason,
-            status=Status.INSTALLATION_QUEUED,
-        )
-        installed_apps.insert(installed_app.dict())
+    installed_app = InstalledApp(
+        name=name,
+        installation_reason=installation_reason,
+        status=Status.INSTALLATION_QUEUED,
+    )
+    installed_apps.insert(installed_app.dict())
 
     installation_task = worker.InstallationTask(
         app_name=name,
@@ -98,10 +96,10 @@ async def reinstall_app(name: str):
 
 async def refresh_init_apps():
     configured_init_apps = set(gconf.get("apps.initial_apps"))
-    with installed_apps_table() as apps:
-        installed_apps = {app["name"] for app in apps.all()}
+    all_apps = installed_apps.get_all()
+    installed_apps_set = {app["name"] for app in all_apps}
 
-    for app_name in configured_init_apps - installed_apps:
+    for app_name in configured_init_apps - installed_apps_set:
         log.info(f"installing initial app {app_name}")
         await install_app_from_store(app_name, InstallationReason.CONFIG)
     log.debug("refreshed initial apps")

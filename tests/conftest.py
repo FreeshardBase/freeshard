@@ -56,6 +56,13 @@ def config_override(tmp_path, request):
     print(f"\nUsing temp path: {tmp_path}")
     tempfile_override = {
         "path_root": f"{tmp_path}/path_root",
+        "db": {
+            "host": "localhost",
+            "port": 5432,
+            "dbname": "shard-core",
+            "user": "shard-core",
+            "password": "my-password",
+        },
     }
 
     # Detects the variable named *config_override* of a test module
@@ -71,10 +78,18 @@ def config_override(tmp_path, request):
         gconf.override_conf(function_override),
     ):
         yield
+    
+    # Truncate all tables after each test
+    from shard_core.db import util as db_util
+    try:
+        db_util.truncate_all_tables()
+    except Exception as e:
+        # If database is not initialized yet, skip truncation
+        print(f"Could not truncate tables: {e}")
 
 
 @pytest_asyncio.fixture
-async def api_client(requests_mock, mocker) -> AsyncGenerator[AsyncClient]:
+async def api_client(requests_mock, mocker):  # Remove AsyncGenerator type hint for Python 3.12 compatibility
     # Modules that define some global state need to be reloaded
     importlib.reload(websocket)
     importlib.reload(app_installation.worker)

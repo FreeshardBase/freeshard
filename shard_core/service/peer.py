@@ -6,9 +6,8 @@ import requests
 from fastapi.requests import Request
 from http_message_signatures import HTTPSignatureKeyResolver, algorithms
 from requests_http_signature import HTTPSignatureAuth
-from tinydb import Query
 
-from shard_core.database.database import peers_table
+from shard_core.db import peers
 from shard_core.data_model.identity import OutputIdentity
 from shard_core.data_model.peer import Peer
 from shard_core.service.crypto import PublicKey
@@ -18,16 +17,15 @@ log = logging.getLogger(__name__)
 
 
 def get_peer_by_id(id: str):
-    with peers_table() as peers:
-        if p := peers.get(Query().id.matches(f"{id}:*")):
-            return Peer(**p)
-        else:
-            raise KeyError(id)
+    peer_data = peers.get_by_id(id)
+    if peer_data:
+        return Peer(**peer_data)
+    else:
+        raise KeyError(id)
 
 
 async def update_all_peer_pubkeys():
-    with peers_table() as peers:  # type: Table
-        peers_without_pubkey = peers.search(Query().public_bytes_b64.exists())
+    peers_without_pubkey = peers.search_without_pubkey()
     await asyncio.gather(
         *[update_peer_meta(Peer(**peer)) for peer in peers_without_pubkey]
     )
@@ -43,16 +41,14 @@ async def update_peer_meta(peer: Peer):
         response = await asyncio.get_running_loop().run_in_executor(None, do_request)
     except requests.ConnectionError as e:
         log.debug(f"Could not find peer {peer.short_id}: {e}")
-        with peers_table() as peers:
-            peers.update({"is_reachable": False}, Query().id == peer.id)
+        peers.update(peer.id, is_reachable=False)
         return
 
     try:
         response.raise_for_status()
     except httpx.HTTPStatusError as e:
         log.debug(f"Could not update peer meta for {peer.short_id}: {e}")
-        with peers_table() as peers:  # type: Table
-            peers.update({"is_reachable": False}, Query().id == peer.id)
+        peers.update(peer.id, is_reachable=False)
         return
 
     peer_identity = OutputIdentity(**response.json())
@@ -63,8 +59,13 @@ async def update_peer_meta(peer: Peer):
         )
 
     updated_peer = output_identity_to_peer(peer_identity)
-    with peers_table() as peers:  # type: Table
-        peers.update(updated_peer.dict(), Query().id == peer.id)
+    peer_dict = updated_peer.dict()
+    peers.update(
+        peer.id,
+        name=peer_dict.get('name'),
+        public_bytes_b64=peer_dict.get('public_bytes_b64'),
+        is_reachable=peer_dict.get('is_reachable', True)
+    )
 
 
 def output_identity_to_peer(identity: OutputIdentity) -> Peer:

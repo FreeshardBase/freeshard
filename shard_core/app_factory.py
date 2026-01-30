@@ -12,8 +12,8 @@ from fastapi import FastAPI
 from pydantic import ValidationError
 from requests import ConnectionError, HTTPError
 
-from .database import database
-from .database.database import terminals_table
+from .db import init_database, migrate
+from .db import identities, terminals, peers, installed_apps, tours, app_usage_track, key_value, util as db_util
 from .service import (
     app_installation,
     identity,
@@ -34,7 +34,6 @@ from .service.app_tools import (
     docker_prune_images,
 )
 
-from tinydb import Query
 from .service.backup import start_backup
 from .service.pairing import make_pairing_code
 from .util.async_util import PeriodicTask, BackgroundTask, CronTask
@@ -46,14 +45,20 @@ log = logging.getLogger(__name__)
 
 def create_app():
     gconf.set_env_prefix("FREESHARD")
-    if "CONFIG" in os.environ:
-        for c in os.environ["CONFIG"].split(","):
-            gconf.load(c)
-    else:
-        gconf.load("config.yml")
+    # Only load config if not already loaded (e.g., by test fixtures)
+    try:
+        gconf.get("path_root")
+        log.debug("Config already loaded, skipping config file load")
+    except KeyError:
+        if "CONFIG" in os.environ:
+            for c in os.environ["CONFIG"].split(","):
+                gconf.load(c)
+        else:
+            gconf.load("config.yml")
     configure_logging()
 
-    database.init_database()
+    init_database()
+    migrate()  # Run database migrations at startup
     identity.init_default_identity()
     _copy_traefik_static_config()
 
@@ -159,6 +164,7 @@ def _copy_traefik_static_config():
 
     root = Path(gconf.get("path_root"))
     target = root / "core" / "traefik.yml"
+    target.parent.mkdir(parents=True, exist_ok=True)  # Create directory if not exists
     with open(target, "w") as f:
         f.write(result)
 
@@ -175,8 +181,7 @@ def print_welcome_log():
     params["shard_id"] = i.short_id
     params["shard_url_centered"] = _center(shard_url)
 
-    with terminals_table() as terminals:  # type: Table
-        is_first_start = terminals.count(Query().noop()) == 0
+    is_first_start = terminals.count() == 0
     params["is_first_start"] = is_first_start
     if is_first_start:
         pairing_code = make_pairing_code(deadline=10 * 60)

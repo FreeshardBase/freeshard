@@ -8,3 +8,10 @@ log:
     shard_core: debug
     'shard_core.service.app_usage_reporting': error
     'shard_core.service.websocket': error
+
+db:
+  host: localhost
+  port: 5432
+  dbname: shard-core
+  user: shard-core
+  password: my-password
