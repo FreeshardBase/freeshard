@@ -60,10 +60,10 @@ log:
   levels:
     gunicorn: warning
 
-# Database configuration (override in local_config.yml for local development)
-# db:
-#   host: postgres
-#   port: 5432
-#   dbname: shard-core
-#   user: shard-core
-#   password: "my-password"
+# Database configuration
+db:
+  host: postgres
+  port: 5432
+  dbname: shard-core
+  user: shard-core
+  password: "my-password"

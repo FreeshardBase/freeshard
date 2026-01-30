@@ -12,7 +12,7 @@ authors = [
     { name = "Max von Tettenborn", email = "max.t@freeshard.net" }
 ]
 urls = { "Homepage" = "https://github.com/FreeshardBase/shard_core" }
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
     "gconf~=0.9.3",
     "uvicorn",
