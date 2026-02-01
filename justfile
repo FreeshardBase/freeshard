@@ -28,11 +28,11 @@ run-dev:
 run-dev-for-freeshard-controller:
     PYTHONUNBUFFERED=1 CONFIG=config.yml,local_config.yml UVICORN_PORT=8001 FREESHARD_FREESHARD_CONTROLLER_BASE_URL=http://127.0.0.1:8080 ./.venv/bin/fastapi dev --port 8081 shard_core/app.py
 
-db-start:
-    docker run --name shard-core-postgres -e POSTGRES_PASSWORD=my-password -e POSTGRES_USER=shard-core -e POSTGRES_DB=shard-core -p 5432:5432 -d postgres:16-alpine || docker start shard-core-postgres
+postgres-start:
+    docker compose -f tests/docker-compose.yml up
 
-db-reset:
-    -docker stop shard-core-postgres
-    -docker rm shard-core-postgres
-    just db-start
-    sleep 2
+postgres-reset:
+    docker compose -f tests/docker-compose.yml rm -f
+
+postgres-connect:
+    docker exec -it test_postgres psql -U test_user -d test_db
