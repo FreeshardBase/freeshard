@@ -56,13 +56,6 @@ def config_override(tmp_path, request):
     print(f"\nUsing temp path: {tmp_path}")
     tempfile_override = {
         "path_root": f"{tmp_path}/path_root",
-        "db": {
-            "host": "localhost",
-            "port": 5432,
-            "dbname": "shard-core",
-            "user": "shard-core",
-            "password": "my-password",
-        },
     }
 
     # Detects the variable named *config_override* of a test module

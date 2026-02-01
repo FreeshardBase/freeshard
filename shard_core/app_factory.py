@@ -45,16 +45,11 @@ log = logging.getLogger(__name__)
 
 def create_app():
     gconf.set_env_prefix("FREESHARD")
-    # Only load config if not already loaded (e.g., by test fixtures)
-    try:
-        gconf.get("path_root")
-        log.debug("Config already loaded, skipping config file load")
-    except KeyError:
-        if "CONFIG" in os.environ:
-            for c in os.environ["CONFIG"].split(","):
-                gconf.load(c)
-        else:
-            gconf.load("config.yml")
+    if "CONFIG" in os.environ:
+        for c in os.environ["CONFIG"].split(","):
+            gconf.load(c)
+    else:
+        gconf.load("config.yml")
     configure_logging()
 
     init_database()

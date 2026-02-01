@@ -22,16 +22,16 @@ def get_latest() -> Optional[Dict[str, Any]]:
         return cur.fetchone()
 
 
-def insert(directory: str, start_time: datetime, end_time: datetime, stats: Dict[str, Any]) -> None:
+def insert(start_time: datetime, end_time: datetime, directories: List[Dict[str, Any]]) -> None:
     """Insert a new backup report"""
-    # Convert stats dict to JSON
-    stats_json = json.dumps(stats) if isinstance(stats, dict) else stats
+    # Convert directories list to JSON
+    directories_json = json.dumps(directories) if isinstance(directories, list) else directories
     
     with get_cursor() as cur:
         cur.execute(
             """
-            INSERT INTO backup_reports (directory, start_time, end_time, stats)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO backup_reports (start_time, end_time, directories)
+            VALUES (%s, %s, %s)
             """,
-            (directory, start_time, end_time, stats_json),
+            (start_time, end_time, directories_json),
         )

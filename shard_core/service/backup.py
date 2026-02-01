@@ -115,14 +115,12 @@ async def backup_directories(
 
         overall_end_time = datetime.datetime.now(datetime.timezone.utc)
         
-        # Store backup report for each directory in the database
-        for dir_stat in dir_stats:
-            backup_reports.insert(
-                directory=dir_stat.directory,
-                start_time=dir_stat.startTime,
-                end_time=dir_stat.endTime,
-                stats=dir_stat.dict()
-            )
+        # Store one backup report with all directories in JSON
+        backup_reports.insert(
+            start_time=overall_start_time,
+            end_time=overall_end_time,
+            directories=[dir_stat.dict() for dir_stat in dir_stats]
+        )
         log.info("Backup done")
 
 
@@ -172,25 +170,19 @@ def _get_relative_directory(directory: Path) -> Path:
 def get_latest_backup_report() -> BackupReport | None:
     latest = backup_reports.get_latest()
     if latest:
-        # Get all reports with the same end_time to reconstruct the full BackupReport
-        all_reports = backup_reports.get_all()
-        end_time = latest['end_time']
+        # Parse directories from JSON field
+        directories_data = latest['directories']
+        if isinstance(directories_data, str):
+            import json
+            directories_data = json.loads(directories_data)
         
-        # Find all directory reports from the same backup run
-        dir_stats = []
-        start_times = []
-        for report in all_reports:
-            if report['end_time'] == end_time:
-                stats_dict = report['stats']
-                dir_stats.append(BackupStats.parse_obj(stats_dict))
-                start_times.append(report['start_time'])
+        dir_stats = [BackupStats.parse_obj(d) for d in directories_data]
         
-        if dir_stats:
-            return BackupReport(
-                directories=dir_stats,
-                startTime=min(start_times),
-                endTime=end_time,
-            )
+        return BackupReport(
+            directories=dir_stats,
+            startTime=latest['start_time'],
+            endTime=latest['end_time'],
+        )
     return None
 
 
