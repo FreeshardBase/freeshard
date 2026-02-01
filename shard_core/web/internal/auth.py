@@ -8,6 +8,7 @@ from http_message_signatures import InvalidSignature
 from jinja2 import Template
 
 from shard_core.db import installed_apps, identities
+from shard_core.db.db_connection import db_conn
 from shard_core.data_model.app_meta import InstalledApp, Access, Path
 from shard_core.data_model.auth import AuthState
 from shard_core.data_model.identity import Identity, SafeIdentity
@@ -25,12 +26,12 @@ router = APIRouter()
 
 
 @router.get("/authenticate_terminal", status_code=status.HTTP_200_OK)
-def authenticate_terminal(response: Response, authorization: str = Cookie(None)):
+async def authenticate_terminal(response: Response, authorization: str = Cookie(None)):
     if not authorization:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED)
 
     try:
-        terminal = pairing.verify_terminal_jwt(authorization)
+        terminal = await pairing.verify_terminal_jwt(authorization)
     except pairing.InvalidJwt:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED)
     else:
@@ -59,11 +60,11 @@ async def authenticate_and_authorize(
     x_forwarded_host: str = Header(None),
     x_forwarded_uri: str = Header(None),
 ):
-    app = _match_app(x_forwarded_host)
+    app = await _match_app(x_forwarded_host)
     path_object = _match_path(x_forwarded_uri, app)
     auth_state = await _get_auth_state(request, authorization)
     log.debug(f"Auth state is {auth_state}")
-    header_values = _get_identity()
+    header_values = await _get_identity()
 
     if (
         path_object.access == Access.PRIVATE
@@ -91,9 +92,9 @@ async def authenticate_and_authorize(
     on_request_to_app.send(app)
 
 
-def _match_app(x_forwarded_host) -> InstalledApp:
+async def _match_app(x_forwarded_host) -> InstalledApp:
     app_name = x_forwarded_host.split(".")[0]
-    app = _find_app(app_name)
+    app = await _find_app(app_name)
     if not app:
         log.debug(f"denied auth for {x_forwarded_host} -> unknown app")
         raise HTTPException(status.HTTP_404_NOT_FOUND)
@@ -101,19 +102,16 @@ def _match_app(x_forwarded_host) -> InstalledApp:
 
 
 @cached(cache=TTLCache(maxsize=8, ttl=gconf.get("tests.cache_ttl", default=3)))
-def _get_identity():
-    default_identity_data = identities.get_default()
-    default_identity = Identity(**default_identity_data)
+async def _get_identity():
+    async with db_conn() as conn:
+        default_identity = await identities.get_default(conn)
     return SafeIdentity.from_identity(default_identity)
 
 
 @cached(cache=TTLCache(maxsize=32, ttl=gconf.get("tests.cache_ttl", default=3)))
-def _find_app(app_name) -> Optional[InstalledApp]:
-    app_data = installed_apps.get_by_name(app_name)
-    if app_data:
-        return InstalledApp(**app_data)
-    else:
-        return None
+async def _find_app(app_name) -> Optional[InstalledApp]:
+    async with db_conn() as conn:
+        return await installed_apps.get_by_name(conn, app_name)
 
 
 def _match_path(uri, app: InstalledApp) -> Path:
@@ -127,7 +125,7 @@ def _match_path(uri, app: InstalledApp) -> Path:
 
 async def _get_auth_state(request, authorization) -> AuthState:
     try:
-        terminal = pairing.verify_terminal_jwt(authorization)
+        terminal = await pairing.verify_terminal_jwt(authorization)
     except pairing.InvalidJwt as e:
         log.debug(f"invalid terminal JWT: {e}")
     else:

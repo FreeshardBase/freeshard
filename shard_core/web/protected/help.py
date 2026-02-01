@@ -7,6 +7,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from shard_core.db import tours
+from shard_core.db.db_connection import db_conn
 
 log = logging.getLogger(__name__)
 
@@ -28,16 +29,18 @@ class Tour(BaseModel):
 
 
 @tour_router.put("", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
-def put_tour(tour: Tour):
+async def put_tour(tour: Tour):
     tour_dict = tour.dict()
     tour_dict['id'] = tour.name
     tour_dict['completed'] = (tour.status == TourStatus.SEEN)
-    tours.insert(tour_dict)
+    async with db_conn() as conn:
+        await tours.insert(conn, tour_dict)
 
 
 @tour_router.get("/{name}", response_model=Tour)
-def get_tour(name: str):
-    tour_data = tours.get_by_id(name)
+async def get_tour(name: str):
+    async with db_conn() as conn:
+        tour_data = await tours.get_by_id(conn, name)
     if tour_data:
         return Tour(
             name=tour_data['id'],
@@ -48,8 +51,9 @@ def get_tour(name: str):
 
 
 @tour_router.get("", response_model=List[Tour])
-def list_tours():
-    all_tours = tours.get_all()
+async def list_tours():
+    async with db_conn() as conn:
+        all_tours = await tours.get_all(conn)
     return [
         Tour(
             name=t['id'],
@@ -60,8 +64,9 @@ def list_tours():
 
 
 @tour_router.delete("", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
-def reset_tours():
-    tours.delete_all()
+async def reset_tours():
+    async with db_conn() as conn:
+        await tours.delete_all(conn)
 
 
 router.include_router(tour_router)

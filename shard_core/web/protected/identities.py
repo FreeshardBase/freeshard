@@ -10,6 +10,7 @@ from fastapi.datastructures import UploadFile
 from fastapi.responses import Response, StreamingResponse
 
 from shard_core.db import identities
+from shard_core.db.db_connection import db_conn
 from shard_core.data_model.identity import Identity, OutputIdentity, InputIdentity
 from shard_core.service import identity as identity_service, identity
 from shard_core.service.assets import put_asset
@@ -23,22 +24,24 @@ router = APIRouter(
 
 
 @router.get("", response_model=List[OutputIdentity])
-def list_all_identities(name: str = None):
-    all_identities = identities.get_all()
+async def list_all_identities(name: str = None):
+    async with db_conn() as conn:
+        all_identities = await identities.get_all(conn)
     if name:
-        return [i for i in all_identities if name.lower() in i.get('name', '').lower()]
+        return [i for i in all_identities if name.lower() in i.name.lower()]
     else:
         return all_identities
 
 
 @router.get("/default", response_model=OutputIdentity)
-def get_default_identity():
-    return identity.get_default_identity()
+async def get_default_identity():
+    return await identity.get_default_identity()
 
 
 @router.get("/{id}", response_model=OutputIdentity)
-def get_identity_by_id(id):
-    identity_data = identities.get_by_id(id)
+async def get_identity_by_id(id):
+    async with db_conn() as conn:
+        identity_data = await identities.get_by_id(conn, id)
     if identity_data:
         return identity_data
     else:
@@ -46,14 +49,14 @@ def get_identity_by_id(id):
 
 
 @router.get("/default/avatar")
-def get_default_avatar():
-    default_id = identity.get_default_identity()
-    return get_avatar_by_identity(default_id.id)
+async def get_default_avatar():
+    default_id = await identity.get_default_identity()
+    return await get_avatar_by_identity(default_id.id)
 
 
 @router.get("/{id}/avatar")
-def get_avatar_by_identity(id):
-    i = OutputIdentity.parse_obj(get_identity_by_id(id))
+async def get_avatar_by_identity(id):
+    i = OutputIdentity.parse_obj(await get_identity_by_id(id))
 
     try:
         avatar_file = find_avatar_file(i.id)
@@ -66,31 +69,34 @@ def get_avatar_by_identity(id):
 
 
 @router.put("", response_model=OutputIdentity, status_code=status.HTTP_201_CREATED)
-def put_identity(i: InputIdentity):
+async def put_identity(i: InputIdentity):
     if i.id:
-        existing = identities.get_by_id(i.id)
-        if existing:
-            input_dict = i.dict(exclude_unset=True)
-            identities.update(
-                i.id,
-                name=input_dict.get('name'),
-                email=input_dict.get('email'),
-                is_default=input_dict.get('is_default')
-            )
-            updated = identities.get_by_id(i.id)
-            return OutputIdentity(**updated)
-        else:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        async with db_conn() as conn:
+            existing = await identities.get_by_id(conn, i.id)
+            if existing:
+                input_dict = i.dict(exclude_unset=True)
+                await identities.update(
+                    conn,
+                    i.id,
+                    name=input_dict.get('name'),
+                    email=input_dict.get('email'),
+                    is_default=input_dict.get('is_default')
+                )
+                updated = await identities.get_by_id(conn, i.id)
+                return updated
+            else:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     else:
         new_identity = Identity.create(**i.dict(exclude_unset=True))
-        identities.insert(new_identity.dict())
+        async with db_conn() as conn:
+            await identities.insert(conn, new_identity)
         log.info(f"added {new_identity}")
         return new_identity
 
 
 @router.put("/default/avatar")
 async def put_default_avatar(file: UploadFile):
-    default_id = identity.get_default_identity()
+    default_id = await identity.get_default_identity()
     await put_avatar(default_id.id, file)
 
 
@@ -109,7 +115,7 @@ async def put_avatar(id: str, file: UploadFile):
     else:
         existing_file.unlink()
 
-    i = OutputIdentity.parse_obj(get_identity_by_id(id))
+    i = OutputIdentity.parse_obj(await get_identity_by_id(id))
     file_extension = file.filename.split(".")[-1]
     file_path = Path("avatars") / f"{i.id}.{file_extension}"
     put_asset(await file.read(), file_path, overwrite=True)
@@ -117,13 +123,13 @@ async def put_avatar(id: str, file: UploadFile):
 
 @router.delete("/default/avatar", status_code=status.HTTP_200_OK)
 async def delete_default_avatar():
-    default_id = identity.get_default_identity()
+    default_id = await identity.get_default_identity()
     await delete_avatar(default_id.id)
 
 
 @router.delete("/{id}/avatar", status_code=status.HTTP_200_OK)
 async def delete_avatar(id: str):
-    i = OutputIdentity.parse_obj(get_identity_by_id(id))
+    i = OutputIdentity.parse_obj(await get_identity_by_id(id))
 
     try:
         avatar_file = find_avatar_file(i.id)
@@ -138,8 +144,8 @@ async def delete_avatar(id: str):
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
 )
-def make_identity_default(id):
+async def make_identity_default(id):
     try:
-        identity_service.make_default(id)
+        await identity_service.make_default(id)
     except KeyError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
