@@ -2,30 +2,31 @@
 Database access methods for app usage tracking
 """
 import json
-from datetime import datetime
-from typing import List, Dict, Any
+from typing import List
 
-from shard_core.db.db_connection import get_cursor
+from psycopg import AsyncConnection
+from psycopg.rows import class_row
+
+from shard_core.data_model.app_usage import AppUsageTrack
 
 
-def get_all() -> List[Dict[str, Any]]:
+async def get_all(conn: AsyncConnection) -> List[AppUsageTrack]:
     """Get all app usage tracks"""
-    with get_cursor() as cur:
-        cur.execute("SELECT * FROM app_usage_track ORDER BY timestamp DESC")
-        return cur.fetchall()
+    async with conn.cursor(row_factory=class_row(AppUsageTrack)) as cur:
+        await cur.execute("SELECT timestamp, installed_apps FROM app_usage_track ORDER BY timestamp DESC")
+        return await cur.fetchall()
 
 
-def insert(track: Dict[str, Any]) -> None:
+async def insert(conn: AsyncConnection, track: AppUsageTrack) -> None:
     """Insert a new app usage track"""
     # Convert installed_apps list to JSON
-    if 'installed_apps' in track:
-        track['installed_apps'] = json.dumps(track['installed_apps']) if isinstance(track['installed_apps'], list) else track['installed_apps']
+    installed_apps_json = json.dumps(track.installed_apps)
     
-    with get_cursor() as cur:
-        cur.execute(
+    async with conn.cursor() as cur:
+        await cur.execute(
             """
             INSERT INTO app_usage_track (timestamp, installed_apps)
-            VALUES (%(timestamp)s, %(installed_apps)s)
+            VALUES (%s, %s)
             """,
-            track,
+            (track.timestamp, installed_apps_json),
         )

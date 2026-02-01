@@ -4,27 +4,29 @@ Database access methods for tours
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
-from shard_core.db.db_connection import get_cursor
+from psycopg import AsyncConnection
 
 
-def get_all() -> List[Dict[str, Any]]:
+async def get_all(conn: AsyncConnection) -> List[Dict[str, Any]]:
     """Get all tours"""
-    with get_cursor() as cur:
-        cur.execute("SELECT * FROM tours ORDER BY created_at")
-        return cur.fetchall()
+    async with conn.cursor() as cur:
+        await cur.execute("SELECT * FROM tours ORDER BY created_at")
+        rows = await cur.fetchall()
+        return [dict(row) for row in rows]
 
 
-def get_by_id(tour_id: str) -> Optional[Dict[str, Any]]:
+async def get_by_id(conn: AsyncConnection, tour_id: str) -> Optional[Dict[str, Any]]:
     """Get tour by id"""
-    with get_cursor() as cur:
-        cur.execute("SELECT * FROM tours WHERE id = %s", (tour_id,))
-        return cur.fetchone()
+    async with conn.cursor() as cur:
+        await cur.execute("SELECT * FROM tours WHERE id = %s", (tour_id,))
+        row = await cur.fetchone()
+        return dict(row) if row else None
 
 
-def insert(tour: Dict[str, Any]) -> None:
+async def insert(conn: AsyncConnection, tour: Dict[str, Any]) -> None:
     """Insert a new tour"""
-    with get_cursor() as cur:
-        cur.execute(
+    async with conn.cursor() as cur:
+        await cur.execute(
             """
             INSERT INTO tours (id, completed)
             VALUES (%(id)s, %(completed)s)
@@ -36,7 +38,8 @@ def insert(tour: Dict[str, Any]) -> None:
         )
 
 
-def update(
+async def update(
+    conn: AsyncConnection,
     tour_id: str,
     *,
     completed: Optional[bool] = None
@@ -51,27 +54,28 @@ def update(
         'updated_at': datetime.utcnow()
     }
     
-    with get_cursor() as cur:
-        cur.execute(
+    async with conn.cursor() as cur:
+        await cur.execute(
             "UPDATE tours SET completed = %(completed)s, updated_at = %(updated_at)s WHERE id = %(id)s",
             params,
         )
 
 
-def delete(tour_id: str) -> None:
+async def delete(conn: AsyncConnection, tour_id: str) -> None:
     """Delete a tour"""
-    with get_cursor() as cur:
-        cur.execute("DELETE FROM tours WHERE id = %s", (tour_id,))
+    async with conn.cursor() as cur:
+        await cur.execute("DELETE FROM tours WHERE id = %s", (tour_id,))
 
 
-def count() -> int:
+async def count(conn: AsyncConnection) -> int:
     """Count all tours"""
-    with get_cursor() as cur:
-        cur.execute("SELECT COUNT(*) as count FROM tours")
-        return cur.fetchone()['count']
+    async with conn.cursor() as cur:
+        await cur.execute("SELECT COUNT(*) as count FROM tours")
+        result = await cur.fetchone()
+        return result[0]
 
 
-def delete_all() -> None:
+async def delete_all(conn: AsyncConnection) -> None:
     """Delete all tours"""
-    with get_cursor() as cur:
-        cur.execute("DELETE FROM tours")
+    async with conn.cursor() as cur:
+        await cur.execute("DELETE FROM tours")

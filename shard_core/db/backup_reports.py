@@ -5,30 +5,33 @@ import json
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
-from shard_core.db.db_connection import get_cursor
+from psycopg import AsyncConnection
+from psycopg.rows import class_row
+
+from shard_core.data_model.backup import BackupReport
 
 
-def get_all() -> List[Dict[str, Any]]:
+async def get_all(conn: AsyncConnection) -> List[BackupReport]:
     """Get all backup reports"""
-    with get_cursor() as cur:
-        cur.execute("SELECT * FROM backup_reports ORDER BY end_time DESC")
-        return cur.fetchall()
+    async with conn.cursor(row_factory=class_row(BackupReport)) as cur:
+        await cur.execute("SELECT start_time as \"startTime\", end_time as \"endTime\", directories FROM backup_reports ORDER BY end_time DESC")
+        return await cur.fetchall()
 
 
-def get_latest() -> Optional[Dict[str, Any]]:
+async def get_latest(conn: AsyncConnection) -> Optional[BackupReport]:
     """Get the latest backup report"""
-    with get_cursor() as cur:
-        cur.execute("SELECT * FROM backup_reports ORDER BY end_time DESC LIMIT 1")
-        return cur.fetchone()
+    async with conn.cursor(row_factory=class_row(BackupReport)) as cur:
+        await cur.execute("SELECT start_time as \"startTime\", end_time as \"endTime\", directories FROM backup_reports ORDER BY end_time DESC LIMIT 1")
+        return await cur.fetchone()
 
 
-def insert(start_time: datetime, end_time: datetime, directories: List[Dict[str, Any]]) -> None:
+async def insert(conn: AsyncConnection, start_time: datetime, end_time: datetime, directories: List[Dict[str, Any]]) -> None:
     """Insert a new backup report"""
     # Convert directories list to JSON
     directories_json = json.dumps(directories) if isinstance(directories, list) else directories
     
-    with get_cursor() as cur:
-        cur.execute(
+    async with conn.cursor() as cur:
+        await cur.execute(
             """
             INSERT INTO backup_reports (start_time, end_time, directories)
             VALUES (%s, %s, %s)

@@ -2,45 +2,49 @@
 Database access methods for identities
 """
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 
-from shard_core.db.db_connection import get_cursor
+from psycopg import AsyncConnection
+from psycopg.rows import class_row
+
+from shard_core.data_model.identity import Identity
 
 
-def get_all() -> List[Dict[str, Any]]:
+async def get_all(conn: AsyncConnection) -> List[Identity]:
     """Get all identities"""
-    with get_cursor() as cur:
-        cur.execute("SELECT * FROM identities ORDER BY created_at")
-        return cur.fetchall()
+    async with conn.cursor(row_factory=class_row(Identity)) as cur:
+        await cur.execute("SELECT * FROM identities ORDER BY created_at")
+        return await cur.fetchall()
 
 
-def get_by_id(identity_id: str) -> Optional[Dict[str, Any]]:
+async def get_by_id(conn: AsyncConnection, identity_id: str) -> Optional[Identity]:
     """Get identity by id"""
-    with get_cursor() as cur:
-        cur.execute("SELECT * FROM identities WHERE id = %s", (identity_id,))
-        return cur.fetchone()
+    async with conn.cursor(row_factory=class_row(Identity)) as cur:
+        await cur.execute("SELECT * FROM identities WHERE id = %s", (identity_id,))
+        return await cur.fetchone()
 
 
-def get_default() -> Optional[Dict[str, Any]]:
+async def get_default(conn: AsyncConnection) -> Optional[Identity]:
     """Get the default identity"""
-    with get_cursor() as cur:
-        cur.execute("SELECT * FROM identities WHERE is_default = TRUE LIMIT 1")
-        return cur.fetchone()
+    async with conn.cursor(row_factory=class_row(Identity)) as cur:
+        await cur.execute("SELECT * FROM identities WHERE is_default = TRUE LIMIT 1")
+        return await cur.fetchone()
 
 
-def insert(identity: Dict[str, Any]) -> None:
+async def insert(conn: AsyncConnection, identity: Identity) -> None:
     """Insert a new identity"""
-    with get_cursor() as cur:
-        cur.execute(
+    async with conn.cursor() as cur:
+        await cur.execute(
             """
             INSERT INTO identities (id, name, email, description, private_key, is_default)
-            VALUES (%(id)s, %(name)s, %(email)s, %(description)s, %(private_key)s, %(is_default)s)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """,
-            identity,
+            (identity.id, identity.name, identity.email, identity.description, identity.private_key, identity.is_default),
         )
 
 
-def update(
+async def update(
+    conn: AsyncConnection,
     identity_id: str,
     *,
     name: Optional[str] = None,
@@ -72,21 +76,22 @@ def update(
     params['updated_at'] = datetime.utcnow()
     set_parts.append("updated_at = %(updated_at)s")
     
-    with get_cursor() as cur:
-        cur.execute(
+    async with conn.cursor() as cur:
+        await cur.execute(
             f"UPDATE identities SET {', '.join(set_parts)} WHERE id = %(id)s",
             params,
         )
 
 
-def delete(identity_id: str) -> None:
+async def delete(conn: AsyncConnection, identity_id: str) -> None:
     """Delete an identity"""
-    with get_cursor() as cur:
-        cur.execute("DELETE FROM identities WHERE id = %s", (identity_id,))
+    async with conn.cursor() as cur:
+        await cur.execute("DELETE FROM identities WHERE id = %s", (identity_id,))
 
 
-def count() -> int:
+async def count(conn: AsyncConnection) -> int:
     """Count all identities"""
-    with get_cursor() as cur:
-        cur.execute("SELECT COUNT(*) as count FROM identities")
-        return cur.fetchone()['count']
+    async with conn.cursor() as cur:
+        await cur.execute("SELECT COUNT(*) as count FROM identities")
+        result = await cur.fetchone()
+        return result[0]

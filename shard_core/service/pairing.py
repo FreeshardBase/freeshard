@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from shard_core.database import database
 from shard_core.db import terminals
+from shard_core.db.db_connection import db_conn
 from shard_core.data_model.terminal import Terminal
 
 STORE_KEY_JWT_SECRET = "terminal_jwt_secret"
@@ -67,7 +68,7 @@ def create_terminal_jwt(terminal_id, **kwargs) -> str:
     return jwt.encode(payload, jwt_secret, algorithm="HS256")
 
 
-def verify_terminal_jwt(token: str = None):
+async def verify_terminal_jwt(token: str = None):
     if not token:
         raise InvalidJwt("Missing JWT")
 
@@ -82,11 +83,12 @@ def verify_terminal_jwt(token: str = None):
     except jwt.InvalidTokenError as e:
         raise InvalidJwt from e
 
-    terminal_data = terminals.get_by_id(decoded_token["sub"])
-    if terminal_data:
-        return Terminal(**terminal_data)
-    else:
-        raise InvalidJwt
+    async with db_conn() as conn:
+        terminal = await terminals.get_by_id(conn, decoded_token["sub"])
+        if terminal:
+            return terminal
+        else:
+            raise InvalidJwt
 
 
 def _ensure_jwt_secret():

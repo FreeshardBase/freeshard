@@ -2,45 +2,49 @@
 Database access methods for peers
 """
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 
-from shard_core.db.db_connection import get_cursor
+from psycopg import AsyncConnection
+from psycopg.rows import class_row
+
+from shard_core.data_model.peer import Peer
 
 
-def get_all() -> List[Dict[str, Any]]:
+async def get_all(conn: AsyncConnection) -> List[Peer]:
     """Get all peers"""
-    with get_cursor() as cur:
-        cur.execute("SELECT * FROM peers ORDER BY created_at")
-        return cur.fetchall()
+    async with conn.cursor(row_factory=class_row(Peer)) as cur:
+        await cur.execute("SELECT * FROM peers ORDER BY created_at")
+        return await cur.fetchall()
 
 
-def get_by_id(peer_id: str) -> Optional[Dict[str, Any]]:
+async def get_by_id(conn: AsyncConnection, peer_id: str) -> Optional[Peer]:
     """Get peer by id (supports partial match with wildcard)"""
-    with get_cursor() as cur:
+    async with conn.cursor(row_factory=class_row(Peer)) as cur:
         # First try exact match
-        cur.execute("SELECT * FROM peers WHERE id = %s", (peer_id,))
-        result = cur.fetchone()
+        await cur.execute("SELECT * FROM peers WHERE id = %s", (peer_id,))
+        result = await cur.fetchone()
         if result:
             return result
         
         # Try prefix match
-        cur.execute("SELECT * FROM peers WHERE id LIKE %s LIMIT 1", (f"{peer_id}:%",))
-        return cur.fetchone()
+        await cur.execute("SELECT * FROM peers WHERE id LIKE %s LIMIT 1", (f"{peer_id}:%",))
+        return await cur.fetchone()
 
 
-def insert(peer: Dict[str, Any]) -> None:
+async def insert(conn: AsyncConnection, peer: Peer) -> None:
     """Insert a new peer"""
-    with get_cursor() as cur:
-        cur.execute(
+    async with conn.cursor() as cur:
+        await cur.execute(
             """
             INSERT INTO peers (id, name, public_bytes_b64, is_reachable)
-            VALUES (%(id)s, %(name)s, %(public_bytes_b64)s, %(is_reachable)s)
+            VALUES (%s, %s, %s, %s)
             """,
-            peer,
+            (peer.id, peer.name, peer.public_bytes_b64, peer.is_reachable),
         )
 
 
-def update(
+async def update(
+    conn: AsyncConnection,
     peer_id: str,
     *,
     name: Optional[str] = None,
@@ -65,21 +69,21 @@ def update(
     params['updated_at'] = datetime.utcnow()
     set_parts.append("updated_at = %(updated_at)s")
     
-    with get_cursor() as cur:
-        cur.execute(
+    async with conn.cursor() as cur:
+        await cur.execute(
             f"UPDATE peers SET {', '.join(set_parts)} WHERE id = %(id)s",
             params,
         )
 
 
-def delete(peer_id: str) -> None:
+async def delete(conn: AsyncConnection, peer_id: str) -> None:
     """Delete a peer"""
-    with get_cursor() as cur:
-        cur.execute("DELETE FROM peers WHERE id = %s", (peer_id,))
+    async with conn.cursor() as cur:
+        await cur.execute("DELETE FROM peers WHERE id = %s", (peer_id,))
 
 
-def search_without_pubkey() -> List[Dict[str, Any]]:
+async def search_without_pubkey(conn: AsyncConnection) -> List[Peer]:
     """Search for peers that don't have a public key"""
-    with get_cursor() as cur:
-        cur.execute("SELECT * FROM peers WHERE public_bytes_b64 IS NOT NULL")
-        return cur.fetchall()
+    async with conn.cursor(row_factory=class_row(Peer)) as cur:
+        await cur.execute("SELECT * FROM peers WHERE public_bytes_b64 IS NOT NULL")
+        return await cur.fetchall()

@@ -3,15 +3,15 @@ Utility methods for database operations
 """
 import logging
 
-from shard_core.db.db_connection import get_cursor
+from psycopg import AsyncConnection
 
 log = logging.getLogger(__name__)
 
 
-def truncate_all_tables() -> None:
+async def truncate_all_tables(conn: AsyncConnection) -> None:
     """Truncate all tables - useful for tests"""
-    with get_cursor() as cur:
-        cur.execute(
+    async with conn.cursor() as cur:
+        await cur.execute(
             """
             TRUNCATE TABLE 
                 identities, 

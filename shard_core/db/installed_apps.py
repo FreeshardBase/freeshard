@@ -5,24 +5,27 @@ import json
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
-from shard_core.db.db_connection import get_cursor
+from psycopg import AsyncConnection
+from psycopg.rows import class_row
+
+from shard_core.data_model.app_meta import InstalledApp
 
 
-def get_all() -> List[Dict[str, Any]]:
+async def get_all(conn: AsyncConnection) -> List[InstalledApp]:
     """Get all installed apps"""
-    with get_cursor() as cur:
-        cur.execute("SELECT * FROM installed_apps ORDER BY created_at")
-        return cur.fetchall()
+    async with conn.cursor(row_factory=class_row(InstalledApp)) as cur:
+        await cur.execute("SELECT name, status, installation_reason, last_access FROM installed_apps ORDER BY created_at")
+        return await cur.fetchall()
 
 
-def get_by_name(app_name: str) -> Optional[Dict[str, Any]]:
+async def get_by_name(conn: AsyncConnection, app_name: str) -> Optional[InstalledApp]:
     """Get installed app by name"""
-    with get_cursor() as cur:
-        cur.execute("SELECT * FROM installed_apps WHERE name = %s", (app_name,))
-        return cur.fetchone()
+    async with conn.cursor(row_factory=class_row(InstalledApp)) as cur:
+        await cur.execute("SELECT name, status, installation_reason, last_access FROM installed_apps WHERE name = %s", (app_name,))
+        return await cur.fetchone()
 
 
-def insert(app: Dict[str, Any]) -> None:
+async def insert(conn: AsyncConnection, app: Dict[str, Any]) -> None:
     """Insert a new installed app"""
     # Set defaults for optional fields
     if 'access' not in app or app['access'] is None:
@@ -36,8 +39,8 @@ def insert(app: Dict[str, Any]) -> None:
     if app['meta'] is not None and isinstance(app['meta'], dict):
         app['meta'] = json.dumps(app['meta'])
     
-    with get_cursor() as cur:
-        cur.execute(
+    async with conn.cursor() as cur:
+        await cur.execute(
             """
             INSERT INTO installed_apps (name, status, installation_reason, access, last_access, version, meta)
             VALUES (%(name)s, %(status)s, %(installation_reason)s, %(access)s, %(last_access)s, %(version)s, %(meta)s)
@@ -54,7 +57,8 @@ def insert(app: Dict[str, Any]) -> None:
         )
 
 
-def update(
+async def update(
+    conn: AsyncConnection,
     app_name: str,
     *,
     status: Optional[str] = None,
@@ -88,14 +92,14 @@ def update(
     params['updated_at'] = datetime.utcnow()
     set_parts.append("updated_at = %(updated_at)s")
     
-    with get_cursor() as cur:
-        cur.execute(
+    async with conn.cursor() as cur:
+        await cur.execute(
             f"UPDATE installed_apps SET {', '.join(set_parts)} WHERE name = %(name)s",
             params,
         )
 
 
-def delete(app_name: str) -> None:
+async def delete(conn: AsyncConnection, app_name: str) -> None:
     """Delete an installed app"""
-    with get_cursor() as cur:
-        cur.execute("DELETE FROM installed_apps WHERE name = %s", (app_name,))
+    async with conn.cursor() as cur:
+        await cur.execute("DELETE FROM installed_apps WHERE name = %s", (app_name,))

@@ -12,7 +12,8 @@ from fastapi import FastAPI
 from pydantic import ValidationError
 from requests import ConnectionError, HTTPError
 
-from .db import init_database, migrate
+from .db.db_connection import make_and_open_connection_pool, close_connection_pool, db_conn
+from .db.migration import migrate
 from .db import identities, terminals, peers, installed_apps, tours, app_usage_track, key_value, util as db_util
 from .service import (
     app_installation,
@@ -52,8 +53,7 @@ def create_app():
         gconf.load("config.yml")
     configure_logging()
 
-    init_database()
-    migrate()  # Run database migrations at startup
+    migrate()  # Run database migrations at startup (synchronous)
     identity.init_default_identity()
     _copy_traefik_static_config()
 
@@ -86,6 +86,9 @@ def configure_logging():
 
 @asynccontextmanager
 async def lifespan(_):
+    # Initialize database connection pool
+    await make_and_open_connection_pool()
+    
     await write_traefik_dyn_config()
     await app_installation.login_docker_registries()
     await migration.migrate()
@@ -111,6 +114,9 @@ async def lifespan(_):
         await t.wait()
     await docker_stop_all_apps()
     await docker_shutdown_all_apps(force=True)
+    
+    # Close database connection pool
+    await close_connection_pool()
 
 
 def _make_background_tasks() -> List[BackgroundTask]:

@@ -4,27 +4,27 @@ Database access methods for key-value storage
 import json
 from typing import Any
 
-from shard_core.db.db_connection import get_cursor
+from psycopg import AsyncConnection
 
 
-def get(key: str) -> Any:
+async def get(conn: AsyncConnection, key: str) -> Any:
     """Get value by key"""
-    with get_cursor() as cur:
-        cur.execute("SELECT value FROM key_value WHERE key = %s", (key,))
-        result = cur.fetchone()
-        if result:
-            return result['value']
+    async with conn.cursor() as cur:
+        await cur.execute("SELECT value FROM key_value WHERE key = %s", (key,))
+        row = await cur.fetchone()
+        if row:
+            return row[0]
         else:
             raise KeyError(key)
 
 
-def set(key: str, value: Any) -> None:
+async def set(conn: AsyncConnection, key: str, value: Any) -> None:
     """Set or update a key-value pair"""
     # Convert value to JSON
     json_value = json.dumps(value)
     
-    with get_cursor() as cur:
-        cur.execute(
+    async with conn.cursor() as cur:
+        await cur.execute(
             """
             INSERT INTO key_value (key, value)
             VALUES (%s, %s)
@@ -36,8 +36,8 @@ def set(key: str, value: Any) -> None:
         )
 
 
-def remove(key: str) -> bool:
+async def remove(conn: AsyncConnection, key: str) -> bool:
     """Remove a key-value pair, returns True if removed"""
-    with get_cursor() as cur:
-        cur.execute("DELETE FROM key_value WHERE key = %s RETURNING key", (key,))
-        return cur.fetchone() is not None
+    async with conn.cursor() as cur:
+        await cur.execute("DELETE FROM key_value WHERE key = %s RETURNING key", (key,))
+        return await cur.fetchone() is not None

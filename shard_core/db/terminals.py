@@ -2,38 +2,42 @@
 Database access methods for terminals
 """
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 
-from shard_core.db.db_connection import get_cursor
+from psycopg import AsyncConnection
+from psycopg.rows import class_row
+
+from shard_core.data_model.terminal import Terminal
 
 
-def get_all() -> List[Dict[str, Any]]:
+async def get_all(conn: AsyncConnection) -> List[Terminal]:
     """Get all terminals"""
-    with get_cursor() as cur:
-        cur.execute("SELECT * FROM terminals ORDER BY last_connection DESC")
-        return cur.fetchall()
+    async with conn.cursor(row_factory=class_row(Terminal)) as cur:
+        await cur.execute("SELECT * FROM terminals ORDER BY last_connection DESC")
+        return await cur.fetchall()
 
 
-def get_by_id(terminal_id: str) -> Optional[Dict[str, Any]]:
+async def get_by_id(conn: AsyncConnection, terminal_id: str) -> Optional[Terminal]:
     """Get terminal by id"""
-    with get_cursor() as cur:
-        cur.execute("SELECT * FROM terminals WHERE id = %s", (terminal_id,))
-        return cur.fetchone()
+    async with conn.cursor(row_factory=class_row(Terminal)) as cur:
+        await cur.execute("SELECT * FROM terminals WHERE id = %s", (terminal_id,))
+        return await cur.fetchone()
 
 
-def insert(terminal: Dict[str, Any]) -> None:
+async def insert(conn: AsyncConnection, terminal: Terminal) -> None:
     """Insert a new terminal"""
-    with get_cursor() as cur:
-        cur.execute(
+    async with conn.cursor() as cur:
+        await cur.execute(
             """
             INSERT INTO terminals (id, name, icon, last_connection)
-            VALUES (%(id)s, %(name)s, %(icon)s, %(last_connection)s)
+            VALUES (%s, %s, %s, %s)
             """,
-            terminal,
+            (terminal.id, terminal.name, terminal.icon.value, terminal.last_connection),
         )
 
 
-def update(
+async def update(
+    conn: AsyncConnection,
     terminal_id: str,
     *,
     name: Optional[str] = None,
@@ -58,21 +62,22 @@ def update(
     params['updated_at'] = datetime.utcnow()
     set_parts.append("updated_at = %(updated_at)s")
     
-    with get_cursor() as cur:
-        cur.execute(
+    async with conn.cursor() as cur:
+        await cur.execute(
             f"UPDATE terminals SET {', '.join(set_parts)} WHERE id = %(id)s",
             params,
         )
 
 
-def delete(terminal_id: str) -> None:
+async def delete(conn: AsyncConnection, terminal_id: str) -> None:
     """Delete a terminal"""
-    with get_cursor() as cur:
-        cur.execute("DELETE FROM terminals WHERE id = %s", (terminal_id,))
+    async with conn.cursor() as cur:
+        await cur.execute("DELETE FROM terminals WHERE id = %s", (terminal_id,))
 
 
-def count() -> int:
+async def count(conn: AsyncConnection) -> int:
     """Count all terminals"""
-    with get_cursor() as cur:
-        cur.execute("SELECT COUNT(*) as count FROM terminals")
-        return cur.fetchone()['count']
+    async with conn.cursor() as cur:
+        await cur.execute("SELECT COUNT(*) as count FROM terminals")
+        result = await cur.fetchone()
+        return result[0]
