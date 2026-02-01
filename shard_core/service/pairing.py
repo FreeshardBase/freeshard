@@ -89,7 +89,6 @@ async def verify_terminal_jwt(token: str = None):
             return terminal
         else:
             raise TerminalNotFound from KeyError
-            raise InvalidJwt
 
 
 async def _ensure_jwt_secret():
