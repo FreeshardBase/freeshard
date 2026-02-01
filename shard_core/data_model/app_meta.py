@@ -6,7 +6,6 @@ from typing import Optional, List, Dict, Union
 import gconf
 from pydantic import BaseModel, root_validator, validator
 
-from shard_core.db import installed_apps
 from shard_core.db.db_connection import db_conn
 from shard_core.data_model import app_meta_migration
 from shard_core.util import signals
@@ -155,6 +154,8 @@ class InstalledAppWithMeta(InstalledApp):
 
 @signals.on_request_to_app.connect
 async def update_last_access(app: InstalledApp):
+    from shard_core.db import installed_apps
+    
     now = datetime.datetime.utcnow()
     max_update_frequency = datetime.timedelta(
         seconds=gconf.get("apps.last_access.max_update_frequency")

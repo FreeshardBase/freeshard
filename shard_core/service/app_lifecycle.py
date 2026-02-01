@@ -22,11 +22,11 @@ background_tasks = set()
 
 
 @signals.on_request_to_app.connect
-def ensure_app_is_running(app: InstalledApp):
+async def ensure_app_is_running(app: InstalledApp):
     if disk.current_disk_usage.disk_space_low:
         return
     app_meta = get_app_metadata(app.name)
-    if size_is_compatible(app_meta.minimum_portal_size):
+    if await size_is_compatible(app_meta.minimum_portal_size):
         global last_access_dict
         last_access_dict[app.name] = time.time()
         task = asyncio.create_task(
@@ -57,7 +57,7 @@ async def _control_app(name: str):
         return
 
     if app_meta.lifecycle.always_on:
-        if size_is_compatible(app_meta.minimum_portal_size):
+        if await size_is_compatible(app_meta.minimum_portal_size):
             await docker_start_app(app_meta.name)
     else:
         last_access = last_access_dict.get(app_meta.name, 0.0)

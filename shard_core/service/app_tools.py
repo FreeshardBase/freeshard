@@ -114,11 +114,8 @@ def get_app_metadata(app_name: str) -> AppMeta:
         raise MetadataNotFound(app_name)
 
 
-def size_is_compatible(app_size) -> bool:
-    try:
-        profile = shard_core.data_model.profile.get_profile()
-    except KeyError:
-        return False
+async def size_is_compatible(app_size) -> bool:
+    profile = await shard_core.data_model.profile.get_profile()
     if profile is None:
         return True
     vm_size = profile.vm_size

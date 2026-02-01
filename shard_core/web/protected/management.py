@@ -18,9 +18,8 @@ async def get_profile(refresh: bool = False):
     if refresh:
         p = await portal_controller.refresh_profile()
     else:
-        try:
-            p = profile.get_profile()
-        except KeyError:
+        p = await profile.get_profile()
+        if p is None:
             p = await portal_controller.refresh_profile()
     if p:
         return p
