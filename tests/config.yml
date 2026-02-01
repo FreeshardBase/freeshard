@@ -19,3 +19,10 @@ log:
 
 telemetry:
   enabled: true
+
+db:
+  host: localhost
+  port: 5432
+  dbname: shard-core
+  user: shard-core
+  password: my-password

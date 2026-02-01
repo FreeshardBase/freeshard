@@ -19,13 +19,13 @@ router = APIRouter(
 
 
 @router.get("/whoareyou", response_model=OutputIdentity)
-def who_are_you():
-    return identity.get_default_identity()
+async def who_are_you():
+    return await identity.get_default_identity()
 
 
 @router.get("/avatar")
-def get_default_avatar():
-    default_id = identity.get_default_identity()
+async def get_default_avatar():
+    default_id = await identity.get_default_identity()
 
     try:
         avatar_file = avatar.find_avatar_file(default_id.id)
@@ -48,12 +48,12 @@ class OutputWhoAmI(BaseModel):
 
 
 @router.get("/whoami", response_model=OutputWhoAmI)
-def who_am_i(authorization: str = Cookie(None)):
+async def who_am_i(authorization: str = Cookie(None)):
     if not authorization:
         return OutputWhoAmI.anonymous()
 
     try:
-        terminal = pairing.verify_terminal_jwt(authorization)
+        terminal = await pairing.verify_terminal_jwt(authorization)
     except pairing.InvalidJwt:
         return OutputWhoAmI.anonymous()
     else:

@@ -2,10 +2,10 @@ from time import sleep
 
 from httpx import AsyncClient
 from starlette import status
-from tinydb.operations import delete
 
 from shard_core.data_model.backend.shard_model import ShardDb
-from shard_core.database.database import terminals_table
+from shard_core.db.db_connection import db_conn
+from shard_core.db import terminals
 from shard_core.data_model.terminal import Terminal, Icon
 from tests.conftest import requests_mock_context, mock_shard, requires_test_env
 from tests.util import get_pairing_code, add_terminal, pair_new_terminal
@@ -193,8 +193,12 @@ async def test_last_connection(api_client: AsyncClient):
     response = await api_client.post("protected/apps/mock_app")
     response.raise_for_status()
 
-    with terminals_table() as terminals:  # type: Table
-        terminals.update(delete("last_connection"))
+    # Clear last_connection by setting it to None
+    terminal_response = await api_client.get(f"protected/terminals/name/{t_name}")
+    terminal_data = terminal_response.json()
+    async with db_conn() as conn:
+        await terminals.update(conn, terminal_data["id"], last_connection=None)
+    
     last_connection_missing = Terminal(
         **(await api_client.get(f"protected/terminals/name/{t_name}")).json()
     )

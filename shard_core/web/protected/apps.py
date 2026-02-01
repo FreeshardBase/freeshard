@@ -6,9 +6,9 @@ from typing import List
 import aiofiles
 from fastapi import APIRouter, status, HTTPException, UploadFile
 from fastapi.responses import Response, StreamingResponse
-from tinydb import Query
 
-from shard_core.database.database import installed_apps_table
+from shard_core.db import installed_apps
+from shard_core.db.db_connection import db_conn
 from shard_core.data_model.app_meta import InstalledAppWithMeta, InstalledApp
 from shard_core.service import app_installation
 from shard_core.service.app_installation.exceptions import (
@@ -30,18 +30,18 @@ router = APIRouter(
 
 
 @router.get("", response_model=List[InstalledAppWithMeta])
-def list_all_apps():
-    with installed_apps_table() as installed_apps:
-        apps = [InstalledApp.parse_obj(app) for app in installed_apps.all()]
+async def list_all_apps():
+    async with db_conn() as conn:
+        apps = await installed_apps.get_all(conn)
     return [enrich_installed_app_with_meta(app) for app in apps]
 
 
 @router.get("/{name}", response_model=InstalledAppWithMeta)
-def get_app(name: str):
-    with installed_apps_table() as installed_apps:
-        installed_app = installed_apps.get(Query().name == name)
-    if installed_app:
-        return enrich_installed_app_with_meta(InstalledApp.parse_obj(installed_app))
+async def get_app(name: str):
+    async with db_conn() as conn:
+        installed_app_data = await installed_apps.get_by_name(conn, name)
+    if installed_app_data:
+        return enrich_installed_app_with_meta(installed_app_data)
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
 
@@ -63,9 +63,9 @@ def get_app_icon(name: str):
 @router.delete(
     "/{name}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response
 )
-def uninstall_app(name: str):
+async def uninstall_app(name: str):
     try:
-        app_installation.uninstall_app(name)
+        await app_installation.uninstall_app(name)
     except AppNotInstalled:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=f"App {name} is not installed"

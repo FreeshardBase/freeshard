@@ -71,10 +71,27 @@ def config_override(tmp_path, request):
         gconf.override_conf(function_override),
     ):
         yield
+    
+    # Truncate all tables after each test
+    from shard_core.db import util as db_util
+    from shard_core.db.db_connection import db_conn
+    import asyncio
+    try:
+        asyncio.run(_truncate_tables_helper())
+    except Exception as e:
+        # If database is not initialized yet, skip truncation
+        print(f"Could not truncate tables: {e}")
+
+
+async def _truncate_tables_helper():
+    from shard_core.db import util as db_util
+    from shard_core.db.db_connection import db_conn
+    async with db_conn() as conn:
+        await db_util.truncate_all_tables(conn)
 
 
 @pytest_asyncio.fixture
-async def api_client(requests_mock, mocker) -> AsyncGenerator[AsyncClient]:
+async def api_client(requests_mock, mocker):  # Remove AsyncGenerator type hint for Python 3.12 compatibility
     # Modules that define some global state need to be reloaded
     importlib.reload(websocket)
     importlib.reload(app_installation.worker)

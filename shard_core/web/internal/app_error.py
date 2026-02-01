@@ -24,8 +24,8 @@ router = APIRouter()
 
 
 @router.get("/app_error/{status}")
-def app_error(status: int, request: Request):
-    behaviour = get_splash_behaviour(request)
+async def app_error(status: int, request: Request):
+    behaviour = await get_splash_behaviour(request)
     template = get_template_splash()
     return HTMLResponse(content=template.render(**behaviour.dict()), status_code=status)
 
@@ -39,7 +39,7 @@ class SplashBehaviour(BaseModel):
     do_reload: bool
 
 
-def get_splash_behaviour(request: Request):
+async def get_splash_behaviour(request: Request):
     # todo: add special splash screen for app that is not size compatible
     status_code = int(request.path_params["status"])
     app_name = get_app_name(request)
@@ -57,7 +57,7 @@ def get_splash_behaviour(request: Request):
     if disk.current_disk_usage.disk_space_low:
         behaviour.display_status = "Low Disk Space"
         behaviour.do_reload = False
-    if not size_is_compatible(app_meta.minimum_portal_size):
+    if not await size_is_compatible(app_meta.minimum_portal_size):
         display_size = app_meta.minimum_portal_size.value.upper()
         behaviour.display_status = f"VM too small, need at least {display_size}"
         behaviour.do_reload = False

@@ -5,9 +5,8 @@ from typing import Optional, List, Dict, Union
 
 import gconf
 from pydantic import BaseModel, root_validator, validator
-from tinydb import Query
 
-from shard_core.database.database import installed_apps_table
+from shard_core.db.db_connection import db_conn
 from shard_core.data_model import app_meta_migration
 from shard_core.util import signals
 
@@ -154,15 +153,17 @@ class InstalledAppWithMeta(InstalledApp):
 
 
 @signals.on_request_to_app.connect
-def update_last_access(app: InstalledApp):
+async def update_last_access(app: InstalledApp):
+    from shard_core.db import installed_apps
+    
     now = datetime.datetime.utcnow()
     max_update_frequency = datetime.timedelta(
         seconds=gconf.get("apps.last_access.max_update_frequency")
     )
     if app.last_access and now - app.last_access < max_update_frequency:
         return
-    with installed_apps_table() as installed_apps:  # type: Table
-        installed_apps.update({"last_access": now}, Query().name == app.name)
+    async with db_conn() as conn:
+        await installed_apps.update(conn, app.name, last_access=now)
 
 
 if __name__ == "__main__":

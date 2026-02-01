@@ -3,7 +3,8 @@ import logging
 import time
 from typing import Dict
 
-from shard_core.database.database import installed_apps_table
+from shard_core.db import installed_apps
+from shard_core.db.db_connection import db_conn
 from shard_core.data_model.app_meta import InstalledApp, Status
 from shard_core.service import disk
 from shard_core.service.app_tools import (
@@ -21,11 +22,11 @@ background_tasks = set()
 
 
 @signals.on_request_to_app.connect
-def ensure_app_is_running(app: InstalledApp):
+async def ensure_app_is_running(app: InstalledApp):
     if disk.current_disk_usage.disk_space_low:
         return
     app_meta = get_app_metadata(app.name)
-    if size_is_compatible(app_meta.minimum_portal_size):
+    if await size_is_compatible(app_meta.minimum_portal_size):
         global last_access_dict
         last_access_dict[app.name] = time.time()
         task = asyncio.create_task(
@@ -36,13 +37,14 @@ def ensure_app_is_running(app: InstalledApp):
 
 
 async def control_apps():
-    with installed_apps_table() as installed_apps:
-        installed_apps = [
-            InstalledApp.parse_obj(a)
-            for a in installed_apps.all()
-            if a["status"] not in (Status.INSTALLATION_QUEUED, Status.INSTALLING)
-        ]
-    tasks = [_control_app(app.name) for app in installed_apps]
+    async with db_conn() as conn:
+        all_apps = await installed_apps.get_all(conn)
+    installed_apps_list = [
+        app
+        for app in all_apps
+        if app.status not in (Status.INSTALLATION_QUEUED, Status.INSTALLING)
+    ]
+    tasks = [_control_app(app.name) for app in installed_apps_list]
     await asyncio.gather(*tasks)
 
 
@@ -55,7 +57,7 @@ async def _control_app(name: str):
         return
 
     if app_meta.lifecycle.always_on:
-        if size_is_compatible(app_meta.minimum_portal_size):
+        if await size_is_compatible(app_meta.minimum_portal_size):
             await docker_start_app(app_meta.name)
     else:
         last_access = last_access_dict.get(app_meta.name, 0.0)

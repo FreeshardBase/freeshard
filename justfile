@@ -27,3 +27,12 @@ run-dev:
 
 run-dev-for-freeshard-controller:
     PYTHONUNBUFFERED=1 CONFIG=config.yml,local_config.yml UVICORN_PORT=8001 FREESHARD_FREESHARD_CONTROLLER_BASE_URL=http://127.0.0.1:8080 ./.venv/bin/fastapi dev --port 8081 shard_core/app.py
+
+postgres-start:
+    docker compose -f tests/docker-compose.yml up
+
+postgres-reset:
+    docker compose -f tests/docker-compose.yml rm -f
+
+postgres-connect:
+    docker exec -it test_postgres psql -U test_user -d test_db
