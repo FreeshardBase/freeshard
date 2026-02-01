@@ -104,7 +104,7 @@ async def lifespan(_):
         t.start()
 
     log.info("Startup complete")
-    print_welcome_log()
+    await print_welcome_log()
     yield  # === run app ===
     log.info("Shutting down")
 
@@ -170,9 +170,9 @@ def _copy_traefik_static_config():
         f.write(result)
 
 
-def print_welcome_log():
+async def print_welcome_log():
     params = {}
-    i = identity.get_default_identity()
+    i = await identity.get_default_identity()
     protocol = (
         "http"
         if str_to_bool(gconf.get("traefik.disable_ssl", default="false"))
@@ -182,10 +182,11 @@ def print_welcome_log():
     params["shard_id"] = i.short_id
     params["shard_url_centered"] = _center(shard_url)
 
-    is_first_start = terminals.count() == 0
+    async with db_conn() as conn:
+        is_first_start = await terminals.count(conn) == 0
     params["is_first_start"] = is_first_start
     if is_first_start:
-        pairing_code = make_pairing_code(deadline=10 * 60)
+        pairing_code = await make_pairing_code(deadline=10 * 60)
         pairing_link = f"{shard_url}/#/pair?code={pairing_code.code}"
         params["pairing_link_centered"] = _center(pairing_link)
 

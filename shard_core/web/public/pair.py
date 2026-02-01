@@ -22,7 +22,7 @@ router = APIRouter(
 @router.post("/terminal", status_code=status.HTTP_201_CREATED)
 async def add_terminal(code: str, terminal: InputTerminal, response: Response):
     try:
-        pairing.redeem_pairing_code(code)
+        await pairing.redeem_pairing_code(code)
     except (KeyError, pairing.InvalidPairingCode, pairing.PairingCodeExpired) as e:
         log.info(e)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED) from e
@@ -34,7 +34,7 @@ async def add_terminal(code: str, terminal: InputTerminal, response: Response):
     default_identity_data = identities.get_default()
     default_identity = Identity(**default_identity_data)
 
-    jwt = pairing.create_terminal_jwt(new_terminal.id)
+    jwt = await pairing.create_terminal_jwt(new_terminal.id)
     response.set_cookie(
         "authorization",
         jwt,

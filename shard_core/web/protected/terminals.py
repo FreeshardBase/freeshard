@@ -61,7 +61,7 @@ def delete_terminal_by_id(id_: str):
 @router.get(
     "/pairing-code", response_model=PairingCode, status_code=status.HTTP_201_CREATED
 )
-def new_pairing_code(deadline: int = None):
-    pairing_code = pairing.make_pairing_code(deadline=deadline)
+async def new_pairing_code(deadline: int = None):
+    pairing_code = await pairing.make_pairing_code(deadline=deadline)
     log.info("created new terminal pairing code")
     return pairing_code
