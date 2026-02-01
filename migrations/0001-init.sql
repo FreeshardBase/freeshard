@@ -10,7 +10,7 @@ CREATE TABLE identities (
 
 CREATE TABLE terminals (
     id integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
-    hash_id TEXT NOT NULL UNIQUE,
+    terminal_id TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
     icon TEXT DEFAULT 'unknown',
     last_connection TIMESTAMP
@@ -39,7 +39,7 @@ CREATE TABLE installed_apps (
 
 CREATE TABLE tours (
     id integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
-    hash_id TEXT NOT NULL UNIQUE,
+    tour_id TEXT NOT NULL UNIQUE,
     completed BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -70,12 +70,12 @@ CREATE TABLE backup_reports (
 CREATE INDEX idx_identities_is_default ON identities(is_default);
 CREATE INDEX idx_identities_hash_id ON identities(hash_id);
 CREATE INDEX idx_terminals_last_connection ON terminals(last_connection DESC);
-CREATE INDEX idx_terminals_hash_id ON terminals(hash_id);
+CREATE INDEX idx_terminals_terminal_id ON terminals(terminal_id);
 CREATE INDEX idx_peers_hash_id ON peers(hash_id);
 CREATE INDEX idx_installed_apps_status ON installed_apps(status);
 CREATE INDEX idx_installed_apps_name ON installed_apps(name);
 CREATE INDEX idx_installed_apps_last_access ON installed_apps(last_access);
-CREATE INDEX idx_tours_hash_id ON tours(hash_id);
+CREATE INDEX idx_tours_tour_id ON tours(tour_id);
 CREATE INDEX idx_app_usage_track_timestamp ON app_usage_track(timestamp DESC);
 CREATE INDEX idx_backup_reports_end_time ON backup_reports(end_time DESC);
 
