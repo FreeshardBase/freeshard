@@ -7,6 +7,7 @@ import gconf
 
 import shard_core.data_model.profile
 from shard_core.db import installed_apps
+from shard_core.db.db_connection import db_conn
 from shard_core.data_model.app_meta import (
     Status,
     AppMeta,
@@ -29,69 +30,72 @@ async def docker_create_app_containers(name: str):
 
 @throttle(5)
 async def docker_start_app(name: str):
-    app_data = installed_apps.get_by_name(name)
-    if not app_data:
-        log.error(f"App {name} not found in database")
-        return
-    
-    app_status = app_data["status"]
+    async with db_conn() as conn:
+        app_data = await installed_apps.get_by_name(conn, name)
+        if not app_data:
+            log.error(f"App {name} not found in database")
+            return
+        
+        app_status = app_data.status
 
-    if app_status in [Status.STOPPED, Status.RUNNING, Status.DOWN]:
-        log.debug(f"starting app {name=}")
-        await subprocess(
-            "docker-compose", "up", "-d", cwd=get_installed_apps_path() / name
-        )
-        installed_apps.update(name, status=Status.RUNNING)
-        signals.on_apps_update.send()
-    else:
-        log.debug(f"app {name=} has status {app_status}, skipping start")
+        if app_status in [Status.STOPPED, Status.RUNNING, Status.DOWN]:
+            log.debug(f"starting app {name=}")
+            await subprocess(
+                "docker-compose", "up", "-d", cwd=get_installed_apps_path() / name
+            )
+            await installed_apps.update(conn, name, status=Status.RUNNING)
+            signals.on_apps_update.send()
+        else:
+            log.debug(f"app {name=} has status {app_status}, skipping start")
 
 
 async def docker_stop_app(name: str, set_status: bool = True):
-    app_data = installed_apps.get_by_name(name)
-    if not app_data:
-        log.error(f"App {name} not found in database")
-        return
-    
-    app_status = app_data["status"]
-    
-    if app_status in [Status.RUNNING, Status.UNINSTALLING]:
-        await subprocess("docker-compose", "stop", cwd=get_installed_apps_path() / name)
-        if set_status:
-            installed_apps.update(name, status=Status.STOPPED)
-        signals.on_apps_update.send()
-    else:
-        log.debug(f"app {name=} has {app_status=}, skipping stop")
+    async with db_conn() as conn:
+        app_data = await installed_apps.get_by_name(conn, name)
+        if not app_data:
+            log.error(f"App {name} not found in database")
+            return
+        
+        app_status = app_data.status
+        
+        if app_status in [Status.RUNNING, Status.UNINSTALLING]:
+            await subprocess("docker-compose", "stop", cwd=get_installed_apps_path() / name)
+            if set_status:
+                await installed_apps.update(conn, name, status=Status.STOPPED)
+            signals.on_apps_update.send()
+        else:
+            log.debug(f"app {name=} has {app_status=}, skipping stop")
 
 
 async def docker_shutdown_app(name: str, set_status: bool = True, force: bool = False):
-    app_data = installed_apps.get_by_name(name)
-    if not app_data:
-        log.error(f"App {name} not found in database")
-        return
-    
-    app_status = app_data["status"]
-    
-    if force or app_status in [Status.STOPPED, Status.UNINSTALLING]:
-        await subprocess("docker-compose", "down", cwd=get_installed_apps_path() / name)
-        if set_status:
-            installed_apps.update(name, status=Status.DOWN)
-        signals.on_apps_update.send()
-    else:
-        log.debug(f"app {name=} has {app_status=}, skipping shutdown")
+    async with db_conn() as conn:
+        app_data = await installed_apps.get_by_name(conn, name)
+        if not app_data:
+            log.error(f"App {name} not found in database")
+            return
+        
+        app_status = app_data.status
+        
+        if force or app_status in [Status.STOPPED, Status.UNINSTALLING]:
+            await subprocess("docker-compose", "down", cwd=get_installed_apps_path() / name)
+            if set_status:
+                await installed_apps.update(conn, name, status=Status.DOWN)
+            signals.on_apps_update.send()
+        else:
+            log.debug(f"app {name=} has {app_status=}, skipping shutdown")
 
 
 async def docker_stop_all_apps():
-    apps_data = installed_apps.get_all()
-    apps = [InstalledApp.parse_obj(a) for a in apps_data]
-    tasks = [docker_stop_app(app.name) for app in apps]
+    async with db_conn() as conn:
+        apps_data = await installed_apps.get_all(conn)
+    tasks = [docker_stop_app(app.name) for app in apps_data]
     await asyncio.gather(*tasks)
 
 
 async def docker_shutdown_all_apps(force: bool = False):
-    apps_data = installed_apps.get_all()
-    apps = [InstalledApp.parse_obj(a) for a in apps_data]
-    tasks = [docker_shutdown_app(app.name, force=force) for app in apps]
+    async with db_conn() as conn:
+        apps_data = await installed_apps.get_all(conn)
+    tasks = [docker_shutdown_app(app.name, force=force) for app in apps_data]
     await asyncio.gather(*tasks)
 
 

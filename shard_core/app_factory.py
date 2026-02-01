@@ -54,7 +54,6 @@ def create_app():
     configure_logging()
 
     migrate()  # Run database migrations at startup (synchronous)
-    identity.init_default_identity()
     _copy_traefik_static_config()
 
     app_meta = metadata("shard_core")
@@ -89,11 +88,12 @@ async def lifespan(_):
     # Initialize database connection pool
     await make_and_open_connection_pool()
     
+    await identity.init_default_identity()
     await write_traefik_dyn_config()
     await app_installation.login_docker_registries()
     await migration.migrate()
     await app_installation.refresh_init_apps()
-    backup.ensure_backup_passphrase()
+    await backup.ensure_backup_passphrase()
     try:
         await portal_controller.refresh_profile()
     except (ConnectionError, HTTPError, ValidationError) as e:

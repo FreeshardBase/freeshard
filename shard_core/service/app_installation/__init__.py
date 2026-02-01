@@ -3,6 +3,7 @@ import logging
 import gconf
 
 from shard_core.db import installed_apps
+from shard_core.db.db_connection import db_conn
 from shard_core.data_model.app_meta import InstallationReason, InstalledApp, Status
 from shard_core.util import signals
 from shard_core.util.subprocess import subprocess, SubprocessError
@@ -19,7 +20,7 @@ async def install_app_from_store(
     if not await util.app_exists_in_store(name):
         raise AppDoesNotExist(name)
 
-    if util.app_exists_in_db(name):
+    if await util.app_exists_in_db(name):
         raise AppAlreadyInstalled(name)
 
     installed_app = InstalledApp(
@@ -27,7 +28,8 @@ async def install_app_from_store(
         installation_reason=installation_reason,
         status=Status.INSTALLATION_QUEUED,
     )
-    installed_apps.insert(installed_app.dict())
+    async with db_conn() as conn:
+        await installed_apps.insert(conn, installed_app.dict())
 
     installation_task = worker.InstallationTask(
         app_name=name,
@@ -41,7 +43,7 @@ async def install_app_from_store(
 async def install_app_from_existing_zip(
     name: str, installation_reason: InstallationReason = InstallationReason.CUSTOM
 ):
-    if util.app_exists_in_db(name):
+    if await util.app_exists_in_db(name):
         raise AppAlreadyInstalled(name)
 
     installed_app = InstalledApp(
@@ -49,7 +51,8 @@ async def install_app_from_existing_zip(
         installation_reason=installation_reason,
         status=Status.INSTALLATION_QUEUED,
     )
-    installed_apps.insert(installed_app.dict())
+    async with db_conn() as conn:
+        await installed_apps.insert(conn, installed_app.dict())
 
     installation_task = worker.InstallationTask(
         app_name=name,
@@ -60,11 +63,11 @@ async def install_app_from_existing_zip(
     log.info(f"created {installation_task}")
 
 
-def uninstall_app(name: str):
-    if not util.app_exists_in_db(name):
+async def uninstall_app(name: str):
+    if not await util.app_exists_in_db(name):
         raise AppNotInstalled(name)
 
-    util.update_app_status(name, Status.UNINSTALLATION_QUEUED)
+    await util.update_app_status(name, Status.UNINSTALLATION_QUEUED)
 
     uninstallation_task = worker.InstallationTask(
         app_name=name,
@@ -80,10 +83,10 @@ async def reinstall_app(name: str):
     if not await util.app_exists_in_store(name):
         raise AppDoesNotExist(name)
 
-    if not util.app_exists_in_db(name):
+    if not await util.app_exists_in_db(name):
         raise AppNotInstalled(name)
 
-    util.update_app_status(name, Status.REINSTALLATION_QUEUED)
+    await util.update_app_status(name, Status.REINSTALLATION_QUEUED)
 
     reinstallation_task = worker.InstallationTask(
         app_name=name,
@@ -96,8 +99,9 @@ async def reinstall_app(name: str):
 
 async def refresh_init_apps():
     configured_init_apps = set(gconf.get("apps.initial_apps"))
-    all_apps = installed_apps.get_all()
-    installed_apps_set = {app["name"] for app in all_apps}
+    async with db_conn() as conn:
+        all_apps = await installed_apps.get_all(conn)
+    installed_apps_set = {app.name for app in all_apps}
 
     for app_name in configured_init_apps - installed_apps_set:
         log.info(f"installing initial app {app_name}")

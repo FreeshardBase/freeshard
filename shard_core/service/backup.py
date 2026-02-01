@@ -11,6 +11,7 @@ import gconf
 from requests import HTTPError
 
 from shard_core.db import backup_reports, key_value
+from shard_core.db.db_connection import db_conn
 from shard_core.data_model.backup import (
     BackupReport,
     BackupStats,
@@ -116,11 +117,13 @@ async def backup_directories(
         overall_end_time = datetime.datetime.now(datetime.timezone.utc)
         
         # Store one backup report with all directories in JSON
-        backup_reports.insert(
-            start_time=overall_start_time,
-            end_time=overall_end_time,
-            directories=[dir_stat.dict() for dir_stat in dir_stats]
-        )
+        async with db_conn() as conn:
+            await backup_reports.insert(
+                conn,
+                start_time=overall_start_time,
+                end_time=overall_end_time,
+                directories=[dir_stat.dict() for dir_stat in dir_stats]
+            )
         log.info("Backup done")
 
 
@@ -155,7 +158,8 @@ async def _backup_directory(
 
 
 async def _get_obscured_passphrase():
-    passphrase = key_value.get(STORE_KEY_BACKUP_PASSPHRASE)
+    async with db_conn() as conn:
+        passphrase = await key_value.get(conn, STORE_KEY_BACKUP_PASSPHRASE)
     obscured_passphrase = subprocess.run(
         ["rclone", "obscure", passphrase], capture_output=True, text=True
     ).stdout.strip()
@@ -167,44 +171,35 @@ def _get_relative_directory(directory: Path) -> Path:
     return directory.relative_to(path_root)
 
 
-def get_latest_backup_report() -> BackupReport | None:
-    latest = backup_reports.get_latest()
+async def get_latest_backup_report() -> BackupReport | None:
+    async with db_conn() as conn:
+        latest = await backup_reports.get_latest(conn)
     if latest:
-        # Parse directories from JSON field
-        directories_data = latest['directories']
-        if isinstance(directories_data, str):
-            import json
-            directories_data = json.loads(directories_data)
-        
-        dir_stats = [BackupStats.parse_obj(d) for d in directories_data]
-        
-        return BackupReport(
-            directories=dir_stats,
-            startTime=latest['start_time'],
-            endTime=latest['end_time'],
-        )
+        return latest
     return None
 
 
-def ensure_backup_passphrase():
-    try:
-        key_value.get(STORE_KEY_BACKUP_PASSPHRASE)
-    except KeyError:
-        passphrase_numbers = passphrase_util.generate_passphrase_numbers(10)
-        passphrase = passphrase_util.get_passphrase(passphrase_numbers)
-        key_value.set(STORE_KEY_BACKUP_PASSPHRASE, passphrase)
-        log.info("Generated new backup passphrase")
-    else:
-        log.info("Backup passphrase already exists")
+async def ensure_backup_passphrase():
+    async with db_conn() as conn:
+        try:
+            await key_value.get(conn, STORE_KEY_BACKUP_PASSPHRASE)
+        except KeyError:
+            passphrase_numbers = passphrase_util.generate_passphrase_numbers(10)
+            passphrase = passphrase_util.get_passphrase(passphrase_numbers)
+            await key_value.set(conn, STORE_KEY_BACKUP_PASSPHRASE, passphrase)
+            log.info("Generated new backup passphrase")
+        else:
+            log.info("Backup passphrase already exists")
 
 
-def get_backup_passphrase(terminal_id: str) -> str:
-    passphrase = key_value.get(STORE_KEY_BACKUP_PASSPHRASE)
-    last_access_info = BackupPassphraseLastAccessInfoDB(
-        time=datetime.datetime.now(datetime.timezone.utc),
-        terminal_id=terminal_id,
-    )
-    key_value.set(STORE_KEY_BACKUP_PASSPHRASE_LAST_ACCESS, last_access_info.dict())
+async def get_backup_passphrase(terminal_id: str) -> str:
+    async with db_conn() as conn:
+        passphrase = await key_value.get(conn, STORE_KEY_BACKUP_PASSPHRASE)
+        last_access_info = BackupPassphraseLastAccessInfoDB(
+            time=datetime.datetime.now(datetime.timezone.utc),
+            terminal_id=terminal_id,
+        )
+        await key_value.set(conn, STORE_KEY_BACKUP_PASSPHRASE_LAST_ACCESS, last_access_info.dict())
     return passphrase
 
 

@@ -2,8 +2,8 @@ import logging
 
 from fastapi import Header, HTTPException, APIRouter, status
 
-from shard_core.database import database
 from shard_core.db import terminals
+from shard_core.db.db_connection import db_conn
 from shard_core.data_model.backup import (
     BackupPassphraseResponse,
     BackupInfoResponse,
@@ -22,23 +22,22 @@ router = APIRouter(
 
 @router.get("/info", response_model=BackupInfoResponse)
 async def get_backup_info():
-    try:
-        last_access_info_db = BackupPassphraseLastAccessInfoDB.parse_obj(
-            database.get_value(backup.STORE_KEY_BACKUP_PASSPHRASE_LAST_ACCESS)
-        )
-    except KeyError:
-        last_access_info_response = None
-    else:
-        terminal_data = terminals.get_by_id(last_access_info_db.terminal_id)
-        terminal_name = (
-            Terminal.parse_obj(terminal_data).name if terminal_data else "Unknown"
-        )
-        last_access_info_response = BackupPassphraseLastAccessInfoResponse(
-            **last_access_info_db.dict(), terminal_name=terminal_name
-        )
+    async with db_conn() as conn:
+        try:
+            from shard_core.db import key_value
+            last_access_info_data = await key_value.get(conn, backup.STORE_KEY_BACKUP_PASSPHRASE_LAST_ACCESS)
+            last_access_info_db = BackupPassphraseLastAccessInfoDB.parse_obj(last_access_info_data)
+        except KeyError:
+            last_access_info_response = None
+        else:
+            terminal_data = await terminals.get_by_id(conn, last_access_info_db.terminal_id)
+            terminal_name = terminal_data.name if terminal_data else "Unknown"
+            last_access_info_response = BackupPassphraseLastAccessInfoResponse(
+                **last_access_info_db.dict(), terminal_name=terminal_name
+            )
 
     return BackupInfoResponse(
-        last_report=backup.get_latest_backup_report(),
+        last_report=await backup.get_latest_backup_report(),
         last_passphrase_access_info=last_access_info_response,
     )
 
@@ -47,7 +46,7 @@ async def get_backup_info():
 async def get_backup_passphrase(x_ptl_client_id: str = Header(None)):
     if not x_ptl_client_id:
         raise HTTPException(status_code=400, detail="Missing X-Ptl-Client-Id header")
-    passphrase = backup.get_backup_passphrase(x_ptl_client_id)
+    passphrase = await backup.get_backup_passphrase(x_ptl_client_id)
     return BackupPassphraseResponse(passphrase=passphrase)
 
 
