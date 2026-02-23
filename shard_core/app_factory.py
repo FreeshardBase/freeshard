@@ -32,6 +32,7 @@ from .service.app_tools import (
     docker_stop_all_apps,
     docker_shutdown_all_apps,
     docker_prune_images,
+    scheduled_docker_prune_images,
 )
 
 from tinydb import Query
@@ -129,7 +130,7 @@ def _make_background_tasks() -> List[BackgroundTask]:
             gconf.get("apps.usage_reporting.reporting_schedule"),
         ),
         CronTask(
-            docker_prune_images,
+            scheduled_docker_prune_images,
             gconf.get("apps.pruning.schedule"),
         ),
         CronTask(

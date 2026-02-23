@@ -42,6 +42,7 @@ apps:
   pruning:
     schedule: '0 4 * * *'
     max_age: 24
+    enabled: false
 
 telemetry:
   enabled: false
