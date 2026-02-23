@@ -2,7 +2,7 @@ import pytest
 from httpx import AsyncClient
 
 import gconf
-from shard_core.service.app_tools import docker_prune_images
+from shard_core.service.app_tools import docker_prune_images, scheduled_docker_prune_images
 from tests.conftest import requires_test_env
 from tests.util import retry_async
 
@@ -30,5 +30,7 @@ async def test_docker_prune_manually(
 @requires_test_env("full")
 async def test_docker_prune_disabled(api_client, memory_logger):
     with gconf.override_conf({"apps": {"pruning": {"enabled": False}}}):
-        await docker_prune_images()
-    assert not any(["docker images pruned" in r.msg for r in memory_logger.records])
+        await scheduled_docker_prune_images()
+    assert any(
+        ["docker image pruning is disabled, skipping" in r.msg for r in memory_logger.records]
+    )
