@@ -5,19 +5,16 @@ from shard_core.service import telemetry
 from unittest.mock import AsyncMock, patch
 from fastapi import status
 
+from tests import util
 from tests.conftest import requires_test_env
-from tests.util import pair_new_terminal, wait_until_app_installed
+from tests.util import pair_new_terminal
 import gconf
 
 
 @requires_test_env("full")
 async def test_telemetry_recording(api_client):
     app_name = "mock_app"
-
-    response = await api_client.post(f"protected/apps/{app_name}")
-    assert response.status_code == status.HTTP_201_CREATED
-
-    await wait_until_app_installed(api_client, app_name)
+    await util.install_app(api_client, app_name)
 
     await pair_new_terminal(api_client)
 
