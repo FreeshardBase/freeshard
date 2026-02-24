@@ -12,11 +12,11 @@ from tests.conftest import requires_test_env
 @requires_test_env("full")
 async def test_refresh_shared_secret(api_client: AsyncClient, requests_mock):
     with pytest.raises(KeyError):
-        database.get_value(STORE_KEY_FREESHARD_CONTROLLER_SHARED_KEY)
+        await database.get_value(STORE_KEY_FREESHARD_CONTROLLER_SHARED_KEY)
 
     await freeshard_controller.refresh_shared_secret()
 
-    assert database.get_value(STORE_KEY_FREESHARD_CONTROLLER_SHARED_KEY)
+    assert await database.get_value(STORE_KEY_FREESHARD_CONTROLLER_SHARED_KEY)
 
 
 @requires_test_env("full")

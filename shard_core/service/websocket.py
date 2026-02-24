@@ -7,7 +7,9 @@ from typing import Dict, List, Tuple
 from pydantic import BaseModel
 from starlette.websockets import WebSocket
 
-from shard_core.database.database import terminals_table, installed_apps_table
+from shard_core.database.connection import db_conn
+from shard_core.database import terminals as terminals_db
+from shard_core.database import installed_apps as installed_apps_db
 from shard_core.data_model.app_meta import InstalledApp
 from shard_core.data_model.terminal import Terminal
 from shard_core.service.app_tools import enrich_installed_app_with_meta
@@ -113,8 +115,12 @@ def send_disk_usage_update(disk_usage: DiskUsage):
 
 @signals.on_terminals_update.connect
 def send_terminals_update(_):
-    with terminals_table() as terminals:  # type: Table
-        all_terminals = terminals.all()
+    asyncio.create_task(_send_terminals_update_async())
+
+
+async def _send_terminals_update_async():
+    async with db_conn() as conn:
+        all_terminals = await terminals_db.get_all(conn)
     ws_worker.broadcast_message("terminals_update", all_terminals)
 
 
@@ -125,10 +131,14 @@ def send_terminal_add(terminal: Terminal):
 
 @signals.on_apps_update.connect
 def send_apps_update(_):
-    with installed_apps_table() as installed_apps:
-        all_apps = installed_apps.all()
+    asyncio.create_task(_send_apps_update_async())
+
+
+async def _send_apps_update_async():
+    async with db_conn() as conn:
+        all_apps_rows = await installed_apps_db.get_all(conn)
     enriched_apps = [
-        enrich_installed_app_with_meta(InstalledApp.parse_obj(app)) for app in all_apps
+        enrich_installed_app_with_meta(InstalledApp.parse_obj(app)) for app in all_apps_rows
     ]
     ws_worker.broadcast_message("apps_update", enriched_apps)
 

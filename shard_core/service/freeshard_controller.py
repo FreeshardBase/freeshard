@@ -22,7 +22,7 @@ async def refresh_shared_secret():
     response = await call_freeshard_controller("api/shards/self")
     shard = ShardDb.validate(response.json())
     shared_secret = shard.shared_secret
-    database.set_value(STORE_KEY_FREESHARD_CONTROLLER_SHARED_KEY, shared_secret)
+    await database.set_value(STORE_KEY_FREESHARD_CONTROLLER_SHARED_KEY, shared_secret)
     return shared_secret
 
 
@@ -31,7 +31,7 @@ async def validate_shared_secret(secret: str):
         raise SharedSecretInvalid
 
     try:
-        expected_shared_secret = database.get_value(
+        expected_shared_secret = await database.get_value(
             STORE_KEY_FREESHARD_CONTROLLER_SHARED_KEY
         )
     except KeyError:

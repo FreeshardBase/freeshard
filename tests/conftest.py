@@ -44,18 +44,59 @@ from tests.util import (
 pytest_plugins = ("pytest_asyncio",)
 
 
+@pytest.fixture(scope="session")
+def docker_compose_file():
+    return str(Path(__file__).parent / "docker-compose.yml")
+
+
+@pytest.fixture(scope="session")
+def docker_compose_project_name():
+    return "shard-core-test"
+
+
+def is_responsive(url):
+    import psycopg
+
+    try:
+        conn = psycopg.connect(url)
+        conn.close()
+        return True
+    except psycopg.OperationalError:
+        return False
+
+
+@pytest.fixture(scope="session")
+def postgres_db(docker_services):
+    """Start Postgres and wait until it is responsive."""
+    port = docker_services.port_for("postgres", 5432)
+    conninfo = f"host=localhost port={port} dbname=shard_core_test user=shard_core_test password=shard_core_test"
+    docker_services.wait_until_responsive(
+        timeout=30.0,
+        pause=0.5,
+        check=lambda: is_responsive(conninfo),
+    )
+    return {
+        "host": "localhost",
+        "port": port,
+        "dbname": "shard_core_test",
+        "user": "shard_core_test",
+        "password": "shard_core_test",
+    }
+
+
 @pytest.fixture(autouse=True, scope="session")
-def setup_all():
+def setup_all(postgres_db):
     # Logging in with each api_client hit a rate limit or something.
     # We do it one time here, and then patch the login function to noop for each api_client
     asyncio.run(app_installation.login_docker_registries())
 
 
 @pytest.fixture(autouse=True)
-def config_override(tmp_path, request):
+def config_override(tmp_path, request, postgres_db):
     print(f"\nUsing temp path: {tmp_path}")
     tempfile_override = {
         "path_root": f"{tmp_path}/path_root",
+        "db": postgres_db,
     }
 
     # Detects the variable named *config_override* of a test module
@@ -71,6 +112,16 @@ def config_override(tmp_path, request):
         gconf.override_conf(function_override),
     ):
         yield
+
+
+@pytest_asyncio.fixture
+async def db():
+    """Initialize and tear down the database for tests that don't use api_client."""
+    from shard_core.database import database
+
+    await database.init_database()
+    yield
+    await database.shutdown_database()
 
 
 @pytest_asyncio.fixture

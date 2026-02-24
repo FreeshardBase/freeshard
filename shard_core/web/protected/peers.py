@@ -2,10 +2,10 @@ import logging
 from typing import List
 
 from fastapi import APIRouter, HTTPException, status
-from tinydb import Query
 
 import shard_core.service.peer as peer_service
-from shard_core.database.database import peers_table
+from shard_core.database.connection import db_conn
+from shard_core.database import peers as peers_db
 from shard_core.data_model.peer import Peer, InputPeer
 from shard_core.util import signals
 
@@ -17,41 +17,36 @@ router = APIRouter(
 
 
 @router.get("", response_model=List[Peer])
-def list_all_peers(name: str = None):
-    with peers_table() as peers:  # type: Table
+async def list_all_peers(name: str = None):
+    async with db_conn() as conn:
         if name:
-            return peers.search(Query().name.search(name))
+            return await peers_db.search_by_name(conn, name)
         else:
-            return peers.all()
+            return await peers_db.get_all(conn)
 
 
 @router.get("/{id}", response_model=Peer)
-def get_peer_by_id(id):
+async def get_peer_by_id(id):
     try:
-        return peer_service.get_peer_by_id(id)
+        return await peer_service.get_peer_by_id(id)
     except KeyError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=e)
 
 
 @router.put("", response_model=Peer)
 async def put_peer(p: InputPeer):
-    with peers_table() as peers:  # type: Table
-        if peers.get(Query().id.matches(f"{p.id}:*")):
-            peers.update(p.dict(exclude={"id"}), Query().id.matches(f"{p.id}:*"))
-            log.debug(f"updated {p}")
-        else:
-            peers.insert(p.dict())
-            log.info(f"added {p}")
+    async with db_conn() as conn:
+        await peers_db.upsert(conn, p.dict())
     await signals.async_on_peer_write.send_async(Peer(**p.dict()))
     return p
 
 
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_peer(id):
-    with peers_table() as peers:  # type: Table
-        deleted = peers.remove(Query().id.matches(f"{id}:*"))
-        if len(deleted) > 1:
-            log.critical(
-                f"during deleting of peer {id}, {len(deleted)} peers were deleted"
-            )
-        log.info(f"removed peer {deleted[0]}")
+async def delete_peer(id):
+    async with db_conn() as conn:
+        deleted = await peers_db.remove_by_id_prefix(conn, id)
+    if deleted > 1:
+        log.critical(
+            f"during deleting of peer {id}, {deleted} peers were deleted"
+        )
+    log.info(f"removed peer {id}")
