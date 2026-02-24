@@ -12,6 +12,8 @@ from .exceptions import AppAlreadyInstalled, AppDoesNotExist, AppNotInstalled
 
 log = logging.getLogger(__name__)
 
+STORE_KEY_INITIAL_APPS_INSTALLED = "initial_apps_installed"
+
 
 async def install_app_from_store(
     name: str,
@@ -99,7 +101,7 @@ async def reinstall_app(name: str):
 
 async def refresh_init_apps():
     try:
-        database.get_value("initial_apps_installed")
+        database.get_value(STORE_KEY_INITIAL_APPS_INSTALLED)
         log.debug("initial apps already installed on first startup, skipping")
         return
     except KeyError:
@@ -113,7 +115,7 @@ async def refresh_init_apps():
         log.info(f"installing initial app {app_name}")
         await install_app_from_store(app_name, InstallationReason.CONFIG)
 
-    database.set_value("initial_apps_installed", True)
+    database.set_value(STORE_KEY_INITIAL_APPS_INSTALLED, True)
     log.debug("refreshed initial apps")
 
 
