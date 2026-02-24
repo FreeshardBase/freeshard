@@ -4,7 +4,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 from shard_core.data_model.backend.shard_model import ShardBase
-from shard_core.database.database import set_value, get_value
+from shard_core.database import database
 from shard_core.data_model.app_meta import VMSize
 
 
@@ -34,10 +34,10 @@ class Profile(BaseModel):
         )
 
 
-def set_profile(profile: Profile | None):
-    set_value("profile", profile.dict() if profile else "None")
+async def set_profile(profile: Profile | None):
+    await database.set_value("profile", profile.dict() if profile else "None")
 
 
-def get_profile() -> Profile | None:
-    value = get_value("profile")
+async def get_profile() -> Profile | None:
+    value = await database.get_value("profile")
     return None if value == "None" else Profile.parse_obj(value)

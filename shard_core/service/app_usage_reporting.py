@@ -5,9 +5,10 @@ from datetime import datetime, date, timedelta
 import gconf
 from requests import HTTPError
 from starlette import status
-from tinydb import Query
 
-from shard_core.database.database import installed_apps_table, app_usage_track_table
+from shard_core.database.connection import db_conn
+from shard_core.database import installed_apps as installed_apps_db
+from shard_core.database import app_usage as app_usage_db
 from shard_core.data_model.app_meta import InstalledApp
 from shard_core.data_model.app_usage import AppUsageTrack, AppUsageReport
 from shard_core.service.signed_call import signed_request
@@ -16,13 +17,14 @@ log = logging.getLogger(__name__)
 
 
 async def track_currently_installed_apps():
-    with installed_apps_table() as installed_apps:  # type: Table
-        all_apps = [InstalledApp.parse_obj(a) for a in installed_apps.all()]
+    async with db_conn() as conn:
+        all_apps_rows = await installed_apps_db.get_all(conn)
+    all_apps = [InstalledApp.parse_obj(a) for a in all_apps_rows]
     track = AppUsageTrack(
         timestamp=datetime.utcnow(), installed_apps=[app.name for app in all_apps]
     )
-    with app_usage_track_table() as tracks:  # type: Table
-        tracks.insert(track.dict())
+    async with db_conn() as conn:
+        await app_usage_db.insert(conn, track.dict())
     log.debug(f"created app usage track for {len(track.installed_apps)} apps")
 
 
@@ -36,10 +38,8 @@ async def report_app_usage():
 
     report = AppUsageReport(year=start.year, month=start.month, usage={})
 
-    with app_usage_track_table() as tracks:  # type: Table
-        relevant_tracks = tracks.search(
-            (start <= Query().timestamp) & (Query().timestamp < end)
-        )
+    async with db_conn() as conn:
+        relevant_tracks = await app_usage_db.search_by_time_range(conn, start, end)
 
     if not relevant_tracks:
         log.warning("no app usage tracks found for reporting")

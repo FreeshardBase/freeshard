@@ -7,9 +7,10 @@ import httpx
 import jinja2
 import pydantic
 import yaml
-from tinydb import Query
 
-from shard_core.database.database import installed_apps_table, identities_table
+from shard_core.database.connection import db_conn
+from shard_core.database import installed_apps as installed_apps_db
+from shard_core.database import identities as identities_db
 from shard_core.data_model.app_meta import Status, InstalledApp
 from shard_core.data_model.identity import Identity, SafeIdentity
 from shard_core.service.app_installation.exceptions import AppInIllegalStatus
@@ -20,17 +21,18 @@ from shard_core.util import signals
 log = logging.getLogger(__name__)
 
 
-def get_app_from_db(app_name: str) -> InstalledApp:
-    with installed_apps_table() as installed_apps:
-        if record := installed_apps.get(Query().name == app_name):
+async def get_app_from_db(app_name: str) -> InstalledApp:
+    async with db_conn() as conn:
+        record = await installed_apps_db.get_by_name(conn, app_name)
+        if record:
             return InstalledApp.parse_obj(record)
         else:
             raise KeyError(app_name)
 
 
-def app_exists_in_db(app_name: str) -> bool:
-    with installed_apps_table() as installed_apps:
-        return installed_apps.contains(Query().name == app_name)
+async def app_exists_in_db(app_name: str) -> bool:
+    async with db_conn() as conn:
+        return await installed_apps_db.contains(conn, app_name)
 
 
 def assert_app_status(installed_app: InstalledApp, *allowed_status: Status):
@@ -40,12 +42,10 @@ def assert_app_status(installed_app: InstalledApp, *allowed_status: Status):
         )
 
 
-def update_app_status(app_name: str, status: Status, message: str | None = None):
-    with installed_apps_table() as installed_apps:
-        updated_docs = installed_apps.update(
-            {"status": status}, Query().name == app_name
-        )
-    if len(updated_docs) == 0:
+async def update_app_status(app_name: str, status: Status, message: str | None = None):
+    async with db_conn() as conn:
+        updated = await installed_apps_db.update_status(conn, app_name, status)
+    if updated == 0:
         raise KeyError(app_name)
     log.debug(
         f"status of {app_name} updated to {status}"
@@ -71,10 +71,9 @@ async def render_docker_compose_template(app: InstalledApp):
         "installation_dir": f'{gconf.get("path_root_host")}/core/installed_apps/{app.name}',
     }
 
-    with identities_table() as identities:
-        default_identity = Identity(
-            **identities.get(Query().is_default == True)
-        )  # noqa: E712
+    async with db_conn() as conn:
+        default_identity_row = await identities_db.get_default(conn)
+    default_identity = Identity(**default_identity_row)
     portal = SafeIdentity.from_identity(default_identity)
 
     app_dir = get_installed_apps_path() / app.name
@@ -89,22 +88,22 @@ async def render_docker_compose_template(app: InstalledApp):
 
 async def write_traefik_dyn_config():
     log.debug("updating traefik dynamic config")
-    with installed_apps_table() as installed_apps:
-        installed_apps = [
-            InstalledApp(**a)
-            for a in installed_apps.all()
-            if a["status"] != Status.INSTALLATION_QUEUED
-        ]
+    async with db_conn() as conn:
+        all_apps_rows = await installed_apps_db.get_all(conn)
+    installed_apps = [
+        InstalledApp(**a)
+        for a in all_apps_rows
+        if a["status"] != Status.INSTALLATION_QUEUED
+    ]
     app_infos = [
         AppInfo(get_app_metadata(a.name), installed_app=a)
         for a in installed_apps
         if a.status != Status.ERROR
     ]
 
-    with identities_table() as identities:
-        default_identity = Identity(
-            **identities.get(Query().is_default == True)
-        )  # noqa: E712
+    async with db_conn() as conn:
+        default_identity_row = await identities_db.get_default(conn)
+    default_identity = Identity(**default_identity_row)
     portal = SafeIdentity.from_identity(default_identity)
 
     traefik_dyn_filename = (

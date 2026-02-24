@@ -1,9 +1,10 @@
 import logging
 
 from fastapi import APIRouter, HTTPException, status, Response
-from tinydb import Query
 
-from shard_core.database.database import terminals_table, identities_table
+from shard_core.database.connection import db_conn
+from shard_core.database import terminals as terminals_db
+from shard_core.database import identities as identities_db
 from shard_core.data_model.identity import Identity
 from shard_core.data_model.terminal import Terminal, InputTerminal
 from shard_core.service import pairing
@@ -23,22 +24,22 @@ router = APIRouter(
 @router.post("/terminal", status_code=status.HTTP_201_CREATED)
 async def add_terminal(code: str, terminal: InputTerminal, response: Response):
     try:
-        pairing.redeem_pairing_code(code)
+        await pairing.redeem_pairing_code(code)
     except (KeyError, pairing.InvalidPairingCode, pairing.PairingCodeExpired) as e:
         log.info(e)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED) from e
 
     new_terminal = Terminal.create(terminal.name)
-    with terminals_table() as terminals:  # type: Table
-        terminals.insert(new_terminal.dict())
-        is_first_terminal = terminals.count(Query().noop()) == 1
+    async with db_conn() as conn:
+        await terminals_db.insert(conn, new_terminal.dict())
+        terminal_count = await terminals_db.count(conn)
+        is_first_terminal = terminal_count == 1
 
-    with identities_table() as identities:  # type: Table
-        default_identity = Identity(
-            **identities.get(Query().is_default == True)
-        )  # noqa: E712
+    async with db_conn() as conn:
+        default_identity_row = await identities_db.get_default(conn)
+    default_identity = Identity(**default_identity_row)
 
-    jwt = pairing.create_terminal_jwt(new_terminal.id)
+    jwt = await pairing.create_terminal_jwt(new_terminal.id)
     response.set_cookie(
         "authorization",
         jwt,

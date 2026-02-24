@@ -1,6 +1,13 @@
 path_root: "/"
 path_root_host: "/home/shard"
 
+db:
+  host: postgres
+  port: 5432
+  dbname: shard_core
+  user: shard_core
+  password: shard_core
+
 dns:
   zone: freeshard.cloud
   prefix length: 6
