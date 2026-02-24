@@ -16,7 +16,9 @@ async def get_all(conn: AsyncConnection) -> list[dict]:
 
 async def get_by_name(conn: AsyncConnection, name: str) -> Optional[dict]:
     async with conn.cursor(row_factory=dict_row) as cur:
-        await cur.execute("SELECT * FROM installed_apps WHERE name = %(name)s", {"name": name})
+        await cur.execute(
+            "SELECT * FROM installed_apps WHERE name = %(name)s", {"name": name}
+        )
         return await cur.fetchone()
 
 
@@ -60,13 +62,17 @@ async def update_last_access(conn: AsyncConnection, name: str, last_access: date
 
 async def contains(conn: AsyncConnection, name: str) -> bool:
     async with conn.cursor() as cur:
-        await cur.execute("SELECT 1 FROM installed_apps WHERE name = %(name)s", {"name": name})
+        await cur.execute(
+            "SELECT 1 FROM installed_apps WHERE name = %(name)s", {"name": name}
+        )
         return await cur.fetchone() is not None
 
 
 async def remove(conn: AsyncConnection, name: str):
     async with conn.cursor() as cur:
-        await cur.execute("DELETE FROM installed_apps WHERE name = %(name)s", {"name": name})
+        await cur.execute(
+            "DELETE FROM installed_apps WHERE name = %(name)s", {"name": name}
+        )
 
 
 async def count(conn: AsyncConnection) -> int:

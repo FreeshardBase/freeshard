@@ -31,7 +31,9 @@ async def get_backup_info():
         last_access_info_response = None
     else:
         async with db_conn() as conn:
-            terminal_db = await terminals_db.get_by_id(conn, last_access_info_db.terminal_id)
+            terminal_db = await terminals_db.get_by_id(
+                conn, last_access_info_db.terminal_id
+            )
         terminal_name = (
             Terminal.parse_obj(terminal_db).name if terminal_db else "Unknown"
         )

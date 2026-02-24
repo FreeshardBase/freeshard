@@ -5,7 +5,6 @@ from starlette import status
 
 from shard_core.data_model.backend.shard_model import ShardDb
 from shard_core.database.connection import db_conn
-from shard_core.database import terminals as terminals_db
 from shard_core.data_model.terminal import Terminal, Icon
 from tests.conftest import requests_mock_context, mock_shard, requires_test_env
 from tests.util import get_pairing_code, add_terminal, pair_new_terminal

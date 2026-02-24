@@ -24,7 +24,7 @@ async def test_refresh_init_apps_skipped_if_flag_set(db, mocker):
     mock_install.assert_not_called()
 
 
-async def test_refresh_init_apps_installs_on_first_startup(mocker):
+async def test_refresh_init_apps_installs_on_first_startup(db, mocker):
     await database.remove_value(STORE_KEY_INITIAL_APPS_INSTALLED)
     mock_install = mocker.patch(
         "shard_core.service.app_installation.install_app_from_store",

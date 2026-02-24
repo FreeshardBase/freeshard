@@ -1,6 +1,10 @@
 import logging
 
-from shard_core.database.connection import db_conn, make_and_open_connection_pool, close_connection_pool
+from shard_core.database.connection import (
+    db_conn,
+    make_and_open_connection_pool,
+    close_connection_pool,
+)
 from shard_core.database.migration import migrate
 from shard_core.database import kv_store
 

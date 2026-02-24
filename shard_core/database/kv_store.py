@@ -8,7 +8,9 @@ log = logging.getLogger(__name__)
 
 async def get_value(conn: AsyncConnection, key: str):
     async with conn.cursor() as cur:
-        await cur.execute("SELECT value FROM kv_store WHERE key = %(key)s", {"key": key})
+        await cur.execute(
+            "SELECT value FROM kv_store WHERE key = %(key)s", {"key": key}
+        )
         row = await cur.fetchone()
         if row:
             return row[0]

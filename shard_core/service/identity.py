@@ -58,8 +58,12 @@ async def enrich_identity_from_profile(_):
         if profile.owner:
             default_row = await identities_db.get_default(conn)
             if default_row:
-                await identities_db.update(conn, default_row["id"], {"name": profile.owner})
+                await identities_db.update(
+                    conn, default_row["id"], {"name": profile.owner}
+                )
         if profile.owner_email:
             default_row = await identities_db.get_default(conn)
             if default_row:
-                await identities_db.update(conn, default_row["id"], {"email": profile.owner_email})
+                await identities_db.update(
+                    conn, default_row["id"], {"email": profile.owner_email}
+                )

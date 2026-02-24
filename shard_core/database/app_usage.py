@@ -20,7 +20,9 @@ async def insert(conn: AsyncConnection, track: dict):
         )
 
 
-async def search_by_time_range(conn: AsyncConnection, start: datetime, end: datetime) -> list[dict]:
+async def search_by_time_range(
+    conn: AsyncConnection, start: datetime, end: datetime
+) -> list[dict]:
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(
             """SELECT * FROM app_usage_tracks

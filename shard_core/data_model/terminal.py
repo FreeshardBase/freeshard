@@ -52,4 +52,6 @@ async def _update_terminal_last_connection_async(terminal: Terminal):
     async with db_conn() as conn:
         existing = await terminals_db.get_by_id(conn, terminal.id)
         if existing:
-            await terminals_db.update(conn, terminal.id, {"last_connection": datetime.utcnow()})
+            await terminals_db.update(
+                conn, terminal.id, {"last_connection": datetime.utcnow()}
+            )

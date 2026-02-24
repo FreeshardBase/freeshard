@@ -138,7 +138,8 @@ async def _send_apps_update_async():
     async with db_conn() as conn:
         all_apps_rows = await installed_apps_db.get_all(conn)
     enriched_apps = [
-        enrich_installed_app_with_meta(InstalledApp.parse_obj(app)) for app in all_apps_rows
+        enrich_installed_app_with_meta(InstalledApp.parse_obj(app))
+        for app in all_apps_rows
     ]
     ws_worker.broadcast_message("apps_update", enriched_apps)
 

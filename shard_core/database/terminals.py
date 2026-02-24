@@ -1,5 +1,4 @@
 import logging
-from datetime import datetime
 from typing import Optional
 
 from psycopg import AsyncConnection
@@ -22,7 +21,9 @@ async def get_by_id(conn: AsyncConnection, id: str) -> Optional[dict]:
 
 async def get_by_name(conn: AsyncConnection, name: str) -> Optional[dict]:
     async with conn.cursor(row_factory=dict_row) as cur:
-        await cur.execute("SELECT * FROM terminals WHERE name = %(name)s", {"name": name})
+        await cur.execute(
+            "SELECT * FROM terminals WHERE name = %(name)s", {"name": name}
+        )
         return await cur.fetchone()
 
 

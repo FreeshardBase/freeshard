@@ -76,7 +76,7 @@ async def verify_terminal_jwt(token: str = None):
 
     bearer = "Bearer "
     if token.startswith(bearer):
-        token = token[len(bearer):]
+        token = token[len(bearer) :]
 
     try:
         decoded_token = jwt.decode(token, jwt_secret, algorithms=["HS256"])

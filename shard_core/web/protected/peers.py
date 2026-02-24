@@ -46,7 +46,5 @@ async def delete_peer(id):
     async with db_conn() as conn:
         deleted = await peers_db.remove_by_id_prefix(conn, id)
     if deleted > 1:
-        log.critical(
-            f"during deleting of peer {id}, {deleted} peers were deleted"
-        )
+        log.critical(f"during deleting of peer {id}, {deleted} peers were deleted")
     log.info(f"removed peer {id}")
