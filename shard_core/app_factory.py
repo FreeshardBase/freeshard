@@ -31,7 +31,6 @@ from .service.app_installation.util import write_traefik_dyn_config
 from .service.app_tools import (
     docker_stop_all_apps,
     docker_shutdown_all_apps,
-    docker_prune_images,
     scheduled_docker_prune_images,
 )
 
