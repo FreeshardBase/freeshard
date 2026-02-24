@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.13"
 
 [[package]]
@@ -627,6 +627,18 @@ wheels = [
 ]
 
 [[package]]
+name = "importlib-metadata"
+version = "8.7.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "zipp" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f3/49/3b30cad09e7771a4982d9975a8cbf64f00d4a1ececb53297f1d9a7be1b10/importlib_metadata-8.7.1.tar.gz", hash = "sha256:49fef1ae6440c182052f407c8d34a68f72efc36db9ca90dc0113398f2fdde8bb", size = 57107, upload-time = "2025-12-21T10:00:19.278Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fa/5e/f8e9a1d23b9c20a551a8a02ea3637b4642e22c2626e3a13a9a29cdea99eb/importlib_metadata-8.7.1-py3-none-any.whl", hash = "sha256:5a1f80bf1daa489495071efbb095d75a634cf28a8bc299581244063b53176151", size = 27865, upload-time = "2025-12-21T10:00:18.329Z" },
+]
+
+[[package]]
 name = "inflect"
 version = "7.5.0"
 source = { registry = "https://pypi.org/simple" }
@@ -900,6 +912,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/1c/cd/9b5583936515d085a1bec32b45289ceb53b80d9ce1cea0fef4c782dc41a7/psycopg_binary-3.2.9-cp313-cp313-musllinux_1_2_ppc64le.whl", hash = "sha256:778588ca9897b6c6bab39b0d3034efff4c5438f5e3bd52fda3914175498202f9", size = 3411439, upload-time = "2025-05-13T16:08:47.321Z" },
     { url = "https://files.pythonhosted.org/packages/45/6b/6f1164ea1634c87956cdb6db759e0b8c5827f989ee3cdff0f5c70e8331f2/psycopg_binary-3.2.9-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:f0d5b3af045a187aedbd7ed5fc513bd933a97aaff78e61c3745b330792c4345b", size = 3477477, upload-time = "2025-05-13T16:08:51.166Z" },
     { url = "https://files.pythonhosted.org/packages/7b/1d/bf54cfec79377929da600c16114f0da77a5f1670f45e0c3af9fcd36879bc/psycopg_binary-3.2.9-cp313-cp313-win_amd64.whl", hash = "sha256:2290bc146a1b6a9730350f695e8b670e1d1feb8446597bed0bbe7c3c30e0abcb", size = 2928009, upload-time = "2025-05-13T16:08:53.67Z" },
+]
+
+[[package]]
+name = "psycopg-pool"
+version = "3.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/56/9a/9470d013d0d50af0da9c4251614aeb3c1823635cab3edc211e3839db0bcf/psycopg_pool-3.3.0.tar.gz", hash = "sha256:fa115eb2860bd88fce1717d75611f41490dec6135efb619611142b24da3f6db5", size = 31606, upload-time = "2025-12-01T11:34:33.11Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e7/c3/26b8a0908a9db249de3b4169692e1c7c19048a9bc41a4d3209cee7dbb758/psycopg_pool-3.3.0-py3-none-any.whl", hash = "sha256:2e44329155c410b5e8666372db44276a8b1ebd8c90f1c3026ebba40d4bc81063", size = 39995, upload-time = "2025-12-01T11:34:29.761Z" },
 ]
 
 [[package]]
@@ -1246,7 +1270,7 @@ wheels = [
 
 [[package]]
 name = "shard-core"
-version = "0.33.0.dev0"
+version = "0.36.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
@@ -1266,6 +1290,7 @@ dependencies = [
     { name = "httpx" },
     { name = "jinja2" },
     { name = "psycopg", extra = ["binary"] },
+    { name = "psycopg-pool" },
     { name = "pydantic" },
     { name = "pyjwt" },
     { name = "python-gitlab" },
@@ -1273,15 +1298,15 @@ dependencies = [
     { name = "pyyaml" },
     { name = "requests" },
     { name = "requests-http-signature" },
-    { name = "tinydb" },
-    { name = "tinydb-serialization" },
     { name = "uvicorn" },
     { name = "websockets" },
+    { name = "yoyo-migrations" },
 ]
 
 [package.optional-dependencies]
 dev = [
     { name = "aioresponses" },
+    { name = "black" },
     { name = "datamodel-code-generator", extra = ["http"] },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -1302,6 +1327,7 @@ requires-dist = [
     { name = "asgi-lifespan", specifier = "==2.*" },
     { name = "azure-storage-blob" },
     { name = "bitstring" },
+    { name = "black", marker = "extra == 'dev'" },
     { name = "blinker" },
     { name = "cachetools" },
     { name = "croniter" },
@@ -1314,6 +1340,7 @@ requires-dist = [
     { name = "httpx" },
     { name = "jinja2" },
     { name = "psycopg", extras = ["binary"] },
+    { name = "psycopg-pool" },
     { name = "pydantic", specifier = "==1.*" },
     { name = "pyjwt" },
     { name = "pytest", marker = "extra == 'dev'" },
@@ -1328,11 +1355,10 @@ requires-dist = [
     { name = "responses", marker = "extra == 'dev'" },
     { name = "ruff", marker = "extra == 'dev'" },
     { name = "setuptools", marker = "extra == 'dev'" },
-    { name = "tinydb" },
-    { name = "tinydb-serialization" },
     { name = "uvicorn" },
     { name = "websockets" },
     { name = "yappi", marker = "extra == 'dev'" },
+    { name = "yoyo-migrations", extras = ["postgresql-psycopg"] },
 ]
 provides-extras = ["dev"]
 
@@ -1364,6 +1390,15 @@ wheels = [
 ]
 
 [[package]]
+name = "sqlparse"
+version = "0.5.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/90/76/437d71068094df0726366574cf3432a4ed754217b436eb7429415cf2d480/sqlparse-0.5.5.tar.gz", hash = "sha256:e20d4a9b0b8585fdf63b10d30066c7c94c5d7a7ec47c889a2d83a3caa93ff28e", size = 120815, upload-time = "2025-12-19T07:17:45.073Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/49/4b/359f28a903c13438ef59ebeee215fb25da53066db67b305c125f1c6d2a25/sqlparse-0.5.5-py3-none-any.whl", hash = "sha256:12a08b3bf3eec877c519589833aed092e2444e68240a3577e8e26148acc7b1ba", size = 46138, upload-time = "2025-12-19T07:17:46.573Z" },
+]
+
+[[package]]
 name = "starlette"
 version = "0.46.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1376,24 +1411,12 @@ wheels = [
 ]
 
 [[package]]
-name = "tinydb"
-version = "4.8.2"
+name = "tabulate"
+version = "0.9.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/a0/79/4af51e2bb214b6ea58f857c51183d92beba85b23f7ba61c983ab3de56c33/tinydb-4.8.2.tar.gz", hash = "sha256:f7dfc39b8d7fda7a1ca62a8dbb449ffd340a117c1206b68c50b1a481fb95181d", size = 32566, upload-time = "2024-10-12T15:24:01.13Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ec/fe/802052aecb21e3797b8f7902564ab6ea0d60ff8ca23952079064155d1ae1/tabulate-0.9.0.tar.gz", hash = "sha256:0095b12bf5966de529c0feb1fa08671671b3368eec77d7ef7ab114be2c068b3c", size = 81090, upload-time = "2022-10-06T17:21:48.54Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/78/17/853354204e1ca022d6b7d011ca7f3206c4f8faa3cc743e92609b49c1d83f/tinydb-4.8.2-py3-none-any.whl", hash = "sha256:f97030ee5cbc91eeadd1d7af07ab0e48ceb04aa63d4a983adbaca4cba16e86c3", size = 24888, upload-time = "2024-10-12T15:23:59.833Z" },
-]
-
-[[package]]
-name = "tinydb-serialization"
-version = "2.2.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "tinydb" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/87/af/d6bc960eadee5fb4406eaeceec4b7be6ef82676a5f3cf638fd56ecf39448/tinydb_serialization-2.2.0.tar.gz", hash = "sha256:b7e7f2b0cc17350438ba070eeb2f5fcb3a9949c5ff38476379450422de3f935f", size = 4912, upload-time = "2024-10-05T18:50:19.813Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/96/cd/7e44162c9d3288517b7f19d13932112b6ecef079eec28f8d23997ebbe2c6/tinydb_serialization-2.2.0-py3-none-any.whl", hash = "sha256:02edeafd6560b811c8df3e39792a37dee68ac63978659c214eab593316c58253", size = 5736, upload-time = "2024-10-05T18:50:18.206Z" },
+    { url = "https://files.pythonhosted.org/packages/40/44/4a5f08c96eb108af5cb50b41f76142f0afa346dfa99d5296fe7202a11854/tabulate-0.9.0-py3-none-any.whl", hash = "sha256:024ca478df22e9340661486f85298cff5f6dcdba14f3813e8830015b9ed1948f", size = 35252, upload-time = "2022-10-06T17:21:44.262Z" },
 ]
 
 [[package]]
@@ -1623,4 +1646,26 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/24/fd/725b8e73ac2a50e78a4534ac43c6addf5c1c2d65380dd48a9169cc6739a9/yarl-1.20.1-cp313-cp313t-win32.whl", hash = "sha256:b121ff6a7cbd4abc28985b6028235491941b9fe8fe226e6fdc539c977ea1739d", size = 86591, upload-time = "2025-06-10T00:45:25.793Z" },
     { url = "https://files.pythonhosted.org/packages/94/c3/b2e9f38bc3e11191981d57ea08cab2166e74ea770024a646617c9cddd9f6/yarl-1.20.1-cp313-cp313t-win_amd64.whl", hash = "sha256:541d050a355bbbc27e55d906bc91cb6fe42f96c01413dd0f4ed5a5240513874f", size = 93003, upload-time = "2025-06-10T00:45:27.752Z" },
     { url = "https://files.pythonhosted.org/packages/b4/2d/2345fce04cfd4bee161bf1e7d9cdc702e3e16109021035dbb24db654a622/yarl-1.20.1-py3-none-any.whl", hash = "sha256:83b8eb083fe4683c6115795d9fc1cfaf2cbbefb19b3a1cb68f6527460f483a77", size = 46542, upload-time = "2025-06-10T00:46:07.521Z" },
+]
+
+[[package]]
+name = "yoyo-migrations"
+version = "9.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "importlib-metadata" },
+    { name = "sqlparse" },
+    { name = "tabulate" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8c/5d/9ef7f808ea955eca9f08043c65bdc81a4694e784c978b24ad72022974a97/yoyo_migrations-9.0.0-py3-none-any.whl", hash = "sha256:fc65d3a6d9449c1c54d64ff2ff98e32a27da356057c60e3471010bfb19ede081", size = 49002, upload-time = "2024-08-10T09:43:50.388Z" },
+]
+
+[[package]]
+name = "zipp"
+version = "3.23.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e3/02/0f2892c661036d50ede074e376733dca2ae7c6eb617489437771209d4180/zipp-3.23.0.tar.gz", hash = "sha256:a07157588a12518c9d4034df3fbbee09c814741a33ff63c05fa29d26a2404166", size = 25547, upload-time = "2025-06-08T17:06:39.4Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2e/54/647ade08bf0db230bfea292f893923872fd20be6ac6f53b2b936ba839d75/zipp-3.23.0-py3-none-any.whl", hash = "sha256:071652d6115ed432f5ce1d34c336c0adfd6a884660d1e9712a256d3d3bd4b14e", size = 10276, upload-time = "2025-06-08T17:06:38.034Z" },
 ]

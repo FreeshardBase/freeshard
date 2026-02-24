@@ -96,39 +96,40 @@ async def verify_peer_auth(request: Request) -> Peer:
 
 
 async def _make_key_resolver():
+    # Pre-load all peers so the synchronous resolve_public_key callback
+    # doesn't need to access the async DB connection pool.
+    async with db_conn() as conn:
+        all_peers = await peers_db.get_all(conn)
+    peers_by_prefix = {}
+    for p in all_peers:
+        peer = Peer(**p)
+        # Index by the prefix part (before the colon) for prefix matching
+        prefix = peer.id.split(":")[0] if ":" in peer.id else peer.id
+        peers_by_prefix[prefix] = peer
+        # Also index by full id
+        peers_by_prefix[peer.id] = peer
+
     class _KR(HTTPSignatureKeyResolver):
         def resolve_private_key(self, key_id: str):
             pass
 
         def resolve_public_key(self, key_id: str):
-            # This is called synchronously by the library, so we need a sync path.
-            # We use asyncio.get_event_loop().run_until_complete for this edge case.
-            import asyncio
-
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # We're in an async context; use a thread to run the coroutine
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor() as pool:
-                    peer = pool.submit(asyncio.run, _get_peer_sync(key_id)).result()
-            else:
-                peer = loop.run_until_complete(_get_peer_sync(key_id))
+            # Find peer by prefix match (key_id is typically the prefix part)
+            peer = peers_by_prefix.get(key_id)
+            if peer is None:
+                # Try prefix matching against full ids
+                for pid, p in peers_by_prefix.items():
+                    if pid.startswith(key_id):
+                        peer = p
+                        break
+            if peer is None:
+                raise KeyError(key_id)
             if peer.public_bytes_b64:
                 return peer.public_bytes_b64.encode()
             else:
                 raise KeyError(f"No public key known for peer id {key_id}")
 
     return _KR()
-
-
-async def _get_peer_sync(key_id):
-    async with db_conn() as conn:
-        p = await peers_db.get_by_id_prefix(conn, key_id)
-        if p:
-            return Peer(**p)
-        else:
-            raise KeyError(key_id)
 
 
 @signals.async_on_peer_write.connect

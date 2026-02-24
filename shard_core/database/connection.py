@@ -2,6 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 
 import gconf
+import psycopg.conninfo
 from psycopg_pool import AsyncConnectionPool
 
 log = logging.getLogger(__name__)
@@ -12,7 +13,13 @@ _pool: AsyncConnectionPool | None = None
 async def make_and_open_connection_pool():
     global _pool
     db = gconf.get("db")
-    conninfo = f"host={db['host']} port={db['port']} dbname={db['dbname']} user={db['user']} password={db['password']}"
+    conninfo = psycopg.conninfo.make_conninfo(
+        host=db["host"],
+        port=db["port"],
+        dbname=db["dbname"],
+        user=db["user"],
+        password=db["password"],
+    )
     _pool = AsyncConnectionPool(conninfo=conninfo, min_size=2, max_size=10, open=False)
     await _pool.open()
     log.debug("opened connection pool")

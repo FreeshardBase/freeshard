@@ -43,10 +43,15 @@ async def insert(conn: AsyncConnection, identity: dict):
         )
 
 
+_UPDATABLE_COLUMNS = {"name", "email", "description", "private_key", "is_default"}
+
+
 async def update(conn: AsyncConnection, id: str, data: dict):
     set_clauses = []
     params = {"_id": id}
     for key, value in data.items():
+        if key not in _UPDATABLE_COLUMNS:
+            raise ValueError(f"Invalid column: {key}")
         set_clauses.append(f"{key} = %({key})s")
         params[key] = value
     if not set_clauses:

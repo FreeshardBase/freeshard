@@ -53,10 +53,15 @@ async def upsert(conn: AsyncConnection, peer: dict):
         )
 
 
+_UPDATABLE_COLUMNS = {"name", "public_bytes_b64", "is_reachable"}
+
+
 async def update_by_id(conn: AsyncConnection, id: str, data: dict):
     set_clauses = []
     params = {"_id": id}
     for key, value in data.items():
+        if key not in _UPDATABLE_COLUMNS:
+            raise ValueError(f"Invalid column: {key}")
         set_clauses.append(f"{key} = %({key})s")
         params[key] = value
     if not set_clauses:
@@ -70,6 +75,8 @@ async def update_by_id_prefix(conn: AsyncConnection, id_prefix: str, data: dict)
     set_clauses = []
     params = {"_pattern": f"{id_prefix}:%"}
     for key, value in data.items():
+        if key not in _UPDATABLE_COLUMNS:
+            raise ValueError(f"Invalid column: {key}")
         set_clauses.append(f"{key} = %({key})s")
         params[key] = value
     if not set_clauses:
