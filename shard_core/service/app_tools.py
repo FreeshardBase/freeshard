@@ -136,5 +136,12 @@ async def docker_prune_images(apply_filter=True):
     return lines[-1]
 
 
+async def scheduled_docker_prune_images():
+    if not gconf.get("apps.pruning.enabled"):
+        log.debug("docker image pruning is disabled, skipping")
+        return
+    await docker_prune_images()
+
+
 class MetadataNotFound(Exception):
     pass

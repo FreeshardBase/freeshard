@@ -11,6 +11,8 @@ apps:
   usage_reporting:
     tracking_schedule: '* * * * * *'
     reporting_schedule: '* * * * * */3'
+  pruning:
+    enabled: true
 
 log:
   levels:

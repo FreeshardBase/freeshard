@@ -9,7 +9,13 @@ async def subprocess(*args, cwd=None):
         *args, cwd=cwd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
     )
     log.debug(f'[{" ".join(args)}] started' + ("" if not cwd else f" in {cwd}"))
-    stdout, stderr = await process.communicate()
+
+    try:
+        stdout, stderr = await process.communicate()
+    except asyncio.CancelledError:
+        process.kill()
+        await process.wait()
+        raise
 
     if process.returncode != 0:
         raise SubprocessError(
