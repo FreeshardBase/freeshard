@@ -3,9 +3,9 @@ from enum import Enum
 from typing import Optional
 
 from pydantic import BaseModel
-from tinydb import Query
 
-from shard_core.database.database import terminals_table
+from shard_core.db import terminals
+from shard_core.db.db_connection import db_conn
 from shard_core.service import human_encoding
 from shard_core.util.signals import on_terminal_auth
 
@@ -42,8 +42,9 @@ class InputTerminal(BaseModel):
 
 
 @on_terminal_auth.connect
-def update_terminal_last_connection(terminal: Terminal):
-    with terminals_table() as terminals:  # type: Table
-        existing_terminal = Terminal(**(terminals.get(Query().id == terminal.id)))
-        existing_terminal.last_connection = datetime.utcnow()
-        terminals.update(existing_terminal.dict(), Query().id == existing_terminal.id)
+async def update_terminal_last_connection(terminal: Terminal):
+    async with db_conn() as conn:
+        existing_terminal = await terminals.get_by_id(conn, terminal.id)
+        if existing_terminal:
+            existing_terminal.last_connection = datetime.utcnow()
+            await terminals.update(conn, existing_terminal.id, name=existing_terminal.name, icon=existing_terminal.icon.value, last_connection=existing_terminal.last_connection)

@@ -9,9 +9,9 @@ from typing import Literal
 import gconf
 import httpx
 from pydantic import BaseModel
-from tinydb import Query
 
-from shard_core.database.database import installed_apps_table
+from shard_core.db import installed_apps
+from shard_core.db.db_connection import db_conn
 from shard_core.data_model.app_meta import Status
 from shard_core.service.app_tools import (
     get_installed_apps_path,
@@ -94,36 +94,36 @@ installation_worker = InstallationWorker()
 
 
 async def _install_app_from_store(app_name: str):
-    installed_app = get_app_from_db(app_name)
+    installed_app = await get_app_from_db(app_name)
     assert_app_status(installed_app, Status.INSTALLATION_QUEUED)
-    update_app_status(installed_app.name, Status.INSTALLING)
+    await update_app_status(installed_app.name, Status.INSTALLING)
     try:
         zip_file = await _download_app_zip(installed_app.name)
         await _install_app_from_zip(installed_app, zip_file)
-        update_app_status(installed_app.name, Status.STOPPED)
+        await update_app_status(installed_app.name, Status.STOPPED)
     except Exception as e:
-        update_app_status(installed_app.name, Status.ERROR, message=repr(e))
+        await update_app_status(installed_app.name, Status.ERROR, message=repr(e))
         signals.on_app_install_error.send((e, app_name))
 
 
 async def _install_app_from_existing_zip(app_name: str):
-    installed_app = get_app_from_db(app_name)
+    installed_app = await get_app_from_db(app_name)
     assert_app_status(installed_app, Status.INSTALLATION_QUEUED)
-    update_app_status(installed_app.name, Status.INSTALLING)
+    await update_app_status(installed_app.name, Status.INSTALLING)
     try:
         zip_file = (
             get_installed_apps_path() / installed_app.name / f"{installed_app.name}.zip"
         )
         await _install_app_from_zip(installed_app, zip_file)
-        update_app_status(installed_app.name, Status.STOPPED)
+        await update_app_status(installed_app.name, Status.STOPPED)
     except Exception as e:
-        update_app_status(installed_app.name, Status.ERROR, message=repr(e))
+        await update_app_status(installed_app.name, Status.ERROR, message=repr(e))
         signals.on_app_install_error.send((e, app_name))
 
 
 async def _uninstall_app(app_name: str):
     try:
-        update_app_status(app_name, Status.UNINSTALLING)
+        await update_app_status(app_name, Status.UNINSTALLING)
     except KeyError:
         log.warning(f"during uninstallation of {app_name}: app not found in database")
 
@@ -136,17 +136,17 @@ async def _uninstall_app(app_name: str):
     log.debug(f"deleting app data for {app_name}")
     shutil.rmtree(Path(get_installed_apps_path() / app_name), ignore_errors=True)
     log.debug(f"removing app {app_name} from database")
-    with installed_apps_table() as installed_apps:
-        installed_apps.remove(Query().name == app_name)
+    async with db_conn() as conn:
+        await installed_apps.delete(conn, app_name)
     await write_traefik_dyn_config()
     signals.on_apps_update.send()
     log.info(f"uninstalled {app_name}")
 
 
 async def _reinstall_app(app_name: str):
-    installed_app = get_app_from_db(app_name)
+    installed_app = await get_app_from_db(app_name)
     assert_app_status(installed_app, Status.REINSTALLATION_QUEUED)
-    update_app_status(installed_app.name, Status.REINSTALLING)
+    await update_app_status(installed_app.name, Status.REINSTALLING)
 
     try:
         await docker_stop_app(app_name, set_status=False)
@@ -160,9 +160,9 @@ async def _reinstall_app(app_name: str):
     try:
         zip_file = await _download_app_zip(installed_app.name)
         await _install_app_from_zip(installed_app, zip_file)
-        update_app_status(installed_app.name, Status.STOPPED)
+        await update_app_status(installed_app.name, Status.STOPPED)
     except Exception as e:
-        update_app_status(installed_app.name, Status.ERROR, message=repr(e))
+        await update_app_status(installed_app.name, Status.ERROR, message=repr(e))
         signals.on_app_install_error.send((e, app_name))
 
 

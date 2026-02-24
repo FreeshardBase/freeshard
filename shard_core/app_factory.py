@@ -12,8 +12,9 @@ from fastapi import FastAPI
 from pydantic import ValidationError
 from requests import ConnectionError, HTTPError
 
-from .database import database
-from .database.database import terminals_table
+from .db.db_connection import make_and_open_connection_pool, close_connection_pool, db_conn
+from .db.migration import migrate
+from .db import identities, terminals, peers, installed_apps, tours, app_usage_track, key_value, util as db_util
 from .service import (
     app_installation,
     identity,
@@ -34,7 +35,6 @@ from .service.app_tools import (
     scheduled_docker_prune_images,
 )
 
-from tinydb import Query
 from .service.backup import start_backup
 from .service.pairing import make_pairing_code
 from .util.async_util import PeriodicTask, BackgroundTask, CronTask
@@ -53,8 +53,7 @@ def create_app():
         gconf.load("config.yml")
     configure_logging()
 
-    database.init_database()
-    identity.init_default_identity()
+    migrate()  # Run database migrations at startup (synchronous)
     _copy_traefik_static_config()
 
     app_meta = metadata("shard_core")
@@ -86,11 +85,15 @@ def configure_logging():
 
 @asynccontextmanager
 async def lifespan(_):
+    # Initialize database connection pool
+    await make_and_open_connection_pool()
+    
+    await identity.init_default_identity()
     await write_traefik_dyn_config()
     await app_installation.login_docker_registries()
     await migration.migrate()
     await app_installation.refresh_init_apps()
-    backup.ensure_backup_passphrase()
+    await backup.ensure_backup_passphrase()
     try:
         await portal_controller.refresh_profile()
     except (ConnectionError, HTTPError, ValidationError) as e:
@@ -101,7 +104,7 @@ async def lifespan(_):
         t.start()
 
     log.info("Startup complete")
-    print_welcome_log()
+    await print_welcome_log()
     yield  # === run app ===
     log.info("Shutting down")
 
@@ -111,6 +114,9 @@ async def lifespan(_):
         await t.wait()
     await docker_stop_all_apps()
     await docker_shutdown_all_apps(force=True)
+    
+    # Close database connection pool
+    await close_connection_pool()
 
 
 def _make_background_tasks() -> List[BackgroundTask]:
@@ -159,13 +165,14 @@ def _copy_traefik_static_config():
 
     root = Path(gconf.get("path_root"))
     target = root / "core" / "traefik.yml"
+    target.parent.mkdir(parents=True, exist_ok=True)  # Create directory if not exists
     with open(target, "w") as f:
         f.write(result)
 
 
-def print_welcome_log():
+async def print_welcome_log():
     params = {}
-    i = identity.get_default_identity()
+    i = await identity.get_default_identity()
     protocol = (
         "http"
         if str_to_bool(gconf.get("traefik.disable_ssl", default="false"))
@@ -175,11 +182,11 @@ def print_welcome_log():
     params["shard_id"] = i.short_id
     params["shard_url_centered"] = _center(shard_url)
 
-    with terminals_table() as terminals:  # type: Table
-        is_first_start = terminals.count(Query().noop()) == 0
+    async with db_conn() as conn:
+        is_first_start = await terminals.count(conn) == 0
     params["is_first_start"] = is_first_start
     if is_first_start:
-        pairing_code = make_pairing_code(deadline=10 * 60)
+        pairing_code = await make_pairing_code(deadline=10 * 60)
         pairing_link = f"{shard_url}/#/pair?code={pairing_code.code}"
         params["pairing_link_centered"] = _center(pairing_link)
 

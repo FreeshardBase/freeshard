@@ -3,7 +3,8 @@ from datetime import date, timedelta, datetime, time
 
 import responses
 
-from shard_core.database.database import app_usage_track_table
+from shard_core.db.db_connection import db_conn
+from shard_core.db import app_usage_track
 from shard_core.data_model.app_usage import AppUsageTrack, AppUsageReport
 from tests.conftest import requires_test_env
 
@@ -31,12 +32,12 @@ async def test_app_reporting(api_client, requests_mock: responses.RequestsMock):
         installed_apps=["late"],
     )
 
-    with app_usage_track_table() as tracks:
-        tracks.truncate()
-        tracks.insert(included_track_1.dict())
-        tracks.insert(included_track_2.dict())
-        tracks.insert(excluded_track_early.dict())
-        tracks.insert(excluded_track_late.dict())
+    async with db_conn() as conn:
+        # Insert test data
+        await app_usage_track.insert(conn, included_track_1.dict())
+        await app_usage_track.insert(conn, included_track_2.dict())
+        await app_usage_track.insert(conn, excluded_track_early.dict())
+        await app_usage_track.insert(conn, excluded_track_late.dict())
 
     await asyncio.sleep(3.5)  # to trigger reporting
     assert len(requests_mock.calls) >= 1
