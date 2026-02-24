@@ -2,6 +2,7 @@ import logging
 
 import gconf
 
+from shard_core.database import database
 from shard_core.database.database import installed_apps_table
 from shard_core.data_model.app_meta import InstallationReason, InstalledApp, Status
 from shard_core.util import signals
@@ -10,6 +11,8 @@ from . import util, worker
 from .exceptions import AppAlreadyInstalled, AppDoesNotExist, AppNotInstalled
 
 log = logging.getLogger(__name__)
+
+STORE_KEY_INITIAL_APPS_INSTALLED = "initial_apps_installed"
 
 
 async def install_app_from_store(
@@ -97,6 +100,13 @@ async def reinstall_app(name: str):
 
 
 async def refresh_init_apps():
+    try:
+        database.get_value(STORE_KEY_INITIAL_APPS_INSTALLED)
+        log.debug("initial apps already installed on first startup, skipping")
+        return
+    except KeyError:
+        pass  # first startup — flag not yet set
+
     configured_init_apps = set(gconf.get("apps.initial_apps"))
     with installed_apps_table() as apps:
         installed_apps = {app["name"] for app in apps.all()}
@@ -104,6 +114,8 @@ async def refresh_init_apps():
     for app_name in configured_init_apps - installed_apps:
         log.info(f"installing initial app {app_name}")
         await install_app_from_store(app_name, InstallationReason.CONFIG)
+
+    database.set_value(STORE_KEY_INITIAL_APPS_INSTALLED, True)
     log.debug("refreshed initial apps")
 
 
