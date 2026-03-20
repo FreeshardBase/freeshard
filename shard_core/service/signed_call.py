@@ -15,7 +15,9 @@ async def signed_request(
     *args, identity: Identity = None, **kwargs
 ) -> requests.Response:
     auth = get_signature_auth(identity)
-    response = await asyncio.to_thread(requests.request, *args, auth=auth, **kwargs)
+    response = await asyncio.to_thread(
+        requests.request, *args, auth=auth, stream=True, **kwargs
+    )
     return response
 
 
