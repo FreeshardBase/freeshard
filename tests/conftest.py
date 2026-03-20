@@ -54,9 +54,13 @@ def setup_all():
 @pytest.fixture(autouse=True)
 def config_override(tmp_path, request):
     print(f"\nUsing temp path: {tmp_path}")
-    tempfile_override = {
-        "path_root": f"{tmp_path}/path_root",
-    }
+
+    # path_root is set via env var instead of gconf.override_conf because
+    # app_factory.create_app() calls gconf.load() which resets overrides,
+    # but env vars always take precedence in gconf.get().
+    env_key = "FREESHARD_PATH_ROOT"
+    old_env = os.environ.get(env_key)
+    os.environ[env_key] = f"{tmp_path}/path_root"
 
     # Detects the variable named *config_override* of a test module
     module_override = getattr(request.module, "config_override", {})
@@ -66,11 +70,15 @@ def config_override(tmp_path, request):
     function_override = function_override_mark.args[0] if function_override_mark else {}
 
     with (
-        gconf.override_conf(tempfile_override),
         gconf.override_conf(module_override),
         gconf.override_conf(function_override),
     ):
         yield
+
+    if old_env is None:
+        del os.environ[env_key]
+    else:
+        os.environ[env_key] = old_env
 
 
 @pytest_asyncio.fixture
