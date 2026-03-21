@@ -30,7 +30,7 @@ async def add_terminal(code: str, terminal: InputTerminal, response: Response):
 
     new_terminal = Terminal.create(terminal.name)
     with terminals_table() as terminals:  # type: Table
-        terminals.insert(new_terminal.dict())
+        terminals.insert(new_terminal.model_dump())
         is_first_terminal = terminals.count(Query().noop()) == 1
 
     with identities_table() as identities:  # type: Table

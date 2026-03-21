@@ -5,9 +5,9 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Union
+from typing import Annotated, Dict, List, Optional, Union
 
-from pydantic import BaseModel, Extra, Field, confloat, conint
+from pydantic import BaseModel, ConfigDict, Field, RootModel
 
 
 class Certificate(BaseModel):
@@ -108,7 +108,7 @@ class HttpRouter(BaseModel):
         ...,
         description="Rules are a set of matchers configured with values, that determine if a particular request matches specific criteria. If the rule is verified, the router becomes active, calls middlewares, and then forwards the request to the service.",
     )
-    priority: Optional[conint(ge=0)] = Field(
+    priority: Optional[Annotated[int, Field(ge=0)]] = Field(
         0,
         description="To avoid path overlap, routes are sorted, by default, in descending order using rules length. The priority is directly equal to the length of the rule, and so the longest length has the highest priority. A value of 0 for the priority is ignored: priority = 0 means that the default rules length sorting is used.",
     )
@@ -195,7 +195,7 @@ class HttpLoadBalancerService(BaseModel):
     servers: List[Server] = Field(
         ...,
         description="Servers declare a single instance of your program.",
-        min_items=1,
+        min_length=1,
     )
     sticky: Optional[Sticky] = Field(
         None,
@@ -226,7 +226,7 @@ class HttpWeightedService(BaseModel):
 
 class Mirror(BaseModel):
     name: Optional[str] = None
-    percent: Optional[confloat(ge=0.0, le=100.0)] = None
+    percent: Optional[Annotated[float, Field(ge=0.0, le=100.0)]] = None
 
 
 class HttpMirroringService(BaseModel):
@@ -239,28 +239,25 @@ class HttpMirroringService(BaseModel):
 
 
 class HttpServiceItem(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     loadBalancer: Optional[HttpLoadBalancerService] = None
 
 
 class HttpServiceItem1(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     weighted: Optional[HttpWeightedService] = None
 
 
 class HttpServiceItem2(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     mirroring: Optional[HttpMirroringService] = None
 
 
-class HttpService(BaseModel):
-    __root__: Union[HttpServiceItem, HttpServiceItem1, HttpServiceItem2] = Field(
+class HttpService(RootModel):
+    root: Union[HttpServiceItem, HttpServiceItem1, HttpServiceItem2] = Field(
         ...,
         description="The Services are responsible for configuring how to reach the actual services that will eventually handle the incoming requests.",
     )
@@ -320,7 +317,7 @@ class BufferingMiddleware(BaseModel):
 
 
 class ChainMiddleware(BaseModel):
-    middlewares: Optional[List[str]] = Field(None, min_items=1)
+    middlewares: Optional[List[str]] = Field(None, min_length=1)
 
 
 class CircuitBreakerMiddleware(BaseModel):
@@ -683,10 +680,7 @@ class PassTLSClientCertMiddleware(BaseModel):
 
 
 class PluginMiddleware(BaseModel):
-    pass
-
-    class Config:
-        extra = Extra.allow
+    model_config = ConfigDict(extra="allow")
 
 
 class RateLimitMiddleware(BaseModel):
@@ -778,168 +772,145 @@ class StripPrefixRegexMiddleware(BaseModel):
 
 
 class HttpMiddlewareItem(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     addPrefix: Optional[AddPrefixMiddleware] = None
 
 
 class HttpMiddlewareItem1(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     basicAuth: Optional[BasicAuthMiddleware] = None
 
 
 class HttpMiddlewareItem2(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     buffering: Optional[BufferingMiddleware] = None
 
 
 class HttpMiddlewareItem3(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     chain: Optional[ChainMiddleware] = None
 
 
 class HttpMiddlewareItem4(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     circuitBreaker: Optional[CircuitBreakerMiddleware] = None
 
 
 class HttpMiddlewareItem5(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     compress: Optional[CompressMiddleware] = None
 
 
 class HttpMiddlewareItem6(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     contentType: Optional[ContentTypeMiddleware] = None
 
 
 class HttpMiddlewareItem7(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     digestAuth: Optional[DigestAuthMiddleware] = None
 
 
 class HttpMiddlewareItem8(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     errors: Optional[ErrorsMiddleware] = None
 
 
 class HttpMiddlewareItem9(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     forwardAuth: Optional[ForwardAuthMiddleware] = None
 
 
 class HttpMiddlewareItem10(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     headers: Optional[HeadersMiddleware] = None
 
 
 class HttpMiddlewareItem11(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     ipWhiteList: Optional[IpWhiteListMiddleware] = None
 
 
 class HttpMiddlewareItem12(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     inFlightReq: Optional[InFlightReqMiddleware] = None
 
 
 class HttpMiddlewareItem13(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     passTLSClientCert: Optional[PassTLSClientCertMiddleware] = None
 
 
 class HttpMiddlewareItem14(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     plugin: Optional[PluginMiddleware] = None
 
 
 class HttpMiddlewareItem15(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     rateLimit: Optional[RateLimitMiddleware] = None
 
 
 class HttpMiddlewareItem16(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     redirectRegex: Optional[RedirectRegexMiddleware] = None
 
 
 class HttpMiddlewareItem17(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     redirectScheme: Optional[RedirectSchemeMiddleware] = None
 
 
 class HttpMiddlewareItem18(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     replacePath: Optional[ReplacePathMiddleware] = None
 
 
 class HttpMiddlewareItem19(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     replacePathRegex: Optional[ReplacePathRegexMiddleware] = None
 
 
 class HttpMiddlewareItem20(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     retry: Optional[RetryMiddleware] = None
 
 
 class HttpMiddlewareItem21(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     stripPrefix: Optional[StripPrefixMiddleware] = None
 
 
 class HttpMiddlewareItem22(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     stripPrefixRegex: Optional[StripPrefixRegexMiddleware] = None
 
 
-class HttpMiddleware(BaseModel):
-    __root__: Union[
+class HttpMiddleware(RootModel):
+    root: Union[
         HttpMiddlewareItem,
         HttpMiddlewareItem1,
         HttpMiddlewareItem2,
@@ -1019,7 +990,7 @@ class TcpLoadBalancerService(BaseModel):
     servers: List[Server1] = Field(
         ...,
         description="Servers declare a single instance of your program.",
-        min_items=1,
+        min_length=1,
     )
     terminationDelay: Optional[float] = Field(
         100,
@@ -1041,21 +1012,19 @@ class TcpWeightedService(BaseModel):
 
 
 class TcpServiceItem(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     loadBalancer: Optional[TcpLoadBalancerService] = None
 
 
 class TcpServiceItem1(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     weighted: Optional[TcpWeightedService] = None
 
 
-class TcpService(BaseModel):
-    __root__: Union[TcpServiceItem, TcpServiceItem1]
+class TcpService(RootModel):
+    root: Union[TcpServiceItem, TcpServiceItem1]
 
 
 class UdpRouter(BaseModel):
@@ -1077,7 +1046,7 @@ class UdpLoadBalancerService(BaseModel):
     servers: List[Server2] = Field(
         ...,
         description="The servers field defines all the servers that are part of this load-balancing group, i.e. each address (IP:Port) on which an instance of the service's program is deployed.",
-        min_items=1,
+        min_length=1,
     )
 
 
@@ -1095,21 +1064,19 @@ class UdpWeightedService(BaseModel):
 
 
 class UdpServiceItem(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     loadBalancer: Optional[UdpLoadBalancerService] = None
 
 
 class UdpServiceItem1(BaseModel):
-    class Config:
-        extra = Extra.forbid
+    model_config = ConfigDict(extra="forbid")
 
     weighted: Optional[UdpWeightedService] = None
 
 
-class UdpService(BaseModel):
-    __root__: Union[UdpServiceItem, UdpServiceItem1]
+class UdpService(RootModel):
+    root: Union[UdpServiceItem, UdpServiceItem1]
 
 
 class Http(BaseModel):

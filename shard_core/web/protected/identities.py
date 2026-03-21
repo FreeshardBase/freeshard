@@ -54,7 +54,7 @@ def get_default_avatar():
 
 @router.get("/{id}/avatar")
 def get_avatar_by_identity(id):
-    i = OutputIdentity.parse_obj(get_identity_by_id(id))
+    i = OutputIdentity.model_validate(get_identity_by_id(id))
 
     try:
         avatar_file = find_avatar_file(i.id)
@@ -71,13 +71,13 @@ def put_identity(i: InputIdentity):
     with identities_table() as identities:  # type: Table
         if i.id:
             if identities.get(Query().id == i.id):
-                identities.update(i.dict(exclude_unset=True), Query().id == i.id)
+                identities.update(i.model_dump(exclude_unset=True), Query().id == i.id)
                 return OutputIdentity(**identities.get(Query().id == i.id))
             else:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
         else:
-            new_identity = Identity.create(**i.dict(exclude_unset=True))
-            identities.insert(new_identity.dict())
+            new_identity = Identity.create(**i.model_dump(exclude_unset=True))
+            identities.insert(new_identity.model_dump())
             log.info(f"added {new_identity}")
             return new_identity
 
@@ -103,7 +103,7 @@ async def put_avatar(id: str, file: UploadFile):
     else:
         existing_file.unlink()
 
-    i = OutputIdentity.parse_obj(get_identity_by_id(id))
+    i = OutputIdentity.model_validate(get_identity_by_id(id))
     file_extension = file.filename.split(".")[-1]
     file_path = Path("avatars") / f"{i.id}.{file_extension}"
     put_asset(await file.read(), file_path, overwrite=True)
@@ -117,7 +117,7 @@ async def delete_default_avatar():
 
 @router.delete("/{id}/avatar", status_code=status.HTTP_200_OK)
 async def delete_avatar(id: str):
-    i = OutputIdentity.parse_obj(get_identity_by_id(id))
+    i = OutputIdentity.model_validate(get_identity_by_id(id))
 
     try:
         avatar_file = find_avatar_file(i.id)

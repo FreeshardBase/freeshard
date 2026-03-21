@@ -35,7 +35,7 @@ def make_pairing_code(deadline: int = None):
             seconds=deadline or gconf.get("terminal.pairing code deadline", default=600)
         ),
     )
-    database.set_value(STORE_KEY_PAIRING_CODE, pairing_code.dict())
+    database.set_value(STORE_KEY_PAIRING_CODE, pairing_code.model_dump())
     return pairing_code
 
 

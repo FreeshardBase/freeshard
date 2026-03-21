@@ -61,7 +61,7 @@ class WSWorker(BackgroundTask):
             log.debug(f"sending {message.message_type} message")
             try:
                 await asyncio.gather(
-                    *[s.send_text(message.json()) for s in self.active_sockets]
+                    *[s.send_text(message.model_dump_json()) for s in self.active_sockets]
                 )
             except Exception as e:
                 log.error(f"Error during websocket sending: {e}")
@@ -108,7 +108,7 @@ def send_backup_update(e: Exception | None = None):
 
 @signals.on_disk_usage_update.connect
 def send_disk_usage_update(disk_usage: DiskUsage):
-    ws_worker.broadcast_message("disk_usage_update", disk_usage.dict())
+    ws_worker.broadcast_message("disk_usage_update", disk_usage.model_dump())
 
 
 @signals.on_terminals_update.connect
@@ -120,7 +120,7 @@ def send_terminals_update(_):
 
 @signals.on_terminal_add.connect
 def send_terminal_add(terminal: Terminal):
-    ws_worker.broadcast_message("terminal_add", terminal.dict())
+    ws_worker.broadcast_message("terminal_add", terminal.model_dump())
 
 
 @signals.on_apps_update.connect
@@ -128,7 +128,7 @@ def send_apps_update(_):
     with installed_apps_table() as installed_apps:
         all_apps = installed_apps.all()
     enriched_apps = [
-        enrich_installed_app_with_meta(InstalledApp.parse_obj(app)) for app in all_apps
+        enrich_installed_app_with_meta(InstalledApp.model_validate(app)) for app in all_apps
     ]
     ws_worker.broadcast_message("apps_update", enriched_apps)
 

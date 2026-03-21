@@ -31,7 +31,7 @@ async def install_app_from_store(
             installation_reason=installation_reason,
             status=Status.INSTALLATION_QUEUED,
         )
-        installed_apps.insert(installed_app.dict())
+        installed_apps.insert(installed_app.model_dump())
 
     installation_task = worker.InstallationTask(
         app_name=name,
@@ -54,7 +54,7 @@ async def install_app_from_existing_zip(
             installation_reason=installation_reason,
             status=Status.INSTALLATION_QUEUED,
         )
-        installed_apps.insert(installed_app.dict())
+        installed_apps.insert(installed_app.model_dump())
 
     installation_task = worker.InstallationTask(
         app_name=name,

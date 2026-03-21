@@ -39,7 +39,7 @@ async def send_telemetry():
         await call_freeshard_controller(
             "api/telemetry",
             method="POST",
-            body=telemetry.json().encode(),
+            body=telemetry.model_dump_json().encode(),
         )
     except Exception as e:
         log.error(f"Error during telemetry sending: {e}")

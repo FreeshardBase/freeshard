@@ -1,28 +1,29 @@
 from typing import Optional
 
 from shard_core.service.crypto import PublicKey
-from pydantic import BaseModel, validator, root_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 
 class Peer(BaseModel):
     id: str
-    name: Optional[str]
-    public_bytes_b64: Optional[str]
+    name: Optional[str] = None
+    public_bytes_b64: Optional[str] = None
     is_reachable: Optional[bool] = True
 
-    @validator("id")
+    @field_validator("id")
+    @classmethod
     def must_be_long_enough(cls, v):
         if len(v) < 6:
             raise ValueError(f"{v} is too short, must be at least 6 characters")
         return v
 
-    @root_validator
-    def public_bytes_must_match_id(cls, values):
-        if values["public_bytes_b64"]:
-            pubkey = PublicKey(values["public_bytes_b64"])
-            if not pubkey.to_hash_id().startswith(values["id"]):
+    @model_validator(mode="after")
+    def public_bytes_must_match_id(self):
+        if self.public_bytes_b64:
+            pubkey = PublicKey(self.public_bytes_b64)
+            if not pubkey.to_hash_id().startswith(self.id):
                 raise ValueError("public key and id do not match")
-        return values
+        return self
 
     def __str__(self):
         return f"Peer[{self.short_id}]"
@@ -38,9 +39,10 @@ class Peer(BaseModel):
 
 class InputPeer(BaseModel):
     id: str
-    name: Optional[str]
+    name: Optional[str] = None
 
-    @validator("id")
+    @field_validator("id")
+    @classmethod
     def must_be_long_enough(cls, v):
         if len(v) < 6:
             raise ValueError(f"{v} is too short, must be at least 6 characters")

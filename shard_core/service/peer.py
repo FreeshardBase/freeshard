@@ -64,7 +64,7 @@ async def update_peer_meta(peer: Peer):
 
     updated_peer = output_identity_to_peer(peer_identity)
     with peers_table() as peers:  # type: Table
-        peers.update(updated_peer.dict(), Query().id == peer.id)
+        peers.update(updated_peer.model_dump(), Query().id == peer.id)
 
 
 def output_identity_to_peer(identity: OutputIdentity) -> Peer:

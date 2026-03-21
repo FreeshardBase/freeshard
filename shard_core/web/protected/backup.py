@@ -24,7 +24,7 @@ router = APIRouter(
 @router.get("/info", response_model=BackupInfoResponse)
 async def get_backup_info():
     try:
-        last_access_info_db = BackupPassphraseLastAccessInfoDB.parse_obj(
+        last_access_info_db = BackupPassphraseLastAccessInfoDB.model_validate(
             database.get_value(backup.STORE_KEY_BACKUP_PASSPHRASE_LAST_ACCESS)
         )
     except KeyError:
@@ -33,10 +33,10 @@ async def get_backup_info():
         with terminals_table() as terminals:
             terminal_db = terminals.get(Query().id == last_access_info_db.terminal_id)
         terminal_name = (
-            Terminal.parse_obj(terminal_db).name if terminal_db else "Unknown"
+            Terminal.model_validate(terminal_db).name if terminal_db else "Unknown"
         )
         last_access_info_response = BackupPassphraseLastAccessInfoResponse(
-            **last_access_info_db.dict(), terminal_name=terminal_name
+            **last_access_info_db.model_dump(), terminal_name=terminal_name
         )
 
     return BackupInfoResponse(

@@ -22,5 +22,5 @@ async def post_quick_feedback(feedback: QuickFeedbackInput):
     log.debug(f"Posting quick feedback: {feedback.text}")
     controller_url = gconf.get("freeshard_controller.base_url")
     return await signed_request(
-        "POST", f"{controller_url}/api/feedback", json=feedback.dict()
+        "POST", f"{controller_url}/api/feedback", json=feedback.model_dump()
     )

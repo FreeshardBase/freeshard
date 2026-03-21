@@ -32,7 +32,7 @@ router = APIRouter(
 @router.get("", response_model=List[InstalledAppWithMeta])
 def list_all_apps():
     with installed_apps_table() as installed_apps:
-        apps = [InstalledApp.parse_obj(app) for app in installed_apps.all()]
+        apps = [InstalledApp.model_validate(app) for app in installed_apps.all()]
     return [enrich_installed_app_with_meta(app) for app in apps]
 
 
@@ -41,7 +41,7 @@ def get_app(name: str):
     with installed_apps_table() as installed_apps:
         installed_app = installed_apps.get(Query().name == name)
     if installed_app:
-        return enrich_installed_app_with_meta(InstalledApp.parse_obj(installed_app))
+        return enrich_installed_app_with_meta(InstalledApp.model_validate(installed_app))
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
 

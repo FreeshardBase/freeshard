@@ -34,7 +34,7 @@ def compile_config(apps: List[AppInfo], portal: SafeIdentity) -> t.Model:
         del model.tcp.routers
     if not model.tcp.services:
         del model.tcp.services
-    if not model.tcp.dict():
+    if not model.tcp.model_dump():
         del model.tcp
 
     return model
@@ -82,12 +82,12 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
 
     _middlewares = {
         "strip": t.HttpMiddleware(
-            __root__=t.HttpMiddlewareItem21(
+            root=t.HttpMiddlewareItem21(
                 stripPrefix=t.StripPrefixMiddleware(prefixes=["/core/"])
             )
         ),
         "auth-private": t.HttpMiddleware(
-            __root__=t.HttpMiddlewareItem9(
+            root=t.HttpMiddlewareItem9(
                 forwardAuth=t.ForwardAuthMiddleware(
                     address="http://shard_core/internal/authenticate_terminal",
                     authResponseHeaders=[
@@ -99,14 +99,14 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
             )
         ),
         "auth-management": t.HttpMiddleware(
-            __root__=t.HttpMiddlewareItem9(
+            root=t.HttpMiddlewareItem9(
                 forwardAuth=t.ForwardAuthMiddleware(
                     address="http://shard_core/internal/authenticate_management"
                 )
             )
         ),
         "auth-public": t.HttpMiddleware(
-            __root__=t.HttpMiddlewareItem10(
+            root=t.HttpMiddlewareItem10(
                 headers=t.HeadersMiddleware(
                     customRequestHeaders={
                         "X-Ptl-Client-Type": "public",
@@ -117,7 +117,7 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
             )
         ),
         "auth": t.HttpMiddleware(
-            __root__=t.HttpMiddlewareItem9(
+            root=t.HttpMiddlewareItem9(
                 forwardAuth=t.ForwardAuthMiddleware(
                     address="http://shard_core/internal/auth",
                     authResponseHeadersRegex="^X-Ptl-.*",
@@ -125,7 +125,7 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
             )
         ),
         "app-error": t.HttpMiddleware(
-            __root__=t.HttpMiddlewareItem8(
+            root=t.HttpMiddlewareItem8(
                 errors=t.ErrorsMiddleware(
                     status=["500-599", "400-499"],
                     service="shard_core",
@@ -136,14 +136,14 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
     }
     _services = {
         "shard_core": t.HttpService(
-            __root__=t.HttpServiceItem(
+            root=t.HttpServiceItem(
                 loadBalancer=t.HttpLoadBalancerService(
                     servers=[t.Server(url="http://shard_core:80/")]
                 )
             )
         ),
         "web-terminal": t.HttpService(
-            __root__=t.HttpServiceItem(
+            root=t.HttpServiceItem(
                 loadBalancer=t.HttpLoadBalancerService(
                     servers=[t.Server(url="http://web-terminal:80/")]
                 )
@@ -188,7 +188,7 @@ def _add_service(model: t.Model, entrypoint: Entrypoint, app: InstalledApp):
     ep_value = entrypoint.entrypoint_port.value
     if entrypoint.entrypoint_port == EntrypointPort.HTTPS_443:
         model.http.services[f"{app.name}_{ep_value}"] = t.HttpService(
-            __root__=t.HttpServiceItem(
+            root=t.HttpServiceItem(
                 loadBalancer=t.HttpLoadBalancerService(
                     servers=[
                         t.Server(
@@ -200,7 +200,7 @@ def _add_service(model: t.Model, entrypoint: Entrypoint, app: InstalledApp):
         )
     elif entrypoint.entrypoint_port == EntrypointPort.MQTTS_1883:
         model.tcp.services[f"{app.name}_{ep_value}"] = t.TcpService(
-            __root__=t.TcpServiceItem(
+            root=t.TcpServiceItem(
                 loadBalancer=t.TcpLoadBalancerService(
                     servers=[
                         t.Server1(
