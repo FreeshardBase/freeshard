@@ -63,17 +63,12 @@ def _apply_model_dict(base, override: dict):
     return base.model_copy(update=update)
 
 
-def _apply_dict_override(base: Settings, override: dict) -> Settings:
-    """Apply a nested dict override to a Settings instance."""
-    return _apply_model_dict(base, override)
-
-
 @contextmanager
 def settings_override(override: dict):
     """Context manager to temporarily apply a nested dict override to settings."""
     from shard_core.settings import settings
     old = settings()
-    set_settings(_apply_dict_override(old, override))
+    set_settings(_apply_model_dict(old, override))
     try:
         yield
     finally:
@@ -99,7 +94,7 @@ def config_override(tmp_path, request):
     function_override = function_override_mark.args[0] if function_override_mark else {}
 
     base = _TestSettings(path_root=str(tmp_path / "path_root"))
-    combined = _apply_dict_override(base, {**module_override, **function_override})
+    combined = _apply_model_dict(base, {**module_override, **function_override})
     set_settings(combined)
 
     yield
