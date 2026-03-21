@@ -27,7 +27,9 @@ router = APIRouter()
 def app_error(status: int, request: Request):
     behaviour = get_splash_behaviour(request)
     template = get_template_splash()
-    return HTMLResponse(content=template.render(**behaviour.model_dump()), status_code=status)
+    return HTMLResponse(
+        content=template.render(**behaviour.model_dump()), status_code=status
+    )
 
 
 class SplashBehaviour(BaseModel):

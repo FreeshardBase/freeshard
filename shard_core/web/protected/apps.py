@@ -41,7 +41,9 @@ def get_app(name: str):
     with installed_apps_table() as installed_apps:
         installed_app = installed_apps.get(Query().name == name)
     if installed_app:
-        return enrich_installed_app_with_meta(InstalledApp.model_validate(installed_app))
+        return enrich_installed_app_with_meta(
+            InstalledApp.model_validate(installed_app)
+        )
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
 

@@ -192,7 +192,9 @@ def get_backup_passphrase(terminal_id: str) -> str:
         time=datetime.datetime.now(datetime.timezone.utc),
         terminal_id=terminal_id,
     )
-    database.set_value(STORE_KEY_BACKUP_PASSPHRASE_LAST_ACCESS, last_access_info.model_dump())
+    database.set_value(
+        STORE_KEY_BACKUP_PASSPHRASE_LAST_ACCESS, last_access_info.model_dump()
+    )
     return passphrase
 
 
