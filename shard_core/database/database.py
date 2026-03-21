@@ -6,11 +6,12 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-import gconf
 from tinydb import TinyDB, Query, JSONStorage
 from tinydb.table import Table
 from tinydb_serialization import SerializationMiddleware
 from tinydb_serialization.serializers import DateTimeSerializer
+
+from shard_core.settings import settings
 
 log = logging.getLogger(__name__)
 
@@ -18,7 +19,7 @@ global_db_lock = threading.RLock()
 
 
 def init_database():
-    file = Path(gconf.get("path_root")) / "core" / "shard_core_db.json"
+    file = Path(settings().path_root) / "core" / "shard_core_db.json"
     if file.is_dir():
         raise Exception(f"{file} is a directory, should be a file or not existing")
     if not file.exists():
@@ -38,7 +39,7 @@ def get_db() -> TinyDB:
     with global_db_lock:
         wait_time = time.monotonic()
         with TinyDB(
-            Path(gconf.get("path_root")) / "core" / "shard_core_db.json",
+            Path(settings().path_root) / "core" / "shard_core_db.json",
             storage=serialization,
             sort_keys=True,
             indent=2,

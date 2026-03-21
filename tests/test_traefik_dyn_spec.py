@@ -1,15 +1,15 @@
 from pathlib import Path
 
-import gconf
 import yaml
 
+from shard_core.settings import settings
 from tests.conftest import requires_test_env
 
 
 @requires_test_env("full")
 async def test_template_is_written(api_client):
     with open(
-        Path(gconf.get("path_root")) / "core" / "traefik_dyn" / "traefik_dyn.yml", "r"
+        Path(settings().path_root) / "core" / "traefik_dyn" / "traefik_dyn.yml", "r"
     ) as f:
         output = yaml.safe_load(f)
         out_middlewares: dict = output["http"]["middlewares"]

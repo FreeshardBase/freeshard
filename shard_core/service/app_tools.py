@@ -3,7 +3,6 @@ import json
 import logging
 from pathlib import Path
 
-import gconf
 from tinydb import Query
 
 import shard_core.data_model.profile
@@ -14,6 +13,7 @@ from shard_core.data_model.app_meta import (
     InstalledApp,
     InstalledAppWithMeta,
 )
+from shard_core.settings import settings
 from shard_core.util import signals
 from shard_core.util.misc import throttle
 from shard_core.util.subprocess import subprocess, SubprocessError
@@ -89,7 +89,7 @@ async def docker_shutdown_all_apps(force: bool = False):
 
 
 def get_installed_apps_path() -> Path:
-    return Path(gconf.get("path_root")) / "core" / "installed_apps"
+    return Path(settings().path_root) / "core" / "installed_apps"
 
 
 def get_app_metadata(app_name: str) -> AppMeta:
@@ -125,7 +125,7 @@ def enrich_installed_app_with_meta(installed_app: InstalledApp) -> InstalledAppW
 async def docker_prune_images(apply_filter=True):
     command = ["docker", "image", "prune", "-fa"]
     if apply_filter:
-        command.extend(["--filter", f'until={gconf.get("apps.pruning.max_age")}h'])
+        command.extend(["--filter", f'until={settings().apps.pruning.max_age}h'])
     try:
         stdout = await subprocess(*command)
     except SubprocessError as e:
@@ -137,7 +137,7 @@ async def docker_prune_images(apply_filter=True):
 
 
 async def scheduled_docker_prune_images():
-    if not gconf.get("apps.pruning.enabled"):
+    if not settings().apps.pruning.enabled:
         log.debug("docker image pruning is disabled, skipping")
         return
     await docker_prune_images()

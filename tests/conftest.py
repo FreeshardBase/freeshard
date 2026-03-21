@@ -2,7 +2,6 @@ import asyncio
 import importlib
 import json
 import logging
-import os
 import re
 import shutil
 from contextlib import contextmanager
@@ -12,7 +11,6 @@ from logging import LogRecord
 from pathlib import Path
 from typing import List, AsyncGenerator
 
-import gconf
 import pytest
 import pytest_asyncio
 import responses
@@ -34,6 +32,7 @@ from shard_core.data_model.identity import OutputIdentity, Identity
 from shard_core.data_model.profile import Profile
 from shard_core.service import websocket, app_installation, telemetry
 from shard_core.service.app_tools import get_installed_apps_path
+from shard_core.settings import Settings, set_settings, reset_settings
 from shard_core.web.internal.call_peer import _get_app_for_ip_address
 from tests.util import (
     docker_network_portal,
@@ -42,6 +41,43 @@ from tests.util import (
 )
 
 pytest_plugins = ("pytest_asyncio",)
+
+
+class _TestSettings(Settings):
+    """Settings subclass that loads config.toml with tests/config.toml as overlay."""
+
+    @classmethod
+    def _override_toml_files(cls) -> list[str]:
+        return ["tests/config.toml"]
+
+
+def _apply_model_dict(base, override: dict):
+    """Recursively apply a dict of overrides to a pydantic model."""
+    update = {}
+    for key, value in override.items():
+        current = getattr(base, key, None)
+        if isinstance(value, dict) and current is not None and hasattr(current, "model_copy"):
+            update[key] = _apply_model_dict(current, value)
+        else:
+            update[key] = value
+    return base.model_copy(update=update)
+
+
+def _apply_dict_override(base: Settings, override: dict) -> Settings:
+    """Apply a nested dict override to a Settings instance."""
+    return _apply_model_dict(base, override)
+
+
+@contextmanager
+def settings_override(override: dict):
+    """Context manager to temporarily apply a nested dict override to settings."""
+    from shard_core.settings import settings
+    old = settings()
+    set_settings(_apply_dict_override(old, override))
+    try:
+        yield
+    finally:
+        set_settings(old)
 
 
 @pytest.fixture(autouse=True, scope="session")
@@ -55,13 +91,6 @@ def setup_all():
 def config_override(tmp_path, request):
     print(f"\nUsing temp path: {tmp_path}")
 
-    # path_root is set via env var instead of gconf.override_conf because
-    # app_factory.create_app() calls gconf.load() which resets overrides,
-    # but env vars always take precedence in gconf.get().
-    env_key = "FREESHARD_PATH_ROOT"
-    old_env = os.environ.get(env_key)
-    os.environ[env_key] = f"{tmp_path}/path_root"
-
     # Detects the variable named *config_override* of a test module
     module_override = getattr(request.module, "config_override", {})
 
@@ -69,16 +98,13 @@ def config_override(tmp_path, request):
     function_override_mark = request.node.get_closest_marker("config_override")
     function_override = function_override_mark.args[0] if function_override_mark else {}
 
-    with (
-        gconf.override_conf(module_override),
-        gconf.override_conf(function_override),
-    ):
-        yield
+    base = _TestSettings(path_root=str(tmp_path / "path_root"))
+    combined = _apply_dict_override(base, {**module_override, **function_override})
+    set_settings(combined)
 
-    if old_env is None:
-        del os.environ[env_key]
-    else:
-        os.environ[env_key] = old_env
+    yield
+
+    reset_settings()
 
 
 @pytest_asyncio.fixture
@@ -141,38 +167,45 @@ mock_shard = ShardDb(
 
 @contextmanager
 def requests_mock_context(*, shard: ShardDb = None, profile: Profile = None):
+    from shard_core.settings import settings
+
     management_api = "https://management-mock"
     controller_base_url = "https://freeshard-controller-mock"
-
-    config_override = {
-        "management": {"api_url": management_api},
-        "freeshard_controller": {"base_url": controller_base_url},
-    }
     management_shared_secret = "constantSharedSecret"
-    with (
-        responses.RequestsMock(assert_all_requests_are_fired=False) as rsps,
-        gconf.override_conf(config_override),
-    ):
-        rsps.add_callback(
-            responses.PUT,
-            f"{controller_base_url}/resize",
-            callback=requests_mock_resize,
-        )
-        rsps.post(
-            f"{management_api}/app_usage",
-        )
-        rsps.get(
-            f"{management_api}/sharedSecret",
-            body=json.dumps({"shared_secret": management_shared_secret}),
-        )
-        rsps.get(
-            f"{controller_base_url}/api/shards/self",
-            body=(shard or mock_shard).json(),
-        )
-        rsps.post(f"{controller_base_url}/api/feedback")
-        rsps.get(f"{controller_base_url}/api/foo")
-        rsps.add_passthru("")
-        yield rsps
+
+    old_settings = settings()
+    new_settings = old_settings.model_copy(update={
+        "management": old_settings.management.model_copy(update={"api_url": management_api}),
+        "freeshard_controller": old_settings.freeshard_controller.model_copy(
+            update={"base_url": controller_base_url}
+        ),
+    })
+    set_settings(new_settings)
+
+    try:
+        with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
+            rsps.add_callback(
+                responses.PUT,
+                f"{controller_base_url}/resize",
+                callback=requests_mock_resize,
+            )
+            rsps.post(
+                f"{management_api}/app_usage",
+            )
+            rsps.get(
+                f"{management_api}/sharedSecret",
+                body=json.dumps({"shared_secret": management_shared_secret}),
+            )
+            rsps.get(
+                f"{controller_base_url}/api/shards/self",
+                body=(shard or mock_shard).json(),
+            )
+            rsps.post(f"{controller_base_url}/api/feedback")
+            rsps.get(f"{controller_base_url}/api/foo")
+            rsps.add_passthru("")
+            yield rsps
+    finally:
+        set_settings(old_settings)
 
 
 def requests_mock_resize(request: PreparedRequest):
@@ -276,6 +309,7 @@ def memory_logger():
 
 
 def requires_test_env(*envs):
+    import os
     if env := os.environ.get("TEST_ENV"):
         return pytest.mark.skipif(
             env not in list(envs),

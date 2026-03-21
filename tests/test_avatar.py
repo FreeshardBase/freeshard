@@ -1,10 +1,10 @@
 from pathlib import Path
 
-import gconf
 from fastapi import status
 from httpx import AsyncClient
 
 from shard_core.data_model.identity import OutputIdentity
+from shard_core.settings import settings
 from tests.conftest import requires_test_env
 
 
@@ -19,7 +19,7 @@ async def test_upload_happy(api_client: AsyncClient):
     response.raise_for_status()
 
     uploaded_file_path = (
-        Path(gconf.get("path_root"))
+        Path(settings().path_root)
         / "core"
         / "assets"
         / "avatars"
@@ -70,7 +70,7 @@ async def test_upload_different_filetypes(api_client: AsyncClient):
     )
     response.raise_for_status()
 
-    avatars_dir = Path(gconf.get("path_root")) / "core" / "assets" / "avatars"
+    avatars_dir = Path(settings().path_root) / "core" / "assets" / "avatars"
     assert len(list(avatars_dir.iterdir())) == 1
 
 

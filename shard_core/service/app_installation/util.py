@@ -2,7 +2,6 @@ import logging
 from pathlib import Path
 
 import aiofiles
-import gconf
 import httpx
 import jinja2
 import pydantic
@@ -14,6 +13,7 @@ from shard_core.data_model.app_meta import Status, InstalledApp
 from shard_core.data_model.identity import Identity, SafeIdentity
 from shard_core.service.app_installation.exceptions import AppInIllegalStatus
 from shard_core.service.app_tools import get_installed_apps_path, get_app_metadata
+from shard_core.settings import settings
 from shard_core.service.traefik_dynamic_config import AppInfo, compile_config
 from shard_core.util import signals
 
@@ -55,8 +55,8 @@ def update_app_status(app_name: str, status: Status, message: str | None = None)
 
 
 async def app_exists_in_store(name: str) -> bool:
-    app_store = gconf.get("apps.app_store")
-    url = f'{app_store["base_url"]}/{app_store["container_name"]}/master/all_apps/{name}/{name}.zip'
+    app_store = settings().apps.app_store
+    url = f'{app_store.base_url}/{app_store.container_name}/master/all_apps/{name}/{name}.zip'
     async with httpx.AsyncClient() as client:
         response = await client.get(url)
         return response.status_code == 200
@@ -64,11 +64,12 @@ async def app_exists_in_store(name: str) -> bool:
 
 async def render_docker_compose_template(app: InstalledApp):
     log.debug(f"creating docker-compose.yml for app {app.name}")
+    path_root_host = settings().path_root_host
     fs = {
-        "app_data": f'{gconf.get("path_root_host")}/user_data/app_data/{app.name}',
-        "all_app_data": f'{gconf.get("path_root_host")}/user_data/app_data',
-        "shared": f'{gconf.get("path_root_host")}/user_data/shared',
-        "installation_dir": f'{gconf.get("path_root_host")}/core/installed_apps/{app.name}',
+        "app_data": f'{path_root_host}/user_data/app_data/{app.name}',
+        "all_app_data": f'{path_root_host}/user_data/app_data',
+        "shared": f'{path_root_host}/user_data/shared',
+        "installation_dir": f'{path_root_host}/core/installed_apps/{app.name}',
     }
 
     with identities_table() as identities:
@@ -108,7 +109,7 @@ async def write_traefik_dyn_config():
     portal = SafeIdentity.from_identity(default_identity)
 
     traefik_dyn_filename = (
-        Path(gconf.get("path_root")) / "core" / "traefik_dyn" / "traefik_dyn.yml"
+        Path(settings().path_root) / "core" / "traefik_dyn" / "traefik_dyn.yml"
     )
     await _write_to_yaml(compile_config(app_infos, portal), traefik_dyn_filename)
 

@@ -1,7 +1,6 @@
 import logging
 from typing import Optional
 
-import gconf
 from cachetools import cached, TTLCache
 from fastapi import HTTPException, APIRouter, Cookie, Response, status, Header, Request
 from http_message_signatures import InvalidSignature
@@ -18,6 +17,7 @@ from shard_core.service.freeshard_controller import (
     validate_shared_secret,
     SharedSecretInvalid,
 )
+from shard_core.settings import settings
 from shard_core.util.signals import on_terminal_auth, on_request_to_app, on_peer_auth
 
 log = logging.getLogger(__name__)
@@ -101,7 +101,7 @@ def _match_app(x_forwarded_host) -> InstalledApp:
     return app
 
 
-@cached(cache=TTLCache(maxsize=8, ttl=gconf.get("tests.cache_ttl", default=3)))
+@cached(cache=TTLCache(maxsize=8, ttl=settings().tests.cache_ttl))
 def _get_identity():
     with identities_table() as identities:
         default_identity = Identity(
@@ -110,7 +110,7 @@ def _get_identity():
     return SafeIdentity.from_identity(default_identity)
 
 
-@cached(cache=TTLCache(maxsize=32, ttl=gconf.get("tests.cache_ttl", default=3)))
+@cached(cache=TTLCache(maxsize=32, ttl=settings().tests.cache_ttl))
 def _find_app(app_name) -> Optional[InstalledApp]:
     with installed_apps_table() as installed_apps:  # type: Table
         if result := installed_apps.get(Query().name == app_name):

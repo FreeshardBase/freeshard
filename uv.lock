@@ -530,16 +530,6 @@ wheels = [
 ]
 
 [[package]]
-name = "gconf"
-version = "0.9.3"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "pyyaml" },
-    { name = "setuptools" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/a6/2e/96749443a7aab4dbad34521d6af54d0d85b78aa66f15854f19aa95b22a31/gconf-0.9.3.tar.gz", hash = "sha256:44e38d7c34bf9f1c8de13a95816eeb2bbb35548e4b51ed96a97f5927652a33bb", size = 18250, upload-time = "2025-05-09T19:17:42.44Z" }
-
-[[package]]
 name = "genson"
 version = "1.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -994,6 +984,20 @@ wheels = [
 ]
 
 [[package]]
+name = "pydantic-settings"
+version = "2.13.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "python-dotenv" },
+    { name = "typing-inspection" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/52/6d/fffca34caecc4a3f97bda81b2098da5e8ab7efc9a66e819074a11955d87e/pydantic_settings-2.13.1.tar.gz", hash = "sha256:b4c11847b15237fb0171e1462bf540e294affb9b86db4d9aa5c01730bdbe4025", size = 223826, upload-time = "2026-02-19T13:45:08.055Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/00/4b/ccc026168948fec4f7555b9164c724cf4125eac006e176541483d2c959be/pydantic_settings-2.13.1-py3-none-any.whl", hash = "sha256:d56fd801823dbeae7f0975e1f8c8e25c258eb75d278ea7abb5d9cebb01b56237", size = 58929, upload-time = "2026-02-19T13:45:06.034Z" },
+]
+
+[[package]]
 name = "pygments"
 version = "2.19.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1320,11 +1324,11 @@ dependencies = [
     { name = "docker" },
     { name = "email-validator" },
     { name = "fastapi", extra = ["standard"] },
-    { name = "gconf" },
     { name = "httpx" },
     { name = "jinja2" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
+    { name = "pydantic-settings" },
     { name = "pyjwt" },
     { name = "python-gitlab" },
     { name = "python-multipart" },
@@ -1368,11 +1372,11 @@ requires-dist = [
     { name = "docker" },
     { name = "email-validator" },
     { name = "fastapi", extras = ["standard"] },
-    { name = "gconf", specifier = "~=0.9.3" },
     { name = "httpx" },
     { name = "jinja2" },
     { name = "psycopg", extras = ["binary"] },
     { name = "pydantic", specifier = ">=2,<3" },
+    { name = "pydantic-settings", specifier = ">=2,<3" },
     { name = "pyjwt" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "pytest-asyncio", marker = "extra == 'dev'" },

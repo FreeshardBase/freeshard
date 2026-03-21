@@ -1,11 +1,11 @@
 from pathlib import Path
 from typing import BinaryIO
 
-import gconf
+from shard_core.settings import settings
 
 
 def assets_path() -> Path:
-    return Path(gconf.get("path_root")) / "core" / "assets"
+    return Path(settings().path_root) / "core" / "assets"
 
 
 def avatars_path() -> Path:

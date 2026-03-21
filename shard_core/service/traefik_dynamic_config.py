@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 from typing import List
 
-import gconf
-
 from shard_core.data_model import traefik_dyn_config as t
 from shard_core.data_model.app_meta import (
     InstalledApp,
@@ -11,7 +9,7 @@ from shard_core.data_model.app_meta import (
     AppMeta,
 )
 from shard_core.data_model.identity import SafeIdentity
-from shard_core.util.misc import str_to_bool
+from shard_core.settings import settings
 
 
 @dataclass
@@ -225,4 +223,4 @@ def make_cert_resolver(portal: SafeIdentity):
 
 
 def _disable_ssl() -> bool:
-    return str_to_bool(gconf.get("traefik.disable_ssl", default="false"))
+    return settings().traefik.disable_ssl

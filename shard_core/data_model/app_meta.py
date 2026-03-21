@@ -4,12 +4,12 @@ from enum import Enum
 from pathlib import Path as FilePath
 from typing import Optional, List, Dict, Union
 
-import gconf
 from pydantic import BaseModel, model_validator, field_validator
 from tinydb import Query
 
 from shard_core.database.database import installed_apps_table
 from shard_core.data_model import app_meta_migration
+from shard_core.settings import settings
 from shard_core.util import signals
 
 CURRENT_VERSION = "1.2"
@@ -158,7 +158,7 @@ class InstalledAppWithMeta(InstalledApp):
 def update_last_access(app: InstalledApp):
     now = datetime.datetime.utcnow()
     max_update_frequency = datetime.timedelta(
-        seconds=gconf.get("apps.last_access.max_update_frequency")
+        seconds=settings().apps.last_access.max_update_frequency
     )
     if app.last_access and now - app.last_access < max_update_frequency:
         return
