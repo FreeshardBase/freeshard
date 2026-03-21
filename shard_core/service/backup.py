@@ -121,7 +121,7 @@ async def backup_directories(
             endTime=overall_end_time,
         )
         with backups_table() as table:
-            table.insert(report.dict())
+            table.insert(report.model_dump())
         log.info("Backup done")
 
 
@@ -171,7 +171,7 @@ def _get_relative_directory(directory: Path) -> Path:
 def get_latest_backup_report() -> BackupReport | None:
     with backups_table() as table:
         latest_stats = max(table.all(), key=lambda x: x["endTime"], default=None)
-    return BackupReport.parse_obj(latest_stats) if latest_stats else None
+    return BackupReport.model_validate(latest_stats) if latest_stats else None
 
 
 def ensure_backup_passphrase():
@@ -192,7 +192,9 @@ def get_backup_passphrase(terminal_id: str) -> str:
         time=datetime.datetime.now(datetime.timezone.utc),
         terminal_id=terminal_id,
     )
-    database.set_value(STORE_KEY_BACKUP_PASSPHRASE_LAST_ACCESS, last_access_info.dict())
+    database.set_value(
+        STORE_KEY_BACKUP_PASSPHRASE_LAST_ACCESS, last_access_info.model_dump()
+    )
     return passphrase
 
 

@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 def get_app_from_db(app_name: str) -> InstalledApp:
     with installed_apps_table() as installed_apps:
         if record := installed_apps.get(Query().name == app_name):
-            return InstalledApp.parse_obj(record)
+            return InstalledApp.model_validate(record)
         else:
             raise KeyError(app_name)
 
@@ -117,4 +117,4 @@ async def _write_to_yaml(spec: pydantic.BaseModel, output_path: Path):
     output_path.parent.mkdir(exist_ok=True, parents=True)
     async with aiofiles.open(output_path, "w") as f:
         await f.write("# == DO NOT MODIFY ==\n# this file is auto-generated\n\n")
-        await f.write(yaml.dump(spec.dict(exclude_none=True)))
+        await f.write(yaml.dump(spec.model_dump(exclude_none=True)))

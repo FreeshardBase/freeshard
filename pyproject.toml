@@ -21,7 +21,7 @@ dependencies = [
     "fastapi[standard]",
     "websockets",
     "pyjwt",
-    "pydantic==1.*",
+    "pydantic>=2,<3",
     "Jinja2",
     "pyyaml",
     "docker",

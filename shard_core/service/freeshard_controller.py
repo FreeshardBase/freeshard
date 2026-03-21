@@ -20,7 +20,7 @@ async def call_freeshard_controller(path: str, method: str = "GET", body: bytes 
 
 async def refresh_shared_secret():
     response = await call_freeshard_controller("api/shards/self")
-    shard = ShardDb.validate(response.json())
+    shard = ShardDb.model_validate(response.json())
     shared_secret = shard.shared_secret
     database.set_value(STORE_KEY_FREESHARD_CONTROLLER_SHARED_KEY, shared_secret)
     return shared_secret

@@ -10,13 +10,13 @@ from shard_core.data_model.app_meta import VMSize
 
 class Profile(BaseModel):
     vm_id: str
-    owner: Optional[str]
-    owner_email: Optional[str]
+    owner: Optional[str] = None
+    owner_email: Optional[str] = None
     time_created: datetime
-    time_assigned: Optional[datetime]
+    time_assigned: Optional[datetime] = None
     delete_after: Optional[datetime] = None
     vm_size: VMSize
-    max_vm_size: Optional[VMSize]
+    max_vm_size: Optional[VMSize] = None
 
     @classmethod
     def from_shard(cls, shard: ShardBase):
@@ -35,9 +35,9 @@ class Profile(BaseModel):
 
 
 def set_profile(profile: Profile | None):
-    set_value("profile", profile.dict() if profile else "None")
+    set_value("profile", profile.model_dump() if profile else "None")
 
 
 def get_profile() -> Profile | None:
     value = get_value("profile")
-    return None if value == "None" else Profile.parse_obj(value)
+    return None if value == "None" else Profile.model_validate(value)

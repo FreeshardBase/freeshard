@@ -22,7 +22,7 @@ class Terminal(BaseModel):
     id: str
     name: str
     icon: Icon = Icon.UNKNOWN
-    last_connection: Optional[datetime]
+    last_connection: Optional[datetime] = None
 
     def __str__(self):
         return f"Terminal[{self.id}, {self.name}]"
@@ -46,4 +46,6 @@ def update_terminal_last_connection(terminal: Terminal):
     with terminals_table() as terminals:  # type: Table
         existing_terminal = Terminal(**(terminals.get(Query().id == terminal.id)))
         existing_terminal.last_connection = datetime.utcnow()
-        terminals.update(existing_terminal.dict(), Query().id == existing_terminal.id)
+        terminals.update(
+            existing_terminal.model_dump(), Query().id == existing_terminal.id
+        )

@@ -76,14 +76,14 @@ async def docker_shutdown_app(name: str, set_status: bool = True, force: bool = 
 
 async def docker_stop_all_apps():
     with installed_apps_table() as installed_apps:
-        apps = [InstalledApp.parse_obj(a) for a in installed_apps.all()]
+        apps = [InstalledApp.model_validate(a) for a in installed_apps.all()]
     tasks = [docker_stop_app(app.name) for app in apps]
     await asyncio.gather(*tasks)
 
 
 async def docker_shutdown_all_apps(force: bool = False):
     with installed_apps_table() as installed_apps:
-        apps = [InstalledApp.parse_obj(a) for a in installed_apps.all()]
+        apps = [InstalledApp.model_validate(a) for a in installed_apps.all()]
     tasks = [docker_shutdown_app(app.name, force=force) for app in apps]
     await asyncio.gather(*tasks)
 
@@ -98,7 +98,7 @@ def get_app_metadata(app_name: str) -> AppMeta:
         raise MetadataNotFound(app_name)
     try:
         with open(app_path / "app_meta.json") as f:
-            return AppMeta.parse_obj(json.load(f))
+            return AppMeta.model_validate(json.load(f))
     except (FileNotFoundError, json.JSONDecodeError):
         raise MetadataNotFound(app_name)
 
@@ -119,7 +119,7 @@ def enrich_installed_app_with_meta(installed_app: InstalledApp) -> InstalledAppW
         metadata = get_app_metadata(installed_app.name)
     except MetadataNotFound:
         metadata = None
-    return InstalledAppWithMeta(**installed_app.dict(), meta=metadata)
+    return InstalledAppWithMeta(**installed_app.model_dump(), meta=metadata)
 
 
 async def docker_prune_images(apply_filter=True):

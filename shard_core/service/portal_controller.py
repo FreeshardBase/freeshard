@@ -30,7 +30,7 @@ async def refresh_profile() -> profile.Profile | None:
             return None
         else:
             raise
-    shard = ShardBase.parse_obj(response.json())
+    shard = ShardBase.model_validate(response.json())
     profile_ = profile.Profile.from_shard(shard)
     profile.set_profile(profile_)
     log.debug("refreshed profile")
@@ -40,4 +40,4 @@ async def refresh_profile() -> profile.Profile | None:
 async def get_backup_sas_url() -> SasUrlResponse:
     response = await _call_freeshard_controller("shard_backup/backup_sas_url")
     response.raise_for_status()
-    return SasUrlResponse.parse_obj(response.json())
+    return SasUrlResponse.model_validate(response.json())

@@ -1,10 +1,11 @@
 import datetime
+import json
 from enum import Enum
 from pathlib import Path as FilePath
 from typing import Optional, List, Dict, Union
 
 import gconf
-from pydantic import BaseModel, root_validator, validator
+from pydantic import BaseModel, model_validator, field_validator
 from tinydb import Query
 
 from shard_core.database.database import installed_apps_table
@@ -71,15 +72,15 @@ class VMSize(str, Enum):
 
 
 class StoreInfo(BaseModel):
-    description_short: Optional[str]
-    description_long: Optional[Union[str, List[str]]]
-    hint: Optional[Union[str, List[str]]]
-    is_featured: Optional[bool]
+    description_short: Optional[str] = None
+    description_long: Optional[Union[str, List[str]]] = None
+    hint: Optional[Union[str, List[str]]] = None
+    is_featured: Optional[bool] = None
 
 
 class Path(BaseModel):
     access: Access
-    headers: Optional[Dict[str, str]]
+    headers: Optional[Dict[str, str]] = None
 
 
 class Entrypoint(BaseModel):
@@ -90,34 +91,33 @@ class Entrypoint(BaseModel):
 
 class Lifecycle(BaseModel):
     always_on: bool = False
-    idle_time_for_shutdown: Optional[int]
+    idle_time_for_shutdown: Optional[int] = None
 
-    @validator("idle_time_for_shutdown")
+    @field_validator("idle_time_for_shutdown")
+    @classmethod
     def validate_idle_time_for_shutdown(cls, v):
         if v and v < 5:
             raise ValueError(f"idle_time_for_shutdown must be at least 5, was {v}")
         return v
 
-    @root_validator
-    def validate_exclusivity(cls, values):
-        if values.get("always_on") and values.get("idle_time_for_shutdown", None):
+    @model_validator(mode="after")
+    def validate_exclusivity(self):
+        if self.always_on and self.idle_time_for_shutdown is not None:
             raise ValueError(
                 "if always_on is true, idle_time_for_shutdown must not be set"
             )
-        if not values.get("always_on") and not values.get(
-            "idle_time_for_shutdown", None
-        ):
+        if not self.always_on and self.idle_time_for_shutdown is None:
             raise ValueError(
                 "if always_on is false or not set, idle_time_for_shutdown must be set"
             )
-        return values
+        return self
 
 
 class AppMeta(BaseModel):
     v: str
     app_version: str
-    upstream_repo: str | None
-    homepage: str | None
+    upstream_repo: str | None = None
+    homepage: str | None = None
     name: str
     pretty_name: str
     icon: str
@@ -125,9 +125,10 @@ class AppMeta(BaseModel):
     paths: Dict[str, Path]
     lifecycle: Lifecycle = Lifecycle(idle_time_for_shutdown=60)
     minimum_portal_size: VMSize = VMSize.XS
-    store_info: Optional[StoreInfo]
+    store_info: Optional[StoreInfo] = None
 
-    @root_validator(pre=True)
+    @model_validator(mode="before")
+    @classmethod
     def migrate(cls, values):
         migration_count = 0
         while values["v"] != CURRENT_VERSION:
@@ -169,4 +170,4 @@ if __name__ == "__main__":
     dest_dir = FilePath("schemas")
     dest_dir.mkdir(exist_ok=True)
     with open(dest_dir / f"schema_app_meta_{CURRENT_VERSION}.json", "w") as f:
-        f.write(AppMeta.schema_json(indent=2))
+        f.write(json.dumps(AppMeta.model_json_schema(), indent=2))

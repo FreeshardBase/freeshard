@@ -18,7 +18,7 @@ def init_default_identity():
                 '"Noone wants to manage their own server"\n\nOld outdated saying',
             )
             default_identity.is_default = True
-            identities.insert(default_identity.dict())
+            identities.insert(default_identity.model_dump())
             log.info(f"created initial default identity {default_identity.id}")
         else:
             default_identity = Identity(
@@ -35,8 +35,8 @@ def make_default(id):
         if new_default := Identity(**identities.get(Query().id == id)):
             last_default.is_default = False
             new_default.is_default = True
-            identities.update(last_default.dict(), Query().id == last_default.id)
-            identities.update(new_default.dict(), Query().id == new_default.id)
+            identities.update(last_default.model_dump(), Query().id == last_default.id)
+            identities.update(new_default.model_dump(), Query().id == new_default.id)
             log.info(f"set as default {new_default.id}")
         else:
             KeyError(id)

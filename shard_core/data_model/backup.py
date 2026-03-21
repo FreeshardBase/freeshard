@@ -8,25 +8,25 @@ class BackupStats(BaseModel):
     directory: str
     startTime: datetime.datetime
     endTime: datetime.datetime
-    bytes: int | None
-    checks: int | None
-    deletedDirs: int | None
-    deletes: int | None
-    elapsedTime: float | None
-    errors: int | None
-    fatalError: bool | None
-    renames: int | None
-    retryError: bool | None
-    serverSideCopies: int | None
-    serverSideCopyBytes: int | None
-    serverSideMoveBytes: int | None
-    serverSideMoves: int | None
-    speed: int | None
-    totalBytes: int | None
-    totalChecks: int | None
-    totalTransfers: int | None
-    transferTime: float | None
-    transfers: int | None
+    bytes: int | None = None
+    checks: int | None = None
+    deletedDirs: int | None = None
+    deletes: int | None = None
+    elapsedTime: float | None = None
+    errors: int | None = None
+    fatalError: bool | None = None
+    renames: int | None = None
+    retryError: bool | None = None
+    serverSideCopies: int | None = None
+    serverSideCopyBytes: int | None = None
+    serverSideMoveBytes: int | None = None
+    serverSideMoves: int | None = None
+    speed: int | None = None
+    totalBytes: int | None = None
+    totalChecks: int | None = None
+    totalTransfers: int | None = None
+    transferTime: float | None = None
+    transfers: int | None = None
 
 
 class BackupReport(BaseModel):

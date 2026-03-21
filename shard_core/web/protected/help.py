@@ -31,7 +31,7 @@ class Tour(BaseModel):
 @tour_router.put("", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def put_tour(tour: Tour):
     with tours_table() as tours:  # type: Table
-        tours.upsert(tour.dict(), Query().name == tour.name)
+        tours.upsert(tour.model_dump(), Query().name == tour.name)
 
 
 @tour_router.get("/{name}", response_model=Tour)
