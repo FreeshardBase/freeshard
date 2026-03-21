@@ -109,9 +109,7 @@ def _make_background_tasks() -> List[BackgroundTask]:
     s = settings()
     return [
         app_installation.worker.installation_worker,
-        PeriodicTask(
-            app_lifecycle.control_apps, s.apps.lifecycle.refresh_interval
-        ),
+        PeriodicTask(app_lifecycle.control_apps, s.apps.lifecycle.refresh_interval),
         PeriodicTask(peer.update_all_peer_pubkeys, 60),
         CronTask(
             app_usage_reporting.track_currently_installed_apps,
@@ -132,9 +130,7 @@ def _make_background_tasks() -> List[BackgroundTask]:
         ),
         PeriodicTask(disk.update_disk_space, 3),
         websocket.ws_worker,
-        PeriodicTask(
-            telemetry.send_telemetry, s.telemetry.send_interval_seconds
-        ),
+        PeriodicTask(telemetry.send_telemetry, s.telemetry.send_interval_seconds),
     ]
 
 

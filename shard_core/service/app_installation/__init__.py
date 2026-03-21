@@ -126,6 +126,6 @@ async def login_docker_registries():
                 "docker", "login", "-u", r.username, "-p", r.password, r.uri
             )
         except (SubprocessError, OSError) as e:
-            log.error(f'could not log in to registry {r.uri}: {e}')
+            log.error(f"could not log in to registry {r.uri}: {e}")
         else:
-            log.debug(f'logged in to registry {r.uri}')
+            log.debug(f"logged in to registry {r.uri}")

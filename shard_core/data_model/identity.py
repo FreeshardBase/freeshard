@@ -59,7 +59,7 @@ class Identity(BaseModel):
     @property
     def domain(self) -> str:
         dns = settings().dns
-        subdomain = self.id[:dns.prefix_length].lower()
+        subdomain = self.id[: dns.prefix_length].lower()
         domain = f"{subdomain}.{dns.zone}"
         return domain
 

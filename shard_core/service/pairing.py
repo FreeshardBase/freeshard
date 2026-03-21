@@ -31,9 +31,7 @@ def make_pairing_code(deadline: int = None):
         code=("".join(random.choices(string.digits, k=6))),
         created=now,
         valid_until=now
-        + timedelta(
-            seconds=deadline or settings().terminal.pairing_code_deadline
-        ),
+        + timedelta(seconds=deadline or settings().terminal.pairing_code_deadline),
     )
     database.set_value(STORE_KEY_PAIRING_CODE, pairing_code.model_dump())
     return pairing_code
@@ -94,9 +92,7 @@ def _ensure_jwt_secret():
     try:
         database.get_value(STORE_KEY_JWT_SECRET)
     except KeyError:
-        jwt_secret = secrets.token_urlsafe(
-            settings().terminal.jwt_secret_length
-        )
+        jwt_secret = secrets.token_urlsafe(settings().terminal.jwt_secret_length)
         database.set_value(STORE_KEY_JWT_SECRET, jwt_secret)
     return database.get_value(STORE_KEY_JWT_SECRET)
 

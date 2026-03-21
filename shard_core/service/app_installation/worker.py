@@ -179,7 +179,7 @@ async def _install_app_from_zip(installed_app, zip_file):
 
 async def _download_app_zip(name: str) -> Path:
     app_store = settings().apps.app_store
-    url = f'{app_store.base_url}/{app_store.container_name}/master/all_apps/{name}/{name}.zip'
+    url = f"{app_store.base_url}/{app_store.container_name}/master/all_apps/{name}/{name}.zip"
     async with httpx.AsyncClient() as client:
         response = await client.get(url)
         if response.status_code != 200:

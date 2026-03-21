@@ -125,7 +125,7 @@ def enrich_installed_app_with_meta(installed_app: InstalledApp) -> InstalledAppW
 async def docker_prune_images(apply_filter=True):
     command = ["docker", "image", "prune", "-fa"]
     if apply_filter:
-        command.extend(["--filter", f'until={settings().apps.pruning.max_age}h'])
+        command.extend(["--filter", f"until={settings().apps.pruning.max_age}h"])
     try:
         stdout = await subprocess(*command)
     except SubprocessError as e:

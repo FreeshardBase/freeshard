@@ -56,7 +56,11 @@ def _apply_model_dict(base, override: dict):
     update = {}
     for key, value in override.items():
         current = getattr(base, key, None)
-        if isinstance(value, dict) and current is not None and hasattr(current, "model_copy"):
+        if (
+            isinstance(value, dict)
+            and current is not None
+            and hasattr(current, "model_copy")
+        ):
             update[key] = _apply_model_dict(current, value)
         else:
             update[key] = value
@@ -67,6 +71,7 @@ def _apply_model_dict(base, override: dict):
 def settings_override(override: dict):
     """Context manager to temporarily apply a nested dict override to settings."""
     from shard_core.settings import settings
+
     old = settings()
     set_settings(_apply_model_dict(old, override))
     try:
@@ -169,12 +174,16 @@ def requests_mock_context(*, shard: ShardDb = None, profile: Profile = None):
     management_shared_secret = "constantSharedSecret"
 
     old_settings = settings()
-    new_settings = old_settings.model_copy(update={
-        "management": old_settings.management.model_copy(update={"api_url": management_api}),
-        "freeshard_controller": old_settings.freeshard_controller.model_copy(
-            update={"base_url": controller_base_url}
-        ),
-    })
+    new_settings = old_settings.model_copy(
+        update={
+            "management": old_settings.management.model_copy(
+                update={"api_url": management_api}
+            ),
+            "freeshard_controller": old_settings.freeshard_controller.model_copy(
+                update={"base_url": controller_base_url}
+            ),
+        }
+    )
     set_settings(new_settings)
 
     try:
@@ -305,6 +314,7 @@ def memory_logger():
 
 def requires_test_env(*envs):
     import os
+
     if env := os.environ.get("TEST_ENV"):
         return pytest.mark.skipif(
             env not in list(envs),

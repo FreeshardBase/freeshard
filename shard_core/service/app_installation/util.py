@@ -56,7 +56,7 @@ def update_app_status(app_name: str, status: Status, message: str | None = None)
 
 async def app_exists_in_store(name: str) -> bool:
     app_store = settings().apps.app_store
-    url = f'{app_store.base_url}/{app_store.container_name}/master/all_apps/{name}/{name}.zip'
+    url = f"{app_store.base_url}/{app_store.container_name}/master/all_apps/{name}/{name}.zip"
     async with httpx.AsyncClient() as client:
         response = await client.get(url)
         return response.status_code == 200
@@ -66,10 +66,10 @@ async def render_docker_compose_template(app: InstalledApp):
     log.debug(f"creating docker-compose.yml for app {app.name}")
     path_root_host = settings().path_root_host
     fs = {
-        "app_data": f'{path_root_host}/user_data/app_data/{app.name}',
-        "all_app_data": f'{path_root_host}/user_data/app_data',
-        "shared": f'{path_root_host}/user_data/shared',
-        "installation_dir": f'{path_root_host}/core/installed_apps/{app.name}',
+        "app_data": f"{path_root_host}/user_data/app_data/{app.name}",
+        "all_app_data": f"{path_root_host}/user_data/app_data",
+        "shared": f"{path_root_host}/user_data/shared",
+        "installation_dir": f"{path_root_host}/core/installed_apps/{app.name}",
     }
 
     with identities_table() as identities:
