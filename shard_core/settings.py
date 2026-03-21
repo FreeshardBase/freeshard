@@ -99,7 +99,7 @@ class TerminalSettings(BaseModel):
 
 
 class TestsSettings(BaseModel):
-    cache_ttl: int = 3
+    pass
 
 
 class Settings(BaseSettings):

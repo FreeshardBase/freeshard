@@ -6,6 +6,7 @@ from tinydb import Query
 
 from shard_core.database.database import installed_apps_table
 from shard_core.data_model.app_meta import InstalledApp
+from shard_core.web.internal.auth import _find_app
 from tests.conftest import requires_test_env
 
 
@@ -39,6 +40,7 @@ async def test_app_last_access_is_debounced(api_client):
     last_access = _get_last_access_time("filebrowser")
 
     time.sleep(0.1)
+    _find_app.cache.clear()
     await api_client.get(
         "internal/auth",
         headers={
@@ -50,6 +52,7 @@ async def test_app_last_access_is_debounced(api_client):
     assert _get_last_access_time("filebrowser") == last_access
 
     time.sleep(3)
+    _find_app.cache.clear()
     await api_client.get(
         "internal/auth",
         headers={

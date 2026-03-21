@@ -1,6 +1,3 @@
-tests:
-  cache_ttl: 0
-
 apps:
   lifecycle:
     refresh_interval: 2
