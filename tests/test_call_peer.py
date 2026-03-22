@@ -10,14 +10,13 @@ from tests.conftest import requires_test_env
 from tests.util import verify_signature_auth, modify_request_like_traefik_forward_auth
 
 
-@requires_test_env("full")
-async def test_call_peer_from_app_basic(api_client, peer_mock_requests):
-    whoareyou = await api_client.get("public/meta/whoareyou")
+async def test_call_peer_from_app_basic(app_client, peer_mock_requests):
+    whoareyou = await app_client.get("public/meta/whoareyou")
     identity = OutputIdentity(**whoareyou.json())
     pubkey = PublicKey(identity.public_key_pem)
 
     path = "/foo/bar"
-    response = await api_client.get(
+    response = await app_client.get(
         f"internal/call_peer/{peer_mock_requests.identity.short_id}{path}"
     )
     assert response.status_code == 200
@@ -28,14 +27,13 @@ async def test_call_peer_from_app_basic(api_client, peer_mock_requests):
     assert received_request.path_url == path
 
 
-@requires_test_env("full")
-async def test_call_peer_from_app_post(api_client, peer_mock_requests):
-    wouareyou = await api_client.get("public/meta/whoareyou")
+async def test_call_peer_from_app_post(app_client, peer_mock_requests):
+    wouareyou = await app_client.get("public/meta/whoareyou")
     identity = OutputIdentity(**wouareyou.json())
     pubkey = PublicKey(identity.public_key_pem)
 
     path = "/foo/bar"
-    response = await api_client.post(
+    response = await app_client.post(
         f"internal/call_peer/{peer_mock_requests.identity.short_id}{path}",
         data=b"foo data bar",
     )

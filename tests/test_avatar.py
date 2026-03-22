@@ -5,15 +5,13 @@ from httpx import AsyncClient
 
 from shard_core.data_model.identity import OutputIdentity
 from shard_core.settings import settings
-from tests.conftest import requires_test_env
 
 
-@requires_test_env("full")
-async def test_upload_happy(api_client: AsyncClient):
-    i = await api_client.get("protected/identities/default")
+async def test_upload_happy(app_client: AsyncClient):
+    i = await app_client.get("protected/identities/default")
     default_id = OutputIdentity.model_validate(i.json())
     with open("tests/mock_assets/mock_avatar.png", "rb") as avatar_file:
-        response = await api_client.put(
+        response = await app_client.put(
             f"protected/identities/{default_id.id}/avatar", files={"file": avatar_file}
         )
     response.raise_for_status()
@@ -30,41 +28,38 @@ async def test_upload_happy(api_client: AsyncClient):
         assert uploaded_file_path.read_bytes() == avatar_file.read()
 
 
-@requires_test_env("full")
-async def test_upload_wrong_file_type(api_client: AsyncClient):
-    i = await api_client.get("protected/identities/default")
+async def test_upload_wrong_file_type(app_client: AsyncClient):
+    i = await app_client.get("protected/identities/default")
     default_id = OutputIdentity.model_validate(i.json())
-    response = await api_client.put(
+    response = await app_client.put(
         f"protected/identities/{default_id.id}/avatar",
         files={"file": ("filename.pdf", b"some bytes")},
     )
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
 
-@requires_test_env("full")
-async def test_upload_to_unknown_identity(api_client: AsyncClient):
-    i = await api_client.get("protected/identities/default")
+async def test_upload_to_unknown_identity(app_client: AsyncClient):
+    i = await app_client.get("protected/identities/default")
     default_id = OutputIdentity.model_validate(i.json())
     wrong_hash_id = "foobar" + default_id.id[6:]
-    response = await api_client.put(
+    response = await app_client.put(
         f"protected/identities/{wrong_hash_id}/avatar",
         files={"file": ("filename.png", b"some bytes")},
     )
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
-@requires_test_env("full")
-async def test_upload_different_filetypes(api_client: AsyncClient):
-    i = await api_client.get("protected/identities/default")
+async def test_upload_different_filetypes(app_client: AsyncClient):
+    i = await app_client.get("protected/identities/default")
     default_id = OutputIdentity.model_validate(i.json())
 
-    response = await api_client.put(
+    response = await app_client.put(
         f"protected/identities/{default_id.id}/avatar",
         files={"file": ("filename.png", b"some bytes")},
     )
     response.raise_for_status()
 
-    response = await api_client.put(
+    response = await app_client.put(
         f"protected/identities/{default_id.id}/avatar",
         files={"file": ("filename.jpg", b"some bytes")},
     )
@@ -74,98 +69,91 @@ async def test_upload_different_filetypes(api_client: AsyncClient):
     assert len(list(avatars_dir.iterdir())) == 1
 
 
-@requires_test_env("full")
-async def test_put_and_get_happy(api_client: AsyncClient):
-    i = await api_client.get("protected/identities/default")
+async def test_put_and_get_happy(app_client: AsyncClient):
+    i = await app_client.get("protected/identities/default")
     default_id = OutputIdentity.model_validate(i.json())
 
     sent_bytes = b"some bytes"
-    response = await api_client.put(
+    response = await app_client.put(
         f"protected/identities/{default_id.id}/avatar",
         files={"file": ("filename.png", sent_bytes)},
     )
     response.raise_for_status()
 
-    response = await api_client.get(f"protected/identities/{default_id.id}/avatar")
+    response = await app_client.get(f"protected/identities/{default_id.id}/avatar")
     response.raise_for_status()
     response_bytes = response.read()
     assert response_bytes == sent_bytes
     assert response.headers["content-type"] == "image/png"
 
-    response = await api_client.get("public/meta/avatar")
+    response = await app_client.get("public/meta/avatar")
     response.raise_for_status()
     response_bytes = response.read()
     assert response_bytes == sent_bytes
     assert response.headers["content-type"] == "image/png"
 
 
-@requires_test_env("full")
-async def test_get_from_missing_identity(api_client: AsyncClient):
-    i = await api_client.get("protected/identities/default")
+async def test_get_from_missing_identity(app_client: AsyncClient):
+    i = await app_client.get("protected/identities/default")
     default_id = OutputIdentity.model_validate(i.json())
     wrong_hash_id = "foobar" + default_id.id[6:]
 
-    response = await api_client.get(f"protected/identities/{wrong_hash_id}/avatar")
+    response = await app_client.get(f"protected/identities/{wrong_hash_id}/avatar")
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
-@requires_test_env("full")
-async def test_get_missing_avatar(api_client: AsyncClient):
-    i = await api_client.get("protected/identities/default")
+async def test_get_missing_avatar(app_client: AsyncClient):
+    i = await app_client.get("protected/identities/default")
     default_id = OutputIdentity.model_validate(i.json())
 
-    response = await api_client.get(f"protected/identities/{default_id.id}/avatar")
+    response = await app_client.get(f"protected/identities/{default_id.id}/avatar")
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
-@requires_test_env("full")
-async def test_delete_avatar_happy(api_client: AsyncClient):
-    i = await api_client.get("protected/identities/default")
+async def test_delete_avatar_happy(app_client: AsyncClient):
+    i = await app_client.get("protected/identities/default")
     default_id = OutputIdentity.model_validate(i.json())
 
     sent_bytes = b"some bytes"
-    response = await api_client.put(
+    response = await app_client.put(
         f"protected/identities/{default_id.id}/avatar",
         files={"file": ("filename.png", sent_bytes)},
     )
     response.raise_for_status()
 
-    response = await api_client.delete(f"protected/identities/{default_id.id}/avatar")
+    response = await app_client.delete(f"protected/identities/{default_id.id}/avatar")
     response.raise_for_status()
 
-    response = await api_client.get(f"protected/identities/{default_id.id}/avatar")
+    response = await app_client.get(f"protected/identities/{default_id.id}/avatar")
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
-@requires_test_env("full")
-async def test_delete_from_missing_identity(api_client: AsyncClient):
-    i = await api_client.get("protected/identities/default")
+async def test_delete_from_missing_identity(app_client: AsyncClient):
+    i = await app_client.get("protected/identities/default")
     default_id = OutputIdentity.model_validate(i.json())
     wrong_hash_id = "foobar" + default_id.id[6:]
 
-    response = await api_client.delete(f"protected/identities/{wrong_hash_id}/avatar")
+    response = await app_client.delete(f"protected/identities/{wrong_hash_id}/avatar")
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
-@requires_test_env("full")
-async def test_delete_missing_avatar(api_client: AsyncClient):
-    i = await api_client.get("protected/identities/default")
+async def test_delete_missing_avatar(app_client: AsyncClient):
+    i = await app_client.get("protected/identities/default")
     default_id = OutputIdentity.model_validate(i.json())
 
-    response = await api_client.delete(f"protected/identities/{default_id.id}/avatar")
+    response = await app_client.delete(f"protected/identities/{default_id.id}/avatar")
     response.raise_for_status()
 
 
-@requires_test_env("full")
-async def test_put_and_get_default_avatar_happy(api_client: AsyncClient):
+async def test_put_and_get_default_avatar_happy(app_client: AsyncClient):
     sent_bytes = b"some bytes"
-    response = await api_client.put(
+    response = await app_client.put(
         "protected/identities/default/avatar",
         files={"file": ("filename.png", sent_bytes)},
     )
     response.raise_for_status()
 
-    response = await api_client.get("protected/identities/default/avatar")
+    response = await app_client.get("protected/identities/default/avatar")
     response.raise_for_status()
 
     response_bytes = response.read()
@@ -173,23 +161,21 @@ async def test_put_and_get_default_avatar_happy(api_client: AsyncClient):
     assert response.headers["content-type"] == "image/png"
 
 
-@requires_test_env("full")
-async def test_get_missing_default_avatar(api_client: AsyncClient):
-    response = await api_client.get("protected/identities/default/avatar")
+async def test_get_missing_default_avatar(app_client: AsyncClient):
+    response = await app_client.get("protected/identities/default/avatar")
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
-@requires_test_env("full")
-async def test_delete_default_avatar(api_client: AsyncClient):
+async def test_delete_default_avatar(app_client: AsyncClient):
     sent_bytes = b"some bytes"
-    response = await api_client.put(
+    response = await app_client.put(
         "protected/identities/default/avatar",
         files={"file": ("filename.png", sent_bytes)},
     )
     response.raise_for_status()
 
-    response = await api_client.delete("protected/identities/default/avatar")
+    response = await app_client.delete("protected/identities/default/avatar")
     response.raise_for_status()
 
-    response = await api_client.get("protected/identities/default/avatar")
+    response = await app_client.get("protected/identities/default/avatar")
     assert response.status_code == status.HTTP_404_NOT_FOUND

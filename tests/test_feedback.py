@@ -1,10 +1,6 @@
-from tests.conftest import requires_test_env
-
-
-@requires_test_env("full")
-async def test_post_quick_feedback(requests_mock, api_client):
+async def test_post_quick_feedback(requests_mock, app_client):
     feedback_text = "This is a test feedback"
-    response = await api_client.post(
+    response = await app_client.post(
         "protected/feedback/quick",
         json={"text": feedback_text},
     )

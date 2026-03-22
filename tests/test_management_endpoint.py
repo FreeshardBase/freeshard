@@ -21,16 +21,15 @@ async def test_install_app(api_client: AsyncClient, requests_mock):
     assert any(a["name"] == "mock_app" for a in installed_apps)
 
 
-@requires_test_env("full")
-async def test_make_pairing_code(api_client: AsyncClient, requests_mock):
-    pairing_code_response = await api_client.get(
+async def test_make_pairing_code(app_client: AsyncClient, requests_mock):
+    pairing_code_response = await app_client.get(
         "management/pairing_code", headers={"authorization": "constantSharedSecret"}
     )
     pairing_code_response.raise_for_status()
     pairing_code = PairingCode.model_validate(pairing_code_response.json())
 
     add_terminal_response = await add_terminal(
-        api_client, pairing_code.code, "new_terminal"
+        app_client, pairing_code.code, "new_terminal"
     )
     add_terminal_response.raise_for_status()
     assert add_terminal_response.status_code == 201
