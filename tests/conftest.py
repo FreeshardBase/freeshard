@@ -202,7 +202,7 @@ def requests_mock_context(*, shard: ShardDb = None, profile: Profile = None):
             )
             rsps.get(
                 f"{controller_base_url}/api/shards/self",
-                body=(shard or mock_shard).json(),
+                body=(shard or mock_shard).model_dump_json(),
             )
             rsps.post(f"{controller_base_url}/api/feedback")
             rsps.get(f"{controller_base_url}/api/foo")
@@ -241,7 +241,7 @@ def peer_mock_requests(mocker):
     with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
         rsps.get(
             base_url + "/public/meta/whoareyou",
-            json=OutputIdentity(**peer_identity.dict()).dict(),
+            json=OutputIdentity(**peer_identity.model_dump()).model_dump(),
         )
         rsps.get(re.compile(app_url + "/.*"))
         rsps.post(re.compile(app_url + "/.*"))

@@ -40,7 +40,7 @@ async def test_telemetry_sending(mock_call_freeshard_controller: AsyncMock, api_
 
     assert mock_call_freeshard_controller.called
     body = mock_call_freeshard_controller.await_args_list[0].kwargs["body"]
-    tel = Telemetry.validate(json.loads(body.decode()))
+    tel = Telemetry.model_validate(json.loads(body.decode()))
     assert tel.no_of_requests == 3
 
 

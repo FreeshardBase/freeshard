@@ -45,7 +45,8 @@ async def test_edit(api_client: AsyncClient):
     response_terminal.name = "T2"
     response_terminal.icon = Icon.NOTEBOOK
     response = await api_client.put(
-        f"protected/terminals/id/{response_terminal.id}", data=response_terminal.json()
+        f"protected/terminals/id/{response_terminal.id}",
+        data=response_terminal.model_dump_json(),
     )
     assert response.status_code == 200
     response = await api_client.get(f"protected/terminals/id/{response_terminal.id}")
@@ -245,7 +246,9 @@ async def test_last_connection(api_client: AsyncClient):
 async def test_pairing_with_profile_missing_owner(
     requests_mock, api_client: AsyncClient
 ):
-    shard_without_owner = ShardDb.parse_obj(mock_shard.dict(exclude={"owner_name"}))
+    shard_without_owner = ShardDb.model_validate(
+        mock_shard.model_dump(exclude={"owner_name"})
+    )
     with requests_mock_context(shard=shard_without_owner):
         t_name = "T1"
         await pair_new_terminal(api_client, t_name)
@@ -260,7 +263,9 @@ async def test_pairing_with_profile_missing_owner(
 async def test_pairing_with_profile_missing_email(
     requests_mock, api_client: AsyncClient
 ):
-    shard_without_email = ShardDb.parse_obj(mock_shard.dict(exclude={"owner_email"}))
+    shard_without_email = ShardDb.model_validate(
+        mock_shard.model_dump(exclude={"owner_email"})
+    )
     with requests_mock_context(shard=shard_without_email):
         t_name = "T1"
         await pair_new_terminal(api_client, t_name)

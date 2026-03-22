@@ -16,10 +16,10 @@ def test_migrate_1_0_to_1_2():
         minimum_portal_size=VMSize.XS,
         store_info=None,
     )
-    app_meta_in_json = app_meta_in.dict(exclude={"pretty_name"})
+    app_meta_in_json = app_meta_in.model_dump(exclude={"pretty_name"})
     app_meta_in_json["v"] = "1.0"
 
-    app_meta_out = AppMeta.validate(app_meta_in_json)
+    app_meta_out = AppMeta.model_validate(app_meta_in_json)
     assert app_meta_out.v == "1.2"
 
     # done by migration to 1.1

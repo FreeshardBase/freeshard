@@ -52,7 +52,7 @@ async def wait_until_app_installed(api_client: AsyncClient, app_name, timeout=20
         if response.status_code == status.HTTP_404_NOT_FOUND:
             await asyncio.sleep(2)
             continue
-        app = InstalledApp.parse_obj(response.json())
+        app = InstalledApp.model_validate(response.json())
         if app.status in (
             Status.INSTALLING,
             Status.INSTALLATION_QUEUED,
