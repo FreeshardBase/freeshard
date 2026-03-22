@@ -15,7 +15,7 @@ from requests import PreparedRequest
 from requests_http_signature import HTTPSignatureAuth
 
 from shard_core.data_model.app_meta import InstalledApp, Status
-from shard_core.util.subprocess import subprocess
+from shard_core.util.subprocess import subprocess, SubprocessError
 
 WAITING_DOCKER_IMAGE = "nginx:alpine"
 
@@ -137,11 +137,39 @@ def modify_request_like_traefik_forward_auth(request: PreparedRequest) -> Reques
 
 @asynccontextmanager
 async def docker_network_portal():
-    await subprocess("docker", "network", "create", "portal")
+    try:
+        await subprocess("docker", "network", "create", "portal")
+    except SubprocessError:
+        pass  # network already exists
     try:
         yield
     finally:
-        await subprocess("docker", "network", "rm", "portal")
+        await _force_remove_docker_network("portal")
+
+
+async def _force_remove_docker_network(network: str):
+    """Disconnect all containers from a network, then remove it."""
+    try:
+        output = await subprocess(
+            "docker",
+            "network",
+            "inspect",
+            network,
+            "--format",
+            "{{range .Containers}}{{.Name}} {{end}}",
+        )
+        container_names = output.split()
+        for name in container_names:
+            try:
+                await subprocess("docker", "network", "disconnect", "-f", network, name)
+            except SubprocessError:
+                pass
+    except SubprocessError:
+        pass  # network doesn't exist, nothing to do
+    try:
+        await subprocess("docker", "network", "rm", network)
+    except SubprocessError:
+        pass
 
 
 async def retry_async(

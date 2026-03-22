@@ -78,14 +78,20 @@ async def docker_stop_all_apps():
     with installed_apps_table() as installed_apps:
         apps = [InstalledApp.model_validate(a) for a in installed_apps.all()]
     tasks = [docker_stop_app(app.name) for app in apps]
-    await asyncio.gather(*tasks)
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    for app, result in zip(apps, results):
+        if isinstance(result, Exception):
+            log.error(f"Error stopping app {app.name}: {result}")
 
 
 async def docker_shutdown_all_apps(force: bool = False):
     with installed_apps_table() as installed_apps:
         apps = [InstalledApp.model_validate(a) for a in installed_apps.all()]
     tasks = [docker_shutdown_app(app.name, force=force) for app in apps]
-    await asyncio.gather(*tasks)
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    for app, result in zip(apps, results):
+        if isinstance(result, Exception):
+            log.error(f"Error shutting down app {app.name}: {result}")
 
 
 def get_installed_apps_path() -> Path:
