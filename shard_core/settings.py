@@ -98,10 +98,6 @@ class TerminalSettings(BaseModel):
     jwt_secret_length: int = 64
 
 
-class TestsSettings(BaseModel):
-    pass
-
-
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="FREESHARD_",
@@ -120,7 +116,6 @@ class Settings(BaseSettings):
     freeshard_controller: FreeshardControllerSettings
     log: LogSettings = LogSettings()
     terminal: TerminalSettings = TerminalSettings()
-    tests: TestsSettings = TestsSettings()
 
     @classmethod
     def settings_customise_sources(
