@@ -1,8 +1,6 @@
 from shard_core.data_model.app_meta import AppMeta, Lifecycle, VMSize
-from tests.conftest import requires_test_env
 
 
-@requires_test_env("full")
 def test_migrate_1_0_to_1_2():
     app_meta_in = AppMeta(
         v="1.0",

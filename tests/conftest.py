@@ -2,6 +2,7 @@ import asyncio
 import importlib
 import json
 import logging
+import os
 import re
 import shutil
 from contextlib import contextmanager
@@ -19,6 +20,7 @@ from asgi_lifespan import LifespanManager
 from httpx import AsyncClient, ASGITransport
 from requests import PreparedRequest
 from responses import RequestsMock
+from tinydb.storages import MemoryStorage
 
 from shard_core.data_model.app_meta import VMSize
 from shard_core.data_model.backend.shard_model import (
@@ -138,6 +140,49 @@ async def api_client(requests_mock, mocker) -> AsyncGenerator[AsyncClient]:
             client.base_url = f'https://{whoareyou["domain"]}'
             await wait_until_all_apps_installed(client)
             yield client
+
+
+@pytest_asyncio.fixture
+async def app_client(mocker) -> AsyncGenerator[AsyncClient]:
+    """Lightweight fixture that creates the FastAPI app WITHOUT running the lifespan.
+
+    No Docker network is created or needed.  When the CI environment variable is set
+    (as in GitHub Actions), TinyDB uses MemoryStorage instead of file-based storage so
+    there is no file I/O overhead.
+    """
+    # Reload modules with global state so each test starts from a clean slate,
+    # just like the api_client fixture does.
+    importlib.reload(websocket)
+    importlib.reload(app_installation.worker)
+    importlib.reload(telemetry)
+
+    if os.environ.get("CI"):
+        # Patch get_db to use in-memory storage so tests run without file I/O
+        import tinydb
+        from tinydb_serialization import SerializationMiddleware
+        from tinydb_serialization.serializers import DateTimeSerializer
+
+        _memory_serialization = SerializationMiddleware(MemoryStorage)
+        _memory_serialization.register_serializer(DateTimeSerializer(), "TinyDate")
+        _shared_memory_db = tinydb.TinyDB(storage=_memory_serialization)
+
+        @contextmanager
+        def _memory_get_db():
+            yield _shared_memory_db
+
+        mocker.patch("shard_core.database.database.get_db", _memory_get_db)
+
+    # create_app() calls database.init_database() and identity.init_default_identity()
+    # internally; we do NOT run the lifespan so no Docker operations are triggered.
+    app = app_factory.create_app()
+
+    # Determine the domain from whoareyou so cookies work correctly
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="https://init", timeout=10
+    ) as client:
+        whoareyou = (await client.get("/public/meta/whoareyou")).json()
+        client.base_url = f'https://{whoareyou["domain"]}'
+        yield client
 
 
 mock_profile = Profile(

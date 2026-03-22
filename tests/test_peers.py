@@ -2,12 +2,10 @@ from httpx import AsyncClient
 from starlette import status
 
 from shard_core.data_model.peer import Peer
-from tests.conftest import requires_test_env
 
 
-@requires_test_env("full")
-async def test_add_and_delete(peer_mock_requests, api_client: AsyncClient):
-    response = await api_client.put(
+async def test_add_and_delete(peer_mock_requests, app_client: AsyncClient):
+    response = await app_client.put(
         "protected/peers",
         json={
             "id": peer_mock_requests.identity.short_id,
@@ -15,21 +13,20 @@ async def test_add_and_delete(peer_mock_requests, api_client: AsyncClient):
     )
     assert response.status_code == status.HTTP_200_OK
 
-    response = await api_client.get("protected/peers")
+    response = await app_client.get("protected/peers")
     assert len(response.json()) == 1
 
-    response = await api_client.delete(
+    response = await app_client.delete(
         f"protected/peers/{peer_mock_requests.identity.short_id}"
     )
     assert response.status_code == status.HTTP_204_NO_CONTENT
 
-    response = await api_client.get("protected/peers")
+    response = await app_client.get("protected/peers")
     assert len(response.json()) == 0
 
 
-@requires_test_env("full")
-async def test_info_is_resolved(api_client: AsyncClient, peer_mock_requests):
-    response = await api_client.put(
+async def test_info_is_resolved(app_client: AsyncClient, peer_mock_requests):
+    response = await app_client.put(
         "protected/peers",
         json={
             "id": peer_mock_requests.identity.short_id,
@@ -37,10 +34,10 @@ async def test_info_is_resolved(api_client: AsyncClient, peer_mock_requests):
     )
     assert response.status_code == status.HTTP_200_OK
 
-    response = await api_client.get("protected/peers")
+    response = await app_client.get("protected/peers")
     assert len(response.json()) == 1
 
-    response = await api_client.get(
+    response = await app_client.get(
         f"protected/peers/{peer_mock_requests.identity.id[:6]}"
     )
     response.raise_for_status()
@@ -49,9 +46,8 @@ async def test_info_is_resolved(api_client: AsyncClient, peer_mock_requests):
     assert peer.name == "mock peer"
 
 
-@requires_test_env("full")
-async def test_add_invalid_id(api_client: AsyncClient):
-    response = await api_client.put(
+async def test_add_invalid_id(app_client: AsyncClient):
+    response = await app_client.put(
         "protected/peers",
         json={
             "id": "foo",
@@ -59,13 +55,12 @@ async def test_add_invalid_id(api_client: AsyncClient):
     )
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
-    response = await api_client.get("protected/peers")
+    response = await app_client.get("protected/peers")
     assert len(response.json()) == 0
 
 
-@requires_test_env("full")
-async def test_update_with_real_name(api_client: AsyncClient, peer_mock_requests):
-    response = await api_client.put(
+async def test_update_with_real_name(app_client: AsyncClient, peer_mock_requests):
+    response = await app_client.put(
         "protected/peers",
         json={
             "id": peer_mock_requests.identity.short_id,
@@ -74,14 +69,13 @@ async def test_update_with_real_name(api_client: AsyncClient, peer_mock_requests
     )
     assert response.status_code == status.HTTP_200_OK
 
-    response = await api_client.get("protected/peers")
+    response = await app_client.get("protected/peers")
     assert len(response.json()) == 1
     assert response.json()[0]["name"] == "mock peer"
 
 
-@requires_test_env("full")
-async def test_is_unreachable(api_client: AsyncClient):
-    response = await api_client.put(
+async def test_is_unreachable(app_client: AsyncClient):
+    response = await app_client.put(
         "protected/peers",
         json={
             "id": "foobar",
@@ -89,6 +83,6 @@ async def test_is_unreachable(api_client: AsyncClient):
     )
     assert response.status_code == status.HTTP_200_OK
 
-    response = await api_client.get("protected/peers")
+    response = await app_client.get("protected/peers")
     assert len(response.json()) == 1
     assert response.json()[0]["is_reachable"] is False
