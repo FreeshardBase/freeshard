@@ -33,14 +33,14 @@ async def test_app_reporting(api_client, requests_mock: responses.RequestsMock):
 
     with app_usage_track_table() as tracks:
         tracks.truncate()
-        tracks.insert(included_track_1.dict())
-        tracks.insert(included_track_2.dict())
-        tracks.insert(excluded_track_early.dict())
-        tracks.insert(excluded_track_late.dict())
+        tracks.insert(included_track_1.model_dump())
+        tracks.insert(included_track_2.model_dump())
+        tracks.insert(excluded_track_early.model_dump())
+        tracks.insert(excluded_track_late.model_dump())
 
     await asyncio.sleep(3.5)  # to trigger reporting
     assert len(requests_mock.calls) >= 1
-    report = AppUsageReport.parse_raw(requests_mock.calls[1].request.body)
+    report = AppUsageReport.model_validate_json(requests_mock.calls[1].request.body)
 
     assert report.year == track_timestamp.year
     assert report.month == track_timestamp.month

@@ -1,10 +1,10 @@
 from typing import Optional
 
-import gconf
 from email_validator import validate_email, EmailNotValidError
 from pydantic import field_validator, BaseModel, computed_field
 
 from shard_core.service import crypto
+from shard_core.settings import settings
 
 
 class Identity(BaseModel):
@@ -58,10 +58,9 @@ class Identity(BaseModel):
     @computed_field
     @property
     def domain(self) -> str:
-        zone = gconf.get("dns.zone")
-        prefix_length = gconf.get("dns.prefix length")
-        subdomain = self.id[:prefix_length].lower()
-        domain = f"{subdomain}.{zone}"
+        dns = settings().dns
+        subdomain = self.id[: dns.prefix_length].lower()
+        domain = f"{subdomain}.{dns.zone}"
         return domain
 
 

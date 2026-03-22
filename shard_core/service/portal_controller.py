@@ -1,10 +1,9 @@
 import logging
 from requests.exceptions import HTTPError
 
-import gconf
-
 from shard_core.data_model.backend.shard_model import ShardBase, SasUrlResponse
 from shard_core.data_model import profile
+from shard_core.settings import settings
 from shard_core.service.signed_call import signed_request
 
 log = logging.getLogger(__name__)
@@ -13,7 +12,7 @@ log = logging.getLogger(__name__)
 async def _call_freeshard_controller(
     path: str, method: str = "GET", body: bytes = None
 ):
-    controller_base_url = gconf.get("freeshard_controller.base_url")
+    controller_base_url = settings().freeshard_controller.base_url
     url = f"{controller_base_url}/api/{path}"
     log.debug(f"call to {method} {url}")
     return await signed_request(method, url, data=body)

@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 from typing import List
 
-import gconf
-
 from shard_core.data_model import traefik_dyn_config as t
 from shard_core.data_model.app_meta import (
     InstalledApp,
@@ -11,7 +9,7 @@ from shard_core.data_model.app_meta import (
     AppMeta,
 )
 from shard_core.data_model.identity import SafeIdentity
-from shard_core.util.misc import str_to_bool
+from shard_core.settings import settings
 
 
 @dataclass
@@ -48,35 +46,35 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
             entryPoints=[http_entrypoint],
             service="shard_core",
             middlewares=["strip", "auth-public"],
-            tls=make_cert_resolver(portal),
+            tls=make_http_cert_resolver(portal),
         ),
         "shard_core_private": t.HttpRouter(
             rule="PathPrefix(`/core/protected`)",
             entryPoints=[http_entrypoint],
             service="shard_core",
             middlewares=["strip", "auth-private"],
-            tls=make_cert_resolver(portal),
+            tls=make_http_cert_resolver(portal),
         ),
         "shard_core_management": t.HttpRouter(
             rule="PathPrefix(`/core/management`)",
             entryPoints=[http_entrypoint],
             service="shard_core",
             middlewares=["strip", "auth-management"],
-            tls=make_cert_resolver(portal),
+            tls=make_http_cert_resolver(portal),
         ),
         "web-terminal": t.HttpRouter(
             rule="PathPrefix(`/`)",
             priority=1,
             entryPoints=[http_entrypoint],
             service="web-terminal",
-            tls=make_cert_resolver(portal),
+            tls=make_http_cert_resolver(portal),
         ),
         "traefik": t.HttpRouter(
             rule=f"HostRegexp(`traefik.{portal.domain}`)",
             entryPoints=[http_entrypoint],
             service="api@internal",
             middlewares=["auth-private"],
-            tls=make_cert_resolver(portal),
+            tls=make_http_cert_resolver(portal),
         ),
     }
 
@@ -171,14 +169,14 @@ def _add_router(
             entryPoints=[http_entrypoint],
             service=f"{app.name}_{ep_value}",
             middlewares=["app-error", "auth"],
-            tls=make_cert_resolver(portal),
+            tls=make_http_cert_resolver(portal),
         )
     elif entrypoint.entrypoint_port == EntrypointPort.MQTTS_1883:
         model.tcp.routers[f"{app.name}_{ep_value}"] = t.TcpRouter(
             rule=f"HostSNI(`{app.name}.{portal.domain}`)",
             entryPoints=["mqtt"],
             service=f"{app.name}_{ep_value}",
-            tls=make_cert_resolver(portal),
+            tls=make_tcp_cert_resolver(portal),
         )
     else:
         raise ValueError("Invalid entrypoint")
@@ -214,15 +212,23 @@ def _add_service(model: t.Model, entrypoint: Entrypoint, app: InstalledApp):
         raise ValueError("Invalid entrypoint")
 
 
-def make_cert_resolver(portal: SafeIdentity):
+def make_http_cert_resolver(portal: SafeIdentity):
     if _disable_ssl():
         return None
-    else:
-        return t.Tls1(
-            certResolver="letsencrypt",
-            domains=[t.Domain(main=portal.domain, sans=[f"*.{portal.domain}"])],
-        )
+    return t.Tls1(
+        certResolver="letsencrypt",
+        domains=[t.Domain(main=portal.domain, sans=[f"*.{portal.domain}"])],
+    )
+
+
+def make_tcp_cert_resolver(portal: SafeIdentity):
+    if _disable_ssl():
+        return None
+    return t.Tls3(
+        certResolver="letsencrypt",
+        domains=[t.Domain1(main=portal.domain, sans=[f"*.{portal.domain}"])],
+    )
 
 
 def _disable_ssl() -> bool:
-    return str_to_bool(gconf.get("traefik.disable_ssl", default="false"))
+    return settings().traefik.disable_ssl

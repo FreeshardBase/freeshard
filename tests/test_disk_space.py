@@ -11,7 +11,7 @@ from tests.conftest import requires_test_env
 async def test_disk_space_is_reported(api_client):
     response = await api_client.get("protected/stats/disk")
     assert response.status_code == status.HTTP_200_OK
-    disk_usage = DiskUsage.parse_obj(response.json())
+    disk_usage = DiskUsage.model_validate(response.json())
     assert disk_usage.total_gb > 0
     assert disk_usage.free_gb > 0
     assert disk_usage.disk_space_low is False
@@ -28,5 +28,5 @@ async def test_disk_space_is_low(mocker, api_client):
 
     response = await api_client.get("protected/stats/disk")
     assert response.status_code == status.HTTP_200_OK
-    disk_usage = DiskUsage.parse_obj(response.json())
+    disk_usage = DiskUsage.model_validate(response.json())
     assert disk_usage.disk_space_low is True

@@ -27,7 +27,7 @@ async def test_make_pairing_code(api_client: AsyncClient, requests_mock):
         "management/pairing_code", headers={"authorization": "constantSharedSecret"}
     )
     pairing_code_response.raise_for_status()
-    pairing_code = PairingCode.validate(pairing_code_response.json())
+    pairing_code = PairingCode.model_validate(pairing_code_response.json())
 
     add_terminal_response = await add_terminal(
         api_client, pairing_code.code, "new_terminal"

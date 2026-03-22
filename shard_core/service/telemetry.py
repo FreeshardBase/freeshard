@@ -1,10 +1,9 @@
 import datetime
 import logging
 
-import gconf
-
 from shard_core.data_model.backend.telemetry_model import Telemetry
 from shard_core.service.freeshard_controller import call_freeshard_controller
+from shard_core.settings import settings
 from shard_core.util.signals import on_terminal_auth, on_request_to_app
 
 log = logging.getLogger(__name__)
@@ -17,7 +16,7 @@ last_send: datetime.datetime = datetime.datetime.now(datetime.timezone.utc)
 @on_terminal_auth.connect
 @on_request_to_app.connect
 def record_request(_):
-    if not gconf.get("telemetry.enabled"):
+    if not settings().telemetry.enabled:
         return
 
     global no_of_requests
@@ -25,7 +24,7 @@ def record_request(_):
 
 
 async def send_telemetry():
-    if not gconf.get("telemetry.enabled"):
+    if not settings().telemetry.enabled:
         return
 
     global last_send

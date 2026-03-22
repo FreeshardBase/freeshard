@@ -7,7 +7,6 @@ import traceback
 from pathlib import Path
 from typing import List
 
-import gconf
 from requests import HTTPError
 
 from shard_core.database import database
@@ -17,6 +16,7 @@ from shard_core.data_model.backup import (
     BackupStats,
     BackupPassphraseLastAccessInfoDB,
 )
+from shard_core.settings import settings
 from shard_core.service.portal_controller import get_backup_sas_url
 from shard_core.util import passphrase as passphrase_util, signals
 
@@ -44,8 +44,9 @@ sync {directory} :azureblob:{container_name}/{directory}
 
 
 async def start_backup():
-    path_root = Path(gconf.get("path_root"))
-    directories = [path_root / d for d in gconf.get("services.backup.directories")]
+    s = settings()
+    path_root = Path(s.path_root)
+    directories = [path_root / d for d in s.services.backup.directories]
 
     if is_backup_in_progress():
         raise BackupStartFailedError("Sync in progress, please try again later.")
@@ -138,7 +139,7 @@ async def _backup_directory(
         container_name=container_name,
         directory=rel_directory,
     )
-    path_root = Path(gconf.get("path_root"))
+    path_root = Path(settings().path_root)
     process = await asyncio.create_subprocess_exec(
         *command.split(),
         cwd=path_root,
@@ -164,7 +165,7 @@ async def _get_obscured_passphrase():
 
 
 def _get_relative_directory(directory: Path) -> Path:
-    path_root = Path(gconf.get("path_root"))
+    path_root = Path(settings().path_root)
     return directory.relative_to(path_root)
 
 

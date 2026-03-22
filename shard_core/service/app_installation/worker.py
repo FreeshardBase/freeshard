@@ -6,7 +6,6 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Literal
 
-import gconf
 import httpx
 from pydantic import BaseModel
 from tinydb import Query
@@ -19,6 +18,7 @@ from shard_core.service.app_tools import (
     docker_stop_app,
     docker_shutdown_app,
 )
+from shard_core.settings import settings
 from shard_core.util import signals
 from .exceptions import AppDoesNotExist
 from .util import (
@@ -178,8 +178,8 @@ async def _install_app_from_zip(installed_app, zip_file):
 
 
 async def _download_app_zip(name: str) -> Path:
-    app_store = gconf.get("apps.app_store")
-    url = f'{app_store["base_url"]}/{app_store["container_name"]}/master/all_apps/{name}/{name}.zip'
+    app_store = settings().apps.app_store
+    url = f"{app_store.base_url}/{app_store.container_name}/master/all_apps/{name}/{name}.zip"
     async with httpx.AsyncClient() as client:
         response = await client.get(url)
         if response.status_code != 200:

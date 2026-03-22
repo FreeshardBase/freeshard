@@ -4,13 +4,13 @@ import secrets
 import string
 from datetime import datetime, timedelta, timezone
 
-import gconf
 import jwt
 from pydantic import BaseModel
 from tinydb import Query
 
 from shard_core.database import database
 from shard_core.database.database import terminals_table
+from shard_core.settings import settings
 from shard_core.data_model.terminal import Terminal
 
 STORE_KEY_JWT_SECRET = "terminal_jwt_secret"
@@ -31,9 +31,7 @@ def make_pairing_code(deadline: int = None):
         code=("".join(random.choices(string.digits, k=6))),
         created=now,
         valid_until=now
-        + timedelta(
-            seconds=deadline or gconf.get("terminal.pairing code deadline", default=600)
-        ),
+        + timedelta(seconds=deadline or settings().terminal.pairing_code_deadline),
     )
     database.set_value(STORE_KEY_PAIRING_CODE, pairing_code.model_dump())
     return pairing_code
@@ -94,9 +92,7 @@ def _ensure_jwt_secret():
     try:
         database.get_value(STORE_KEY_JWT_SECRET)
     except KeyError:
-        jwt_secret = secrets.token_urlsafe(
-            gconf.get("terminal.jwt secret length", default=64)
-        )
+        jwt_secret = secrets.token_urlsafe(settings().terminal.jwt_secret_length)
         database.set_value(STORE_KEY_JWT_SECRET, jwt_secret)
     return database.get_value(STORE_KEY_JWT_SECRET)
 

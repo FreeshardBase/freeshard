@@ -1,9 +1,8 @@
 import logging
 
-import gconf
-
 from shard_core.data_model.backend.shard_model import ShardDb
 from shard_core.database import database
+from shard_core.settings import settings
 from shard_core.service.signed_call import signed_request
 
 log = logging.getLogger(__name__)
@@ -12,7 +11,7 @@ STORE_KEY_FREESHARD_CONTROLLER_SHARED_KEY = "freeshard_controller_shared_key"
 
 
 async def call_freeshard_controller(path: str, method: str = "GET", body: bytes = None):
-    base_url = gconf.get("freeshard_controller.base_url")
+    base_url = settings().freeshard_controller.base_url
     url = f"{base_url}/{path}"
     log.debug(f"call to {method} {url}")
     return await signed_request(method, url, data=body)

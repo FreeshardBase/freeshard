@@ -18,7 +18,7 @@ async def test_app_starts_and_stops(requests_mock, api_client):
 
     assert docker_client.containers.get(app_name).status == "created"
     assert (
-        InstalledApp.parse_obj(
+        InstalledApp.model_validate(
             (await api_client.get(f"protected/apps/{app_name}")).json()
         ).status
         == Status.STOPPED
@@ -36,7 +36,7 @@ async def test_app_starts_and_stops(requests_mock, api_client):
     async def assert_app_running():
         assert docker_client.containers.get(app_name).status == "running"
         assert (
-            InstalledApp.parse_obj(
+            InstalledApp.model_validate(
                 (await api_client.get(f"protected/apps/{app_name}")).json()
             ).status
             == Status.RUNNING
@@ -45,7 +45,7 @@ async def test_app_starts_and_stops(requests_mock, api_client):
     async def assert_app_exited():
         assert docker_client.containers.get(app_name).status == "exited"
         assert (
-            InstalledApp.parse_obj(
+            InstalledApp.model_validate(
                 (await api_client.get(f"protected/apps/{app_name}")).json()
             ).status
             == Status.STOPPED
@@ -65,14 +65,14 @@ async def test_app_starts_and_stops(requests_mock, api_client):
 
     await retry_async(assert_app_running, timeout=10, retry_errors=[AssertionError])
     assert (
-        InstalledApp.parse_obj(
+        InstalledApp.model_validate(
             (await api_client.get(f"protected/apps/{app_name}")).json()
         ).status
         == Status.RUNNING
     )
     await retry_async(assert_app_exited, timeout=10, retry_errors=[AssertionError])
     assert (
-        InstalledApp.parse_obj(
+        InstalledApp.model_validate(
             (await api_client.get(f"protected/apps/{app_name}")).json()
         ).status
         == Status.STOPPED
@@ -92,7 +92,7 @@ async def test_always_on_app_starts(requests_mock, api_client):
     async def assert_app_running():
         assert docker_client.containers.get(app_name).status == "running"
         assert (
-            InstalledApp.parse_obj(
+            InstalledApp.model_validate(
                 (await api_client.get(f"protected/apps/{app_name}")).json()
             ).status
             == Status.RUNNING

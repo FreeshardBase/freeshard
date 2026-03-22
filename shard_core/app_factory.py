@@ -1,12 +1,10 @@
 import logging
-import os
 import sys
 from contextlib import asynccontextmanager
 from importlib.metadata import metadata
 from pathlib import Path
 from typing import List
 
-import gconf
 import jinja2
 from fastapi import FastAPI
 from pydantic import ValidationError
@@ -37,20 +35,14 @@ from .service.app_tools import (
 from tinydb import Query
 from .service.backup import start_backup
 from .service.pairing import make_pairing_code
+from .settings import settings
 from .util.async_util import PeriodicTask, BackgroundTask, CronTask
-from .util.misc import str_to_bool
 from .web import internal, public, protected, management
 
 log = logging.getLogger(__name__)
 
 
 def create_app():
-    gconf.set_env_prefix("FREESHARD")
-    if "CONFIG" in os.environ:
-        for c in os.environ["CONFIG"].split(","):
-            gconf.load(c)
-    else:
-        gconf.load("config.yml")
     configure_logging()
 
     database.init_database()
@@ -78,7 +70,7 @@ def configure_logging():
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         handlers=[logging.StreamHandler(sys.stdout)],
     )
-    for module, level in gconf.get("log.levels").items():  # type: str, str
+    for module, level in settings().log.levels.items():  # type: str, str
         logger = logging.getLogger() if module == "root" else logging.getLogger(module)
         logger.setLevel(getattr(logging, level.upper()))
         log.info(f"set logger for {module} to {level.upper()}")
@@ -114,39 +106,37 @@ async def lifespan(_):
 
 
 def _make_background_tasks() -> List[BackgroundTask]:
+    s = settings()
     return [
         app_installation.worker.installation_worker,
-        PeriodicTask(
-            app_lifecycle.control_apps, gconf.get("apps.lifecycle.refresh_interval")
-        ),
+        PeriodicTask(app_lifecycle.control_apps, s.apps.lifecycle.refresh_interval),
         PeriodicTask(peer.update_all_peer_pubkeys, 60),
         CronTask(
             app_usage_reporting.track_currently_installed_apps,
-            gconf.get("apps.usage_reporting.tracking_schedule"),
+            s.apps.usage_reporting.tracking_schedule,
         ),
         CronTask(
             app_usage_reporting.report_app_usage,
-            gconf.get("apps.usage_reporting.reporting_schedule"),
+            s.apps.usage_reporting.reporting_schedule,
         ),
         CronTask(
             scheduled_docker_prune_images,
-            gconf.get("apps.pruning.schedule"),
+            s.apps.pruning.schedule,
         ),
         CronTask(
             start_backup,
-            cron=gconf.get("services.backup.timing.base_schedule"),
-            max_random_delay=gconf.get("services.backup.timing.max_random_delay"),
+            cron=s.services.backup.timing.base_schedule,
+            max_random_delay=s.services.backup.timing.max_random_delay,
         ),
         PeriodicTask(disk.update_disk_space, 3),
         websocket.ws_worker,
-        PeriodicTask(
-            telemetry.send_telemetry, gconf.get("telemetry.send_interval_seconds")
-        ),
+        PeriodicTask(telemetry.send_telemetry, s.telemetry.send_interval_seconds),
     ]
 
 
 def _copy_traefik_static_config():
-    _disable_ssl = str_to_bool(gconf.get("traefik.disable_ssl", default="false"))
+    s = settings()
+    _disable_ssl = s.traefik.disable_ssl
     traefik_yml = "traefik_no_ssl.yml" if _disable_ssl else "traefik.yml"
     if _disable_ssl:
         log.warning("SSL disabled")
@@ -155,9 +145,9 @@ def _copy_traefik_static_config():
     with open(source, "r") as f:
         template = jinja2.Template(f.read())
 
-    result = template.render({"acme_email": gconf.get("traefik.acme_email")})
+    result = template.render({"acme_email": s.traefik.acme_email})
 
-    root = Path(gconf.get("path_root"))
+    root = Path(s.path_root)
     target = root / "core" / "traefik.yml"
     with open(target, "w") as f:
         f.write(result)
@@ -166,11 +156,7 @@ def _copy_traefik_static_config():
 def print_welcome_log():
     params = {}
     i = identity.get_default_identity()
-    protocol = (
-        "http"
-        if str_to_bool(gconf.get("traefik.disable_ssl", default="false"))
-        else "https"
-    )
+    protocol = "http" if settings().traefik.disable_ssl else "https"
     shard_url = f"{protocol}://{i.domain}"
     params["shard_id"] = i.short_id
     params["shard_url_centered"] = _center(shard_url)
