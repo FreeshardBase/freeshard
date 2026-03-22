@@ -46,7 +46,8 @@ async def test_edit(api_client: AsyncClient):
     response_terminal.icon = Icon.NOTEBOOK
     response = await api_client.put(
         f"protected/terminals/id/{response_terminal.id}",
-        data=response_terminal.model_dump_json(),
+        content=response_terminal.model_dump_json(),
+        headers={"Content-Type": "application/json"},
     )
     assert response.status_code == 200
     response = await api_client.get(f"protected/terminals/id/{response_terminal.id}")
