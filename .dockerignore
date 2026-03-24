@@ -4,4 +4,4 @@ deploy_tools
 scripts
 tests
 justfile
-local_config.yml
+local_config.toml
