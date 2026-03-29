@@ -1,12 +1,15 @@
+from pathlib import Path
 from shutil import _ntuple_diskusage
 
 from fastapi import status
 
 from shard_core.service import disk
 from shard_core.service.disk import DiskUsage
+from shard_core.settings import settings
 
 
 async def test_disk_space_is_reported(app_client):
+    Path(settings().path_root, "user_data").mkdir(parents=True, exist_ok=True)
     # Call update_disk_space directly since there is no background worker in app_client
     await disk.update_disk_space()
 
