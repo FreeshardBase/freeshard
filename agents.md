@@ -77,8 +77,8 @@ Tables: `identities`, `terminals`, `installed_apps`, `peers`, `backups`, `tours`
 ### Background Tasks
 Started at app lifespan startup, stopped at shutdown:
 - `InstallationWorker` — async task queue for app install/uninstall
-- `PeriodicTask(control_apps, 10s)` — auto-start/stop app containers
-- `PeriodicTask(update_disk_space, 3s)` — disk monitoring
+- `PeriodicTask(control_apps, 30s)` — auto-start/stop app containers
+- `PeriodicTask(update_disk_space, 30s)` — disk monitoring
 - `CronTask(start_backup, "0 3 * * *")` — daily backup with random delay
 - `CronTask(docker_prune_images, daily)` — image cleanup
 - Various telemetry and peer key refresh tasks

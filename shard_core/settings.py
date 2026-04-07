@@ -44,7 +44,7 @@ class RegistrySettings(BaseModel):
 
 
 class AppLifecycleSettings(BaseModel):
-    refresh_interval: int = 10
+    refresh_interval: int = 30
 
 
 class AppLastAccessSettings(BaseModel):

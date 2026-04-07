@@ -132,7 +132,7 @@ def _make_background_tasks() -> List[BackgroundTask]:
             cron=s.services.backup.timing.base_schedule,
             max_random_delay=s.services.backup.timing.max_random_delay,
         ),
-        PeriodicTask(disk.update_disk_space, 3),
+        PeriodicTask(disk.update_disk_space, 30),
         websocket.ws_worker,
         PeriodicTask(telemetry.send_telemetry, s.telemetry.send_interval_seconds),
     ]
