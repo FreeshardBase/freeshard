@@ -62,6 +62,18 @@ async def app_exists_in_store(name: str) -> bool:
         return response.status_code == 200
 
 
+async def render_all_docker_compose_templates():
+    with installed_apps_table() as apps:
+        installed_apps = [InstalledApp.model_validate(a) for a in apps.all()]
+    for app in installed_apps:
+        template_file = (
+            get_installed_apps_path() / app.name / "docker-compose.yml.template"
+        )
+        if template_file.exists():
+            await render_docker_compose_template(app)
+    log.info(f"re-rendered docker-compose files for {len(installed_apps)} apps")
+
+
 async def render_docker_compose_template(app: InstalledApp):
     log.debug(f"creating docker-compose.yml for app {app.name}")
     path_root_host = settings().path_root_host

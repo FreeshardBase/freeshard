@@ -25,7 +25,10 @@ from .service import (
     disk,
     telemetry,
 )
-from .service.app_installation.util import write_traefik_dyn_config
+from .service.app_installation.util import (
+    write_traefik_dyn_config,
+    render_all_docker_compose_templates,
+)
 from .service.app_tools import (
     docker_stop_all_apps,
     docker_shutdown_all_apps,
@@ -79,6 +82,7 @@ def configure_logging():
 @asynccontextmanager
 async def lifespan(_):
     await write_traefik_dyn_config()
+    await render_all_docker_compose_templates()
     await app_installation.login_docker_registries()
     await migration.migrate()
     await app_installation.refresh_init_apps()
