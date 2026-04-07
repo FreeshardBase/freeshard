@@ -6,7 +6,21 @@ on:
     types: [created]
 
 jobs:
+  version-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify release tag matches code version
+        run: |
+          expected="${{ github.event.release.tag_name }}"
+          actual=$(grep '^version' pyproject.toml | sed 's/.*"\(.*\)"/\1/')
+          if [ "$expected" != "$actual" ]; then
+            echo "::error::Release tag ($expected) does not match pyproject.toml version ($actual). Run 'just set-version $expected' and commit first."
+            exit 1
+          fi
+
   test:
+    needs: version-check
     uses: ./.github/workflows/test.yml
     with:
       full: true

@@ -22,6 +22,28 @@ get-types:
     cp -r {{SOURCE_DIR}}/* {{TARGET_DIR}}
     sed -i '1s/^/# DO NOT MODIFY - copied from freeshard-controller\n\n/' $(find {{TARGET_DIR}}/ -type f)
 
+@set-version version:
+    just _set-version-files {{version}}
+    git add .
+    git commit -m "set version to {{version}}"
+    echo "Version set to {{version}} and committed"
+
+_set-version-files version:
+    #!.venv/bin/python
+    import re
+    # Update version in pyproject.toml
+    with open('pyproject.toml') as f:
+        content = f.read()
+    content = re.sub(r'(?m)^version = ".*"$', 'version = "{{version}}"', content)
+    with open('pyproject.toml', 'w') as f:
+        f.write(content)
+    # Update image tag in docker-compose.yml
+    with open('docker-compose.yml') as f:
+        content = f.read()
+    content = re.sub(r'(ghcr\.io/freeshardbase/freeshard:)[\w.\-]+', r'\g<1>{{version}}', content)
+    with open('docker-compose.yml', 'w') as f:
+        f.write(content)
+
 run-dev:
     PYTHONUNBUFFERED=1 CONFIG=config.yml,local_config.yml ./.venv/bin/fastapi dev --port 8080 shard_core/app.py
 
