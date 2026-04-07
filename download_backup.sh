@@ -8,4 +8,5 @@ rclone \
 --crypt-remote ":azureblob:$CONTAINER" \
 --stats 3s --stats-log-level NOTICE \
 --progress --progress-terminal-title \
-sync ":crypt:$CONTAINER" "./$CONTAINER"
+sync ":crypt:$CONTAINER" "./$CONTAINER" \
+--create-empty-src-dirs
