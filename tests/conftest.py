@@ -234,8 +234,8 @@ def requests_mock_context(*, shard: ShardDb = None, profile: Profile = None):
     try:
         with responses.RequestsMock(assert_all_requests_are_fired=False) as rsps:
             rsps.add_callback(
-                responses.PUT,
-                f"{controller_base_url}/resize",
+                responses.POST,
+                f"{controller_base_url}/api/shards/self/resize",
                 callback=requests_mock_resize,
             )
             rsps.post(
@@ -259,7 +259,7 @@ def requests_mock_context(*, shard: ShardDb = None, profile: Profile = None):
 
 def requests_mock_resize(request: PreparedRequest):
     data = json.loads(request.body)
-    if data["size"] in ["l", "xl"]:
+    if data["new_vm_size"] in ["l", "xl"]:
         return 409, {}, ""
     else:
         return 204, {}, ""
