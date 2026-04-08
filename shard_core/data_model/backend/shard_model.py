@@ -29,7 +29,7 @@ class ShardStatus(StrEnum):
     ERROR = auto()
 
 
-_VM_SIZE_ORDER = ['xs', 's', 'm', 'l', 'xl']
+_VM_SIZE_ORDER = ["xs", "s", "m", "l", "xl"]
 
 
 @total_ordering
