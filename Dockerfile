@@ -29,6 +29,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     curl \
     docker-compose \
     rclone \
+    tini \
     && apt-get clean
 
 # Install Docker
@@ -48,4 +49,5 @@ HEALTHCHECK --start-period=5s --interval=30s --timeout=5s CMD curl -f http://loc
 
 #ENV FLASK_APP=shard_core
 EXPOSE 80
+ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["fastapi", "run", "--port", "80", "shard_core/app.py"]
