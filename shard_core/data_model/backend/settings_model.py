@@ -22,8 +22,6 @@ class Setting(BaseModel):
     cloud: str | None = None
 
     def __str__(self) -> str:
-        if self.type != "str":
-            raise ValueError("Setting is not of type str")
         return str(self.value)
 
     def __bool__(self) -> bool:

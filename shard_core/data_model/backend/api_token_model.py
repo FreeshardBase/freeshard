@@ -1,5 +1,6 @@
 # DO NOT MODIFY - copied from freeshard-controller
 
+import uuid
 from datetime import datetime
 from typing import Set
 
@@ -9,12 +10,12 @@ from .permission_model import PermissionHolder, Permission
 
 
 class ApiTokenResult(PermissionHolder, BaseModel):
-    id: int
+    id: uuid.UUID
     name: str
     created: datetime
     token: str
     owner_hash_id: str
-    owner_name: str
+    owner_name: str | None
 
 
 class ApiTokenCreate(BaseModel):

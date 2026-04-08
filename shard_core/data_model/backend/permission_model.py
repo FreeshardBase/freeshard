@@ -21,6 +21,8 @@ class Permission(StrEnum):
     MODIFY_PROMO_CODE = auto()
     READ_SETTING = auto()
     MODIFY_SETTING = auto()
+    SUPPORT_SHARD = auto()
+    SSH_SHARD = auto()
 
 
 class PermissionHolder(BaseModel):
