@@ -36,9 +36,23 @@ async def docker_start_app(name: str):
 
     if app_status in [Status.STOPPED, Status.RUNNING, Status.DOWN]:
         log.debug(f"starting app {name=}")
-        await subprocess(
-            "docker-compose", "up", "-d", cwd=get_installed_apps_path() / name
-        )
+        try:
+            await subprocess(
+                "docker-compose", "up", "-d", cwd=get_installed_apps_path() / name
+            )
+        except SubprocessError as e:
+            if "network" in str(e) and "not found" in str(e):
+                log.warning(
+                    f"stale network reference for app {name=}, recreating containers"
+                )
+                await subprocess(
+                    "docker-compose", "down", cwd=get_installed_apps_path() / name
+                )
+                await subprocess(
+                    "docker-compose", "up", "-d", cwd=get_installed_apps_path() / name
+                )
+            else:
+                raise
         with installed_apps_table() as installed_apps:
             installed_apps.update({"status": Status.RUNNING}, Query().name == name)
         signals.on_apps_update.send()
