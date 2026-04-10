@@ -1,11 +1,9 @@
 from httpx import AsyncClient
 from starlette import status
 
-from tests.conftest import requires_test_env
 from tests.util import pair_new_terminal, wait_until_app_installed
 
 
-@requires_test_env("full")
 async def test_default(api_client: AsyncClient):
     app_name = "mock_app"
 
@@ -46,7 +44,6 @@ async def test_default(api_client: AsyncClient):
     ).status_code == status.HTTP_200_OK
 
 
-@requires_test_env("full")
 async def test_headers(api_client: AsyncClient):
     await api_client.post("protected/apps/mock_app")
 
@@ -106,7 +103,6 @@ async def test_headers(api_client: AsyncClient):
     assert response_auth.headers["X-Ptl-Foo"] == "bar"
 
 
-@requires_test_env("full")
 async def test_fail_unknown_app(api_client: AsyncClient):
     assert (
         await api_client.get(

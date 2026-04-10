@@ -6,7 +6,6 @@ from requests import PreparedRequest, Request
 from requests_http_signature import HTTPSignatureAuth
 
 from shard_core.data_model.identity import OutputIdentity
-from tests.conftest import requires_test_env
 from tests.util import verify_signature_auth, modify_request_like_traefik_forward_auth
 
 
@@ -46,7 +45,6 @@ async def test_call_peer_from_app_post(app_client, peer_mock_requests):
     assert received_request.body == b"foo data bar"
 
 
-@requires_test_env("full")
 async def test_peer_auth_basic(api_client: AsyncClient, peer_mock_requests):
     response = await api_client.post("protected/apps/mock_app")
     response.raise_for_status()

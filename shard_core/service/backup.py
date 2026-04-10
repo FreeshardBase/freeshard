@@ -10,7 +10,8 @@ from typing import List
 from requests import HTTPError
 
 from shard_core.database import database
-from shard_core.database.database import backups_table
+from shard_core.database.connection import db_conn
+from shard_core.database import backups as db_backups
 from shard_core.data_model.backup import (
     BackupReport,
     BackupStats,
@@ -27,16 +28,16 @@ STORE_KEY_BACKUP_PASSPHRASE_LAST_ACCESS = "backup_passphrase_last_access"
 BACKUP_IN_PROGESS_LOCK = asyncio.Lock()
 
 COMMAND_TEMPLATE = """
-rclone 
---azureblob-sas-url {sas_token} 
---crypt-password {obscured_password} 
---crypt-remote :azureblob:{container_name} 
+rclone
+--azureblob-sas-url {sas_token}
+--crypt-password {obscured_password}
+--crypt-remote :azureblob:{container_name}
 sync {directory} :crypt:{container_name}/{directory}
 --create-empty-src-dirs --stats-log-level NOTICE --stats 1000m --use-json-log
 """
 
 CLEARTEXT_COMMAND_TEMPLATE = """
-rclone 
+rclone
 --azureblob-sas-url {sas_token}
 sync {directory} :azureblob:{container_name}/{directory}
 --create-empty-src-dirs --stats-log-level NOTICE --stats 1000m --use-json-log
@@ -121,8 +122,8 @@ async def backup_directories(
             startTime=overall_start_time,
             endTime=overall_end_time,
         )
-        with backups_table() as table:
-            table.insert(report.model_dump())
+        async with db_conn() as conn:
+            await db_backups.insert(conn, report.model_dump())
         log.info("Backup done")
 
 
@@ -157,7 +158,7 @@ async def _backup_directory(
 
 
 async def _get_obscured_passphrase():
-    passphrase = database.get_value(STORE_KEY_BACKUP_PASSPHRASE)
+    passphrase = await database.get_value(STORE_KEY_BACKUP_PASSPHRASE)
     obscured_passphrase = subprocess.run(
         ["rclone", "obscure", passphrase], capture_output=True, text=True
     ).stdout.strip()
@@ -169,31 +170,31 @@ def _get_relative_directory(directory: Path) -> Path:
     return directory.relative_to(path_root)
 
 
-def get_latest_backup_report() -> BackupReport | None:
-    with backups_table() as table:
-        latest_stats = max(table.all(), key=lambda x: x["endTime"], default=None)
-    return BackupReport.model_validate(latest_stats) if latest_stats else None
+async def get_latest_backup_report() -> BackupReport | None:
+    async with db_conn() as conn:
+        row = await db_backups.get_latest(conn)
+    return BackupReport.model_validate(row) if row else None
 
 
-def ensure_backup_passphrase():
+async def ensure_backup_passphrase():
     try:
-        database.get_value(STORE_KEY_BACKUP_PASSPHRASE)
+        await database.get_value(STORE_KEY_BACKUP_PASSPHRASE)
     except KeyError:
         passphrase_numbers = passphrase_util.generate_passphrase_numbers(10)
         passphrase = passphrase_util.get_passphrase(passphrase_numbers)
-        database.set_value(STORE_KEY_BACKUP_PASSPHRASE, passphrase)
+        await database.set_value(STORE_KEY_BACKUP_PASSPHRASE, passphrase)
         log.info("Generated new backup passphrase")
     else:
         log.info("Backup passphrase already exists")
 
 
-def get_backup_passphrase(terminal_id: str) -> str:
-    passphrase = database.get_value(STORE_KEY_BACKUP_PASSPHRASE)
+async def get_backup_passphrase(terminal_id: str) -> str:
+    passphrase = await database.get_value(STORE_KEY_BACKUP_PASSPHRASE)
     last_access_info = BackupPassphraseLastAccessInfoDB(
         time=datetime.datetime.now(datetime.timezone.utc),
         terminal_id=terminal_id,
     )
-    database.set_value(
+    await database.set_value(
         STORE_KEY_BACKUP_PASSPHRASE_LAST_ACCESS, last_access_info.model_dump()
     )
     return passphrase

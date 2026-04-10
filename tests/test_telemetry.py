@@ -14,15 +14,15 @@ async def test_telemetry_recording(app_client):
     assert telemetry.record_request in on_request_to_app.receivers_for(None)
 
     # Verify counter increments
-    telemetry.record_request("test")
-    telemetry.record_request("test")
+    await telemetry.record_request("test")
+    await telemetry.record_request("test")
     assert telemetry.no_of_requests == 2
 
 
 @patch("shard_core.service.telemetry.call_freeshard_controller", new_callable=AsyncMock)
 async def test_telemetry_sending(mock_call_freeshard_controller: AsyncMock, app_client):
     for i in range(3):
-        telemetry.record_request("arg")
+        await telemetry.record_request("arg")
     await telemetry.send_telemetry()
 
     assert mock_call_freeshard_controller.called
@@ -35,7 +35,7 @@ async def test_telemetry_sending_failure(app_client):
     with settings_override(
         {"freeshard_controller": {"base_url": "https://non-existing.com"}}
     ):
-        telemetry.record_request("arg")
+        await telemetry.record_request("arg")
         await telemetry.send_telemetry()
 
 
@@ -44,7 +44,7 @@ async def test_telemetry_disabled(
     mock_call_freeshard_controller: AsyncMock, app_client
 ):
     with settings_override({"telemetry": {"enabled": False}}):
-        telemetry.record_request("arg")
+        await telemetry.record_request("arg")
         await telemetry.send_telemetry()
 
         assert telemetry.no_of_requests == 0

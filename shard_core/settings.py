@@ -89,6 +89,14 @@ class FreeshardControllerSettings(BaseModel):
     base_url: str
 
 
+class DatabaseSettings(BaseModel):
+    host: str = "postgres"
+    port: int = 5432
+    dbname: str = "shard_core"
+    user: str = "shard_core"
+    password: str = "shard_core"
+
+
 class LogSettings(BaseModel):
     levels: dict[str, str] = {}
 
@@ -106,6 +114,7 @@ class Settings(BaseSettings):
 
     path_root: str = "/"
     path_root_host: str = "/home/shard"
+    db: DatabaseSettings = DatabaseSettings()
     dns: DnsSettings
     services: ServicesSettings
     traefik: TraefikSettings

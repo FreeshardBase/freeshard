@@ -6,10 +6,10 @@ from datetime import datetime, timedelta, timezone
 
 import jwt
 from pydantic import BaseModel
-from tinydb import Query
 
 from shard_core.database import database
-from shard_core.database.database import terminals_table
+from shard_core.database.connection import db_conn
+from shard_core.database import terminals as db_terminals
 from shard_core.settings import settings
 from shard_core.data_model.terminal import Terminal
 
@@ -25,7 +25,7 @@ class PairingCode(BaseModel):
     valid_until: datetime
 
 
-def make_pairing_code(deadline: int = None):
+async def make_pairing_code(deadline: int = None):
     now = datetime.now(timezone.utc)
     pairing_code = PairingCode(
         code=("".join(random.choices(string.digits, k=6))),
@@ -33,14 +33,14 @@ def make_pairing_code(deadline: int = None):
         valid_until=now
         + timedelta(seconds=deadline or settings().terminal.pairing_code_deadline),
     )
-    database.set_value(STORE_KEY_PAIRING_CODE, pairing_code.model_dump())
+    await database.set_value(STORE_KEY_PAIRING_CODE, pairing_code.model_dump())
     return pairing_code
 
 
-def redeem_pairing_code(incoming_code: str):
+async def redeem_pairing_code(incoming_code: str):
     try:
         existing_pairing_code = PairingCode(
-            **database.get_value(STORE_KEY_PAIRING_CODE)
+            **await database.get_value(STORE_KEY_PAIRING_CODE)
         )
     except KeyError:
         raise InvalidPairingCode("no pairing code was issued yet")
@@ -53,11 +53,11 @@ def redeem_pairing_code(incoming_code: str):
             f"issued code ({existing_pairing_code.code}) is expired"
         )
     else:
-        database.remove_value(STORE_KEY_PAIRING_CODE)
+        await database.remove_value(STORE_KEY_PAIRING_CODE)
 
 
-def create_terminal_jwt(terminal_id, **kwargs) -> str:
-    jwt_secret = _ensure_jwt_secret()
+async def create_terminal_jwt(terminal_id, **kwargs) -> str:
+    jwt_secret = await _ensure_jwt_secret()
     payload = {
         "sub": terminal_id,
         "iat": int(datetime.now(timezone.utc).timestamp()),
@@ -66,11 +66,11 @@ def create_terminal_jwt(terminal_id, **kwargs) -> str:
     return jwt.encode(payload, jwt_secret, algorithm="HS256")
 
 
-def verify_terminal_jwt(token: str = None):
+async def verify_terminal_jwt(token: str = None):
     if not token:
         raise InvalidJwt("Missing JWT")
 
-    jwt_secret = _ensure_jwt_secret()
+    jwt_secret = await _ensure_jwt_secret()
 
     bearer = "Bearer "
     if token.startswith(bearer):
@@ -81,20 +81,21 @@ def verify_terminal_jwt(token: str = None):
     except jwt.InvalidTokenError as e:
         raise InvalidJwt from e
 
-    with terminals_table() as terminals:  # type: Table
-        if terminal := terminals.get(Query().id == decoded_token["sub"]):
+    async with db_conn() as conn:
+        terminal = await db_terminals.get_by_id(conn, decoded_token["sub"])
+        if terminal:
             return Terminal(**terminal)
         else:
             raise InvalidJwt
 
 
-def _ensure_jwt_secret():
+async def _ensure_jwt_secret():
     try:
-        database.get_value(STORE_KEY_JWT_SECRET)
+        return await database.get_value(STORE_KEY_JWT_SECRET)
     except KeyError:
         jwt_secret = secrets.token_urlsafe(settings().terminal.jwt_secret_length)
-        database.set_value(STORE_KEY_JWT_SECRET, jwt_secret)
-    return database.get_value(STORE_KEY_JWT_SECRET)
+        await database.set_value(STORE_KEY_JWT_SECRET, jwt_secret)
+        return jwt_secret
 
 
 class InvalidPairingCode(Exception):

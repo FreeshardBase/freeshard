@@ -5,9 +5,7 @@ from pathlib import Path as FilePath
 from typing import Optional, List, Dict, Union
 
 from pydantic import BaseModel, model_validator, field_validator
-from tinydb import Query
 
-from shard_core.database.database import installed_apps_table
 from shard_core.data_model import app_meta_migration
 from shard_core.settings import settings
 from shard_core.util import signals
@@ -155,15 +153,18 @@ class InstalledAppWithMeta(InstalledApp):
 
 
 @signals.on_request_to_app.connect
-def update_last_access(app: InstalledApp):
-    now = datetime.datetime.utcnow()
+async def update_last_access(app: InstalledApp):
+    now = datetime.datetime.now(datetime.timezone.utc)
     max_update_frequency = datetime.timedelta(
         seconds=settings().apps.last_access.max_update_frequency
     )
     if app.last_access and now - app.last_access < max_update_frequency:
         return
-    with installed_apps_table() as installed_apps:  # type: Table
-        installed_apps.update({"last_access": now}, Query().name == app.name)
+    from shard_core.database.connection import db_conn
+    from shard_core.database import installed_apps as db_installed_apps
+
+    async with db_conn() as conn:
+        await db_installed_apps.update_last_access(conn, app.name, now)
 
 
 if __name__ == "__main__":

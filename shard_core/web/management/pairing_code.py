@@ -12,7 +12,7 @@ router = APIRouter(
 
 
 @router.get("", response_model=PairingCode)
-def new_pairing_code(deadline: int = None):
-    pairing_code = make_pairing_code(deadline=deadline)
+async def new_pairing_code(deadline: int = None):
+    pairing_code = await make_pairing_code(deadline=deadline)
     log.info("created new terminal pairing code by freeshard-controller")
     return pairing_code

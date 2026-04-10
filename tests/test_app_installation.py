@@ -4,7 +4,6 @@ from docker.errors import NotFound
 from fastapi import status
 from httpx import AsyncClient
 
-from tests.conftest import requires_test_env
 from tests.util import (
     wait_until_app_installed,
     mock_app_store_path,
@@ -15,14 +14,12 @@ pytest_plugins = ("pytest_asyncio",)
 pytestmark = pytest.mark.asyncio
 
 
-@requires_test_env("full")
 async def test_get_initial_apps(api_client: AsyncClient):
     response = (await api_client.get("protected/apps")).json()
     assert len(response) == 3
     assert "filebrowser" in [e["name"] for e in response]
 
 
-@requires_test_env("full")
 async def test_install_app(api_client: AsyncClient):
     docker_client = docker.from_env()
     app_name = "mock_app"
@@ -38,7 +35,6 @@ async def test_install_app(api_client: AsyncClient):
     assert len(response) == 4
 
 
-@requires_test_env("full")
 async def test_reinstall_app(api_client: AsyncClient):
     app_name = "mock_app"
 
@@ -57,7 +53,6 @@ async def test_reinstall_app(api_client: AsyncClient):
     assert len(response) == 4
 
 
-@requires_test_env("full")
 async def test_install_app_twice(api_client: AsyncClient):
     app_name = "mock_app"
 
@@ -70,7 +65,6 @@ async def test_install_app_twice(api_client: AsyncClient):
     assert response.status_code == status.HTTP_409_CONFLICT
 
 
-@requires_test_env("full")
 async def test_uninstall_app(api_client: AsyncClient):
     docker_client = docker.from_env()
     docker_client.containers.get("filebrowser")
@@ -87,7 +81,6 @@ async def test_uninstall_app(api_client: AsyncClient):
         docker_client.containers.get("filebrowser")
 
 
-@requires_test_env("full")
 async def test_uninstall_running_app(api_client: AsyncClient):
     docker_client = docker.from_env()
     app_name = "mock_app"
@@ -119,7 +112,6 @@ async def test_uninstall_running_app(api_client: AsyncClient):
         docker_client.containers.get(app_name)
 
 
-@requires_test_env("full")
 async def test_install_custom_app(api_client: AsyncClient):
     app_name = "mock_app"
     docker_client = docker.from_env()

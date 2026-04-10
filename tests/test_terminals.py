@@ -2,12 +2,12 @@ from time import sleep
 
 from httpx import AsyncClient
 from starlette import status
-from tinydb.operations import delete
 
 from shard_core.data_model.backend.shard_model import ShardDb
-from shard_core.database.database import terminals_table
+from shard_core.database.connection import db_conn
+from shard_core.database import terminals as db_terminals
 from shard_core.data_model.terminal import Terminal, Icon
-from tests.conftest import requests_mock_context, mock_shard, requires_test_env
+from tests.conftest import requests_mock_context, mock_shard
 from tests.util import get_pairing_code, add_terminal, pair_new_terminal
 
 
@@ -57,28 +57,23 @@ async def test_pairing_happy(requests_mock, app_client: AsyncClient):
     t_name = "T1"
     await pair_new_terminal(app_client, t_name)
 
-    # was the terminal created with the correct data?
     response = await app_client.get("protected/terminals/name/T1")
     assert response.status_code == 200
     assert response.json()["name"] == t_name
     terminal_id = response.json()["id"]
 
-    # can the terminal be authenticated using its jwt token?
     response = await app_client.get("internal/authenticate_terminal")
     assert response.status_code == status.HTTP_200_OK
     assert response.headers["X-Ptl-Client-Type"] == "terminal"
     assert response.headers["X-Ptl-Client-Id"] == terminal_id
     assert response.headers["X-Ptl-Client-Name"] == t_name
 
-    # does whoami return the correct values?
     response = await app_client.get("public/meta/whoami")
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["type"] == "terminal"
     assert response.json()["id"] == terminal_id
     assert response.json()["name"] == t_name
 
-    # has the default identity been updated from the profile?
-    # With app_client there is no startup call, so only 1 call (from pairing).
     assert len(requests_mock.calls) == 1
     response = await app_client.get("protected/identities/default")
     assert response.status_code == status.HTTP_200_OK
@@ -204,7 +199,6 @@ async def test_pairing_with_profile_missing_email(
         assert response.json()["email"] is None
 
 
-@requires_test_env("full")
 async def test_last_connection(api_client: AsyncClient):
     t_name = "T1"
     await pair_new_terminal(api_client, t_name)
@@ -215,8 +209,13 @@ async def test_last_connection(api_client: AsyncClient):
     response = await api_client.post("protected/apps/mock_app")
     response.raise_for_status()
 
-    with terminals_table() as terminals:  # type: Table
-        terminals.update(delete("last_connection"))
+    # Clear last_connection to test it gets set again on auth
+    async with db_conn() as conn:
+        await db_terminals.update(
+            conn,
+            (await api_client.get(f"protected/terminals/name/{t_name}")).json()["id"],
+            {"last_connection": None},
+        )
     last_connection_missing = Terminal(
         **(await api_client.get(f"protected/terminals/name/{t_name}")).json()
     )

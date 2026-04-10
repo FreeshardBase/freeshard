@@ -19,7 +19,7 @@ async def get_profile(refresh: bool = False):
         p = await portal_controller.refresh_profile()
     else:
         try:
-            p = profile.get_profile()
+            p = await profile.get_profile()
         except KeyError:
             p = await portal_controller.refresh_profile()
     if p:

@@ -25,13 +25,13 @@ async def refresh_profile() -> profile.Profile | None:
     except HTTPError:
         if response.status_code == 401:
             log.warning("profile not found, setting to None")
-            profile.set_profile(None)
+            await profile.set_profile(None)
             return None
         else:
             raise
     shard = ShardBase.model_validate(response.json())
     profile_ = profile.Profile.from_shard(shard)
-    profile.set_profile(profile_)
+    await profile.set_profile(profile_)
     log.debug("refreshed profile")
     return profile_
 

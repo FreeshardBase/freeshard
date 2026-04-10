@@ -1,18 +1,14 @@
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
-from tinydb import Query
-
-from shard_core.database.database import installed_apps_table
+from shard_core.database.connection import db_conn
+from shard_core.database import installed_apps as db_installed_apps
 from shard_core.data_model.app_meta import InstalledApp
-from shard_core.web.internal.auth import _find_app
-from tests.conftest import requires_test_env
 
 
-@requires_test_env("full")
 async def test_app_last_access_is_set(api_client):
-    assert _get_last_access_time_delta("filebrowser") is None
+    assert await _get_last_access_time_delta("filebrowser") is None
 
     response = await api_client.get(
         "internal/auth",
@@ -23,10 +19,9 @@ async def test_app_last_access_is_set(api_client):
     )
     response.raise_for_status()
 
-    assert _get_last_access_time_delta("filebrowser") < 3
+    assert await _get_last_access_time_delta("filebrowser") < 3
 
 
-@requires_test_env("full")
 async def test_app_last_access_is_debounced(api_client):
     await api_client.get(
         "internal/auth",
@@ -36,11 +31,10 @@ async def test_app_last_access_is_debounced(api_client):
         },
     )
 
-    assert _get_last_access_time_delta("filebrowser") < 3
-    last_access = _get_last_access_time("filebrowser")
+    assert await _get_last_access_time_delta("filebrowser") < 3
+    last_access = await _get_last_access_time("filebrowser")
 
     time.sleep(0.1)
-    _find_app.cache.clear()
     await api_client.get(
         "internal/auth",
         headers={
@@ -49,10 +43,9 @@ async def test_app_last_access_is_debounced(api_client):
         },
     )
 
-    assert _get_last_access_time("filebrowser") == last_access
+    assert await _get_last_access_time("filebrowser") == last_access
 
     time.sleep(3)
-    _find_app.cache.clear()
     await api_client.get(
         "internal/auth",
         headers={
@@ -61,21 +54,25 @@ async def test_app_last_access_is_debounced(api_client):
         },
     )
 
-    assert _get_last_access_time_delta("filebrowser") < 3
-    assert _get_last_access_time("filebrowser") != last_access
+    assert await _get_last_access_time_delta("filebrowser") < 3
+    assert await _get_last_access_time("filebrowser") != last_access
 
 
-def _get_last_access_time_delta(app_name: str) -> Optional[float]:
-    last_access = _get_last_access_time(app_name)
+async def _get_last_access_time_delta(app_name: str) -> Optional[float]:
+    last_access = await _get_last_access_time(app_name)
     if last_access:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
+        # Ensure both are timezone-aware for comparison
+        if last_access.tzinfo is None:
+            last_access = last_access.replace(tzinfo=timezone.utc)
         delta = now - last_access
         return delta.total_seconds()
     else:
         return None
 
 
-def _get_last_access_time(app_name: str) -> Optional[datetime]:
-    with installed_apps_table() as installed_apps:  # type: Table
-        app = InstalledApp(**installed_apps.get(Query().name == app_name))
+async def _get_last_access_time(app_name: str) -> Optional[datetime]:
+    async with db_conn() as conn:
+        row = await db_installed_apps.get_by_name(conn, app_name)
+    app = InstalledApp(**row)
     return app.last_access

@@ -2,7 +2,28 @@ networks:
   portal:
     name: portal
 
+volumes:
+  postgres_data:
+
 services:
+
+  postgres:
+    image: postgres:17
+    container_name: postgres
+    restart: always
+    environment:
+      - POSTGRES_DB=shard_core
+      - POSTGRES_USER=shard_core
+      - POSTGRES_PASSWORD=shard_core
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - portal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shard_core"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   traefik:
     image: traefik:v3.6
@@ -43,6 +64,9 @@ services:
       - FREESHARD_TRAEFIK_ACME_EMAIL=user@example.com
       - FREESHARD_TRAEFIK_DISABLE_SSL=${DISABLE_SSL}
       - FREESHARD_PATH_ROOT_HOST=${FREESHARD_DIR:?}
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   web-terminal:
     image: ghcr.io/freeshardbase/web-terminal:0.37.4

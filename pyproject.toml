@@ -15,8 +15,9 @@ urls = { "Homepage" = "https://github.com/FreeshardBase/shard_core" }
 requires-python = ">=3.13"
 dependencies = [
     "pydantic-settings>=2,<3",
-    "tinydb",
-    "tinydb-serialization",
+    "psycopg[binary]",
+    "psycopg_pool",
+    "yoyo-migrations",
     "uvicorn",
     "fastapi[standard]",
     "websockets",
@@ -26,7 +27,6 @@ dependencies = [
     "pyyaml",
     "docker",
     "python-gitlab",
-    "psycopg[binary]",
     "cachetools",
     "blinker",
     "requests",
