@@ -5,7 +5,7 @@ The software running on each individual Freeshard. Manages installed apps, termi
 ## Tech Stack
 
 - **Framework**: FastAPI with uvicorn, Python 3.13+
-- **Database**: TinyDB (JSON-based, embedded, thread-safe via RLock)
+- **Database**: PostgreSQL with psycopg3 (async) + yoyo-migrations
 - **Container Orchestration**: Docker / Docker Compose (subprocess calls)
 - **Reverse Proxy**: Traefik v3 (configured dynamically per app)
 - **Config**: Pydantic v2 BaseSettings, loaded from `config.toml` + `local_config.toml`, env prefix `FREESHARD_`
@@ -36,7 +36,7 @@ shard_core/
     disk.py             Disk space monitoring
     migration.py        Database schema migrations
     websocket.py        WebSocket connection lifecycle
-  database/           → TinyDB wrapper with context managers
+  database/           → PostgreSQL access layer (per-entity modules, conn-first-arg pattern)
   data_model/         → Pydantic v2 models
     app_meta.py         App metadata, Status enum, VMSize enum
     identity.py         Shard identity (keys, domain, short_id)
@@ -59,14 +59,14 @@ just get-types        # Sync data models from freeshard-controller repo
 ## Key Patterns
 
 ### Database Access
-TinyDB with context managers for thread safety. No ORM, no SQL.
+PostgreSQL via psycopg3 async. All DB functions take `conn: AsyncConnection` as first arg. Callers acquire connections via `async with db_conn() as conn:`. Schema managed by yoyo-migrations in `migrations/`.
 ```python
-with installed_apps_table() as apps:
-    app = apps.get(Query().name == "myapp")
-    apps.update({"status": Status.RUNNING}, Query().name == "myapp")
+async with db_conn() as conn:
+    app = await db_installed_apps.get_by_name(conn, "myapp")
+    await db_installed_apps.update_status(conn, "myapp", Status.RUNNING)
 ```
 
-Tables: `identities`, `terminals`, `installed_apps`, `peers`, `backups`, `tours`, `app_usage_track`, plus a key-value base table.
+Tables: `identities`, `terminals`, `installed_apps`, `peers`, `backups`, `tours`, `app_usage_tracks`, `kv_store`.
 
 ### Authentication (4 levels)
 - `/public/*` — No auth
@@ -84,18 +84,19 @@ Started at app lifespan startup, stopped at shutdown:
 - Various telemetry and peer key refresh tasks
 
 ### Signals (Event System)
-Blinker-based decoupled events defined in `util/signals.py`:
+Blinker-based async signals defined in `util/signals.py`. DB-writing handlers are async and called via `await signal.send_async()`:
 - `on_apps_update` — app state changed
 - `on_request_to_app` — user accessing app (triggers auto-start)
 - `on_terminal_auth` — terminal authenticated
 - `async_on_first_terminal_add` — first pairing complete
+- `async_on_peer_write` — peer added/updated
 
 ### App Installation Flow
 1. Request queued → `InstallationWorker` picks it up
 2. Docker Compose template rendered with Jinja2 (shard domain, data paths, etc.)
 3. Traefik dynamic config generated for the app's subdomain routing
 4. `docker-compose up -d` via subprocess
-5. Status updated in TinyDB
+5. Status updated in PostgreSQL
 
 ### Async Fire-and-Forget
 Long operations use `asyncio.create_task()` with done callbacks. No thread pools.
@@ -106,7 +107,7 @@ Long operations use `asyncio.create_task()` with done callbacks. No thread pools
 ## File Path Conventions
 
 Inside Docker container:
-- `/core/shard_core_db.json` — main TinyDB database
+- PostgreSQL database (configured via `[db]` section in config.toml)
 - `/core/installed_apps/{name}/` — per-app Docker Compose files
 - `/core/traefik.yml` — Traefik static config
 - `/user_data/app_data/{name}/` — per-app persistent data
