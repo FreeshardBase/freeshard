@@ -159,7 +159,7 @@ async def docker_prune_images(apply_filter=True):
 
 async def scheduled_docker_prune_images():
     if not settings().apps.pruning.enabled:
-        log.debug("docker image pruning is disabled, skipping")
+        log.info("docker image pruning is disabled, skipping")
         return
     await docker_prune_images()
 

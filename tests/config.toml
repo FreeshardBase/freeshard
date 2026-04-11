@@ -12,7 +12,7 @@ reporting_schedule = "* * * * * */3"
 enabled = true
 
 [log.levels]
-shard_core = "debug"
+shard_core = "info"
 "shard_core.service.app_usage_reporting" = "error"
 
 [telemetry]
