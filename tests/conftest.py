@@ -172,8 +172,10 @@ def _truncate_all_tables(postgres_db: dict):
 async def db():
     """Initialize and tear down the database for tests that don't use api_client."""
     await database.init_database()
-    yield
-    await database.shutdown_database()
+    try:
+        yield
+    finally:
+        await database.shutdown_database()
 
 
 @pytest_asyncio.fixture
@@ -217,20 +219,21 @@ async def app_client(mocker) -> AsyncGenerator[AsyncClient]:
 
     # Initialize the database (migrations + pool) and create default identity
     await database.init_database()
-    from shard_core.service import identity
+    try:
+        from shard_core.service import identity
 
-    await identity.init_default_identity()
+        await identity.init_default_identity()
 
-    app = app_factory.create_app()
+        app = app_factory.create_app()
 
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="https://init", timeout=10
-    ) as client:
-        whoareyou = (await client.get("/public/meta/whoareyou")).json()
-        client.base_url = f'https://{whoareyou["domain"]}'
-        yield client
-
-    await database.shutdown_database()
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="https://init", timeout=10
+        ) as client:
+            whoareyou = (await client.get("/public/meta/whoareyou")).json()
+            client.base_url = f'https://{whoareyou["domain"]}'
+            yield client
+    finally:
+        await database.shutdown_database()
 
 
 mock_profile = Profile(
