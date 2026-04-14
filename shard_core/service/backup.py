@@ -6,6 +6,7 @@ import subprocess
 import traceback
 from pathlib import Path
 from typing import List
+from urllib.parse import urlparse, urlunparse
 
 from azure.storage.blob import BlobClient
 from requests import HTTPError
@@ -139,8 +140,6 @@ def _write_marker_blob(container_name: str, sas_token: str):
         #   https://account.blob.core.windows.net/container?sv=...&sig=...
         # BlobClient.from_blob_url expects the blob path inserted before the query:
         #   https://account.blob.core.windows.net/container/_last_backup?sv=...&sig=...
-        from urllib.parse import urlparse, urlunparse
-
         parsed = urlparse(sas_token)
         blob_url = urlunparse(
             parsed._replace(path=f"/{container_name}/_last_backup")
