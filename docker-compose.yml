@@ -32,6 +32,7 @@ services:
     image: ghcr.io/freeshardbase/freeshard:0.37.4
     container_name: shard_core
     restart: always
+    stop_grace_period: 30s
     volumes:
       - ${FREESHARD_DIR:?}/core:/core
       - ${FREESHARD_DIR:?}/user_data:/user_data
