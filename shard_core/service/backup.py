@@ -6,7 +6,9 @@ import subprocess
 import traceback
 from pathlib import Path
 from typing import List
+from urllib.parse import urlparse, urlunparse
 
+from azure.storage.blob import BlobClient
 from requests import HTTPError
 
 from shard_core.database import database
@@ -123,7 +125,31 @@ async def backup_directories(
         )
         with backups_table() as table:
             table.insert(report.model_dump())
+        _write_marker_blob(container_name, sas_token)
         log.info("Backup done")
+
+
+def _write_marker_blob(container_name: str, sas_token: str):
+    """Write a marker blob to the backup container to record the time of the last backup.
+
+    The blob's Last-Modified timestamp on Azure is updated on every call, giving the
+    controller a reliable recency signal regardless of whether any data blobs changed.
+    """
+    try:
+        # sas_token is a container-level SAS URL of the form:
+        #   https://account.blob.core.windows.net/container?sv=...&sig=...
+        # BlobClient.from_blob_url expects the blob path inserted before the query:
+        #   https://account.blob.core.windows.net/container/_last_backup?sv=...&sig=...
+        parsed = urlparse(sas_token)
+        blob_url = urlunparse(
+            parsed._replace(path=f"/{container_name}/_last_backup")
+        )
+        blob_client = BlobClient.from_blob_url(blob_url)
+        timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        blob_client.upload_blob(timestamp, overwrite=True)
+        log.debug("Wrote _last_backup marker blob")
+    except Exception:
+        log.warning("Failed to write _last_backup marker blob", exc_info=True)
 
 
 def is_backup_in_progress():
