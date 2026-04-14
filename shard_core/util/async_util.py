@@ -95,4 +95,7 @@ class CronTask(BackgroundTask):
             delta = next_exec - time.time()
             log.debug(f"next execution of cron task {self.name} in {delta:.2f} seconds")
             await asyncio.sleep(delta)
-            await self.func()
+            try:
+                await self.func()
+            except Exception as e:
+                log.error(f"error in cron task {self.name}: {type(e).__name__}({e})")
