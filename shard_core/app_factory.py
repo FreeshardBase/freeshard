@@ -31,7 +31,6 @@ from .service.app_installation.util import (
     render_all_docker_compose_templates,
 )
 from .service.app_tools import (
-    docker_stop_all_apps,
     docker_shutdown_all_apps,
     scheduled_docker_prune_images,
 )
@@ -105,7 +104,6 @@ async def lifespan(_):
         t.stop()
     for t in background_tasks:
         await t.wait()
-    await docker_stop_all_apps()
     await docker_shutdown_all_apps(force=True)
     await database.shutdown_database()
 

@@ -50,9 +50,10 @@ services:
         condition: service_healthy
 
   shard_core:
-    image: ghcr.io/freeshardbase/freeshard:0.37.3
+    image: ghcr.io/freeshardbase/freeshard:0.37.4
     container_name: shard_core
     restart: always
+    stop_grace_period: 30s
     volumes:
       - ${FREESHARD_DIR:?}/core:/core
       - ${FREESHARD_DIR:?}/user_data:/user_data
@@ -60,9 +61,9 @@ services:
     networks:
       - portal
     environment:
-      - FREESHARD_DNS_ZONE=${DNS_ZONE:?}
-      - FREESHARD_TRAEFIK_ACME_EMAIL=user@example.com
-      - FREESHARD_TRAEFIK_DISABLE_SSL=${DISABLE_SSL}
+      - FREESHARD_DNS__ZONE=${DNS_ZONE:?}
+      - FREESHARD_TRAEFIK__ACME_EMAIL=${EMAIL:?}
+      - FREESHARD_TRAEFIK__DISABLE_SSL=${DISABLE_SSL}
       - FREESHARD_PATH_ROOT_HOST=${FREESHARD_DIR:?}
     depends_on:
       postgres:

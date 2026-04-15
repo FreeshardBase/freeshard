@@ -50,6 +50,16 @@ async def docker_start_app(name: str):
                 await subprocess(
                     "docker-compose", "up", "-d", cwd=get_installed_apps_path() / name
                 )
+            elif "Conflict" in str(e) and "already in use" in str(e):
+                log.warning(
+                    f"stale containers for app {name=}, removing and recreating"
+                )
+                await subprocess(
+                    "docker-compose", "down", cwd=get_installed_apps_path() / name
+                )
+                await subprocess(
+                    "docker-compose", "up", "-d", cwd=get_installed_apps_path() / name
+                )
             else:
                 raise
         async with db_conn() as conn:

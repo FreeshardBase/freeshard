@@ -34,3 +34,25 @@ async def test_cron():
     await asyncio.sleep(2)
     p.stop()
     assert c.n == 2
+
+
+@requires_test_env("full")
+async def test_cron_continues_after_exception():
+    """CronTask must keep running after the function raises an exception."""
+
+    class FailOnce:
+        def __init__(self):
+            self.n = 0
+
+        async def run(self):
+            self.n += 1
+            if self.n == 1:
+                raise RuntimeError("intentional test error")
+
+    f = FailOnce()
+    p = CronTask(f.run, cron="* * * * * *")
+    p.start()
+    await asyncio.sleep(3)
+    p.stop()
+    # First call raised, but the task should have continued and run at least once more
+    assert f.n >= 2
