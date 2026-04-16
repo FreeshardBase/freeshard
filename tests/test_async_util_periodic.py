@@ -36,7 +36,6 @@ async def test_cron():
     assert c.n == 2
 
 
-@requires_test_env("full")
 async def test_cron_continues_after_exception():
     """CronTask must keep running after the function raises an exception."""
 
