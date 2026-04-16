@@ -1,7 +1,7 @@
 from httpx import AsyncClient
 from starlette import status
 
-from tests.util import pair_new_terminal, wait_until_app_installed
+from tests.util import install_app, pair_new_terminal, wait_until_app_installed
 
 
 async def test_default(api_client: AsyncClient):
@@ -45,7 +45,7 @@ async def test_default(api_client: AsyncClient):
 
 
 async def test_headers(api_client: AsyncClient):
-    await api_client.post("protected/apps/mock_app")
+    await install_app(api_client, "mock_app")
 
     default_identity = (await api_client.get("protected/identities/default")).json()
     print(default_identity)
