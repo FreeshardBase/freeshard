@@ -196,7 +196,7 @@ async def api_client(requests_mock, mocker) -> AsyncGenerator[AsyncClient]:
     async with docker_network_portal():
         app = app_factory.create_app()
         async with (
-            LifespanManager(app, startup_timeout=20),
+            LifespanManager(app, startup_timeout=20, shutdown_timeout=20),
             AsyncClient(
                 transport=ASGITransport(app=app), base_url="https://init", timeout=20
             ) as client,
