@@ -50,7 +50,7 @@ services:
         condition: service_healthy
 
   shard_core:
-    image: ghcr.io/freeshardbase/freeshard:0.38.1
+    image: ghcr.io/freeshardbase/freeshard:0.38.2
     container_name: shard_core
     restart: always
     stop_grace_period: 30s
