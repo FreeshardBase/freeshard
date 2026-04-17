@@ -1,7 +1,8 @@
 import logging
 
 from shard_core.database import database
-from shard_core.database.database import installed_apps_table
+from shard_core.database.connection import db_conn
+from shard_core.database import installed_apps as db_installed_apps
 from shard_core.data_model.app_meta import InstallationReason, InstalledApp, Status
 from shard_core.util import signals
 from shard_core.settings import settings
@@ -21,54 +22,54 @@ async def install_app_from_store(
     if not await util.app_exists_in_store(name):
         raise AppDoesNotExist(name)
 
-    if util.app_exists_in_db(name):
+    if await util.app_exists_in_db(name):
         raise AppAlreadyInstalled(name)
 
-    with installed_apps_table() as installed_apps:
+    async with db_conn() as conn:
         installed_app = InstalledApp(
             name=name,
             installation_reason=installation_reason,
             status=Status.INSTALLATION_QUEUED,
         )
-        installed_apps.insert(installed_app.model_dump())
+        await db_installed_apps.insert(conn, installed_app.model_dump())
 
     installation_task = worker.InstallationTask(
         app_name=name,
         task_type="install from store",
     )
     worker.installation_worker.enqueue(installation_task)
-    signals.on_apps_update.send()
+    await signals.on_apps_update.send_async()
     log.info(f"created {installation_task}")
 
 
 async def install_app_from_existing_zip(
     name: str, installation_reason: InstallationReason = InstallationReason.CUSTOM
 ):
-    if util.app_exists_in_db(name):
+    if await util.app_exists_in_db(name):
         raise AppAlreadyInstalled(name)
 
-    with installed_apps_table() as installed_apps:
+    async with db_conn() as conn:
         installed_app = InstalledApp(
             name=name,
             installation_reason=installation_reason,
             status=Status.INSTALLATION_QUEUED,
         )
-        installed_apps.insert(installed_app.model_dump())
+        await db_installed_apps.insert(conn, installed_app.model_dump())
 
     installation_task = worker.InstallationTask(
         app_name=name,
         task_type="install from zip",
     )
     worker.installation_worker.enqueue(installation_task)
-    signals.on_apps_update.send()
+    await signals.on_apps_update.send_async()
     log.info(f"created {installation_task}")
 
 
-def uninstall_app(name: str):
-    if not util.app_exists_in_db(name):
+async def uninstall_app(name: str):
+    if not await util.app_exists_in_db(name):
         raise AppNotInstalled(name)
 
-    util.update_app_status(name, Status.UNINSTALLATION_QUEUED)
+    await util.update_app_status(name, Status.UNINSTALLATION_QUEUED)
 
     uninstallation_task = worker.InstallationTask(
         app_name=name,
@@ -76,7 +77,7 @@ def uninstall_app(name: str):
     )
     worker.installation_worker.enqueue(uninstallation_task)
 
-    signals.on_apps_update.send()
+    await signals.on_apps_update.send_async()
     log.info(f"created {uninstallation_task}")
 
 
@@ -84,10 +85,10 @@ async def reinstall_app(name: str):
     if not await util.app_exists_in_store(name):
         raise AppDoesNotExist(name)
 
-    if not util.app_exists_in_db(name):
+    if not await util.app_exists_in_db(name):
         raise AppNotInstalled(name)
 
-    util.update_app_status(name, Status.REINSTALLATION_QUEUED)
+    await util.update_app_status(name, Status.REINSTALLATION_QUEUED)
 
     reinstallation_task = worker.InstallationTask(
         app_name=name,
@@ -100,21 +101,22 @@ async def reinstall_app(name: str):
 
 async def refresh_init_apps():
     try:
-        database.get_value(STORE_KEY_INITIAL_APPS_INSTALLED)
+        await database.get_value(STORE_KEY_INITIAL_APPS_INSTALLED)
         log.debug("initial apps already installed on first startup, skipping")
         return
     except KeyError:
         pass  # first startup — flag not yet set
 
     configured_init_apps = set(settings().apps.initial_apps)
-    with installed_apps_table() as apps:
-        installed_apps = {app["name"] for app in apps.all()}
+    async with db_conn() as conn:
+        all_apps = await db_installed_apps.get_all(conn)
+    installed_apps = {app["name"] for app in all_apps}
 
     for app_name in configured_init_apps - installed_apps:
         log.info(f"installing initial app {app_name}")
         await install_app_from_store(app_name, InstallationReason.CONFIG)
 
-    database.set_value(STORE_KEY_INITIAL_APPS_INSTALLED, True)
+    await database.set_value(STORE_KEY_INITIAL_APPS_INSTALLED, True)
     log.debug("refreshed initial apps")
 
 

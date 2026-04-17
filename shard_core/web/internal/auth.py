@@ -1,13 +1,13 @@
 import logging
 from typing import Optional
 
-from cachetools import cached, TTLCache
 from fastapi import HTTPException, APIRouter, Cookie, Response, status, Header, Request
 from http_message_signatures import InvalidSignature
 from jinja2 import Template
-from tinydb import Query
 
-from shard_core.database.database import installed_apps_table, identities_table
+from shard_core.database.connection import db_conn
+from shard_core.database import installed_apps as db_installed_apps
+from shard_core.database import identities as db_identities
 from shard_core.data_model.app_meta import InstalledApp, Access, Path
 from shard_core.data_model.auth import AuthState
 from shard_core.data_model.identity import Identity, SafeIdentity
@@ -25,19 +25,19 @@ router = APIRouter()
 
 
 @router.get("/authenticate_terminal", status_code=status.HTTP_200_OK)
-def authenticate_terminal(response: Response, authorization: str = Cookie(None)):
+async def authenticate_terminal(response: Response, authorization: str = Cookie(None)):
     if not authorization:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED)
 
     try:
-        terminal = pairing.verify_terminal_jwt(authorization)
+        terminal = await pairing.verify_terminal_jwt(authorization)
     except pairing.InvalidJwt:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED)
     else:
         response.headers["X-Ptl-Client-Type"] = "terminal"
         response.headers["X-Ptl-Client-Id"] = terminal.id
         response.headers["X-Ptl-Client-Name"] = terminal.name
-        on_terminal_auth.send(terminal)
+        await on_terminal_auth.send_async(terminal)
 
 
 @router.get("/authenticate_management", status_code=status.HTTP_200_OK)
@@ -59,11 +59,11 @@ async def authenticate_and_authorize(
     x_forwarded_host: str = Header(None),
     x_forwarded_uri: str = Header(None),
 ):
-    app = _match_app(x_forwarded_host)
+    app = await _match_app(x_forwarded_host)
     path_object = _match_path(x_forwarded_uri, app)
     auth_state = await _get_auth_state(request, authorization)
     log.debug(f"Auth state is {auth_state}")
-    header_values = _get_identity()
+    header_values = await _get_identity()
 
     if (
         path_object.access == Access.PRIVATE
@@ -88,34 +88,31 @@ async def authenticate_and_authorize(
         f"granted auth for {x_forwarded_host}{x_forwarded_uri} with headers {response.headers.items()}"
     )
 
-    on_request_to_app.send(app)
+    await on_request_to_app.send_async(app)
 
 
-def _match_app(x_forwarded_host) -> InstalledApp:
+async def _match_app(x_forwarded_host) -> InstalledApp:
     app_name = x_forwarded_host.split(".")[0]
-    app = _find_app(app_name)
+    app = await _find_app(app_name)
     if not app:
         log.debug(f"denied auth for {x_forwarded_host} -> unknown app")
         raise HTTPException(status.HTTP_404_NOT_FOUND)
     return app
 
 
-@cached(cache=TTLCache(maxsize=8, ttl=3))
-def _get_identity():
-    with identities_table() as identities:
-        default_identity = Identity(
-            **identities.get(Query().is_default == True)
-        )  # noqa: E712
+async def _get_identity():
+    async with db_conn() as conn:
+        default_row = await db_identities.get_default(conn)
+    default_identity = Identity(**default_row)
     return SafeIdentity.from_identity(default_identity)
 
 
-@cached(cache=TTLCache(maxsize=32, ttl=3))
-def _find_app(app_name) -> Optional[InstalledApp]:
-    with installed_apps_table() as installed_apps:  # type: Table
-        if result := installed_apps.get(Query().name == app_name):
-            return InstalledApp(**result)
-        else:
-            return None
+async def _find_app(app_name) -> Optional[InstalledApp]:
+    async with db_conn() as conn:
+        result = await db_installed_apps.get_by_name(conn, app_name)
+    if result:
+        return InstalledApp(**result)
+    return None
 
 
 def _match_path(uri, app: InstalledApp) -> Path:
@@ -129,11 +126,11 @@ def _match_path(uri, app: InstalledApp) -> Path:
 
 async def _get_auth_state(request, authorization) -> AuthState:
     try:
-        terminal = pairing.verify_terminal_jwt(authorization)
+        terminal = await pairing.verify_terminal_jwt(authorization)
     except pairing.InvalidJwt as e:
         log.debug(f"invalid terminal JWT: {e}")
     else:
-        on_terminal_auth.send(terminal)
+        await on_terminal_auth.send_async(terminal)
         return AuthState(
             x_ptl_client_type=AuthState.ClientType.TERMINAL,
             x_ptl_client_id=terminal.id,

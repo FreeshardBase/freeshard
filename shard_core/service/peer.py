@@ -6,9 +6,9 @@ import requests
 from fastapi.requests import Request
 from http_message_signatures import HTTPSignatureKeyResolver, algorithms
 from requests_http_signature import HTTPSignatureAuth
-from tinydb import Query
 
-from shard_core.database.database import peers_table
+from shard_core.database.connection import db_conn
+from shard_core.database import peers as db_peers
 from shard_core.data_model.identity import OutputIdentity
 from shard_core.data_model.peer import Peer
 from shard_core.service.crypto import PublicKey
@@ -17,20 +17,20 @@ from shard_core.util import signals
 log = logging.getLogger(__name__)
 
 
-def get_peer_by_id(id: str):
-    with peers_table() as peers:
-        if p := peers.get(Query().id.matches(f"{id}:*")):
+async def get_peer_by_id(id: str):
+    async with db_conn() as conn:
+        p = await db_peers.get_by_id_prefix(conn, id)
+        if p:
             return Peer(**p)
         else:
             raise KeyError(id)
 
 
 async def update_all_peer_pubkeys():
-    with peers_table() as peers:  # type: Table
-        peers_without_pubkey = peers.search(Query().public_bytes_b64.exists())
-    await asyncio.gather(
-        *[update_peer_meta(Peer(**peer)) for peer in peers_without_pubkey]
-    )
+    async with db_conn() as conn:
+        all_peers = await db_peers.get_all(conn)
+    peers_with_pubkey = [Peer(**p) for p in all_peers if p.get("public_bytes_b64")]
+    await asyncio.gather(*[update_peer_meta(peer) for peer in peers_with_pubkey])
 
 
 async def update_peer_meta(peer: Peer):
@@ -43,16 +43,16 @@ async def update_peer_meta(peer: Peer):
         response = await asyncio.get_running_loop().run_in_executor(None, do_request)
     except requests.ConnectionError as e:
         log.debug(f"Could not find peer {peer.short_id}: {e}")
-        with peers_table() as peers:
-            peers.update({"is_reachable": False}, Query().id == peer.id)
+        async with db_conn() as conn:
+            await db_peers.update_by_id(conn, peer.id, {"is_reachable": False})
         return
 
     try:
         response.raise_for_status()
     except httpx.HTTPStatusError as e:
         log.debug(f"Could not update peer meta for {peer.short_id}: {e}")
-        with peers_table() as peers:  # type: Table
-            peers.update({"is_reachable": False}, Query().id == peer.id)
+        async with db_conn() as conn:
+            await db_peers.update_by_id(conn, peer.id, {"is_reachable": False})
         return
 
     peer_identity = OutputIdentity(**response.json())
@@ -63,8 +63,10 @@ async def update_peer_meta(peer: Peer):
         )
 
     updated_peer = output_identity_to_peer(peer_identity)
-    with peers_table() as peers:  # type: Table
-        peers.update(updated_peer.model_dump(), Query().id == peer.id)
+    async with db_conn() as conn:
+        await db_peers.update_by_id(
+            conn, peer.id, updated_peer.model_dump(exclude={"id"})
+        )
 
 
 def output_identity_to_peer(identity: OutputIdentity) -> Peer:
@@ -80,6 +82,15 @@ async def verify_peer_auth(request: Request) -> Peer:
     host = request.headers["X-Forwarded-host"]
     uri = request.headers["X-Forwarded-uri"]
 
+    # Pre-load all peers so the sync key resolver can look them up without DB access
+    async with db_conn() as conn:
+        all_peers = await db_peers.get_all(conn)
+    peers_by_prefix = {}
+    for p in all_peers:
+        peer = Peer(**p)
+        prefix = peer.short_id
+        peers_by_prefix[prefix] = peer
+
     prepared_request = requests.Request(
         method=method,
         url=f"{proto}://{host}{uri}",
@@ -90,21 +101,25 @@ async def verify_peer_auth(request: Request) -> Peer:
     verify_result = HTTPSignatureAuth.verify(
         prepared_request,
         signature_algorithm=algorithms.RSA_PSS_SHA512,
-        key_resolver=_KR(),
+        key_resolver=_PreloadedKR(peers_by_prefix),
     )
-    return get_peer_by_id(verify_result.parameters["keyid"])
+    return await get_peer_by_id(verify_result.parameters["keyid"])
 
 
-class _KR(HTTPSignatureKeyResolver):
+class _PreloadedKR(HTTPSignatureKeyResolver):
+    """Key resolver that uses pre-loaded peers to avoid async DB calls in sync context."""
+
+    def __init__(self, peers_by_prefix: dict[str, Peer]):
+        self._peers_by_prefix = peers_by_prefix
+
     def resolve_private_key(self, key_id: str):
         pass
 
     def resolve_public_key(self, key_id: str):
-        peer = get_peer_by_id(key_id)
-        if peer.public_bytes_b64:
+        peer = self._peers_by_prefix.get(key_id)
+        if peer and peer.public_bytes_b64:
             return peer.public_bytes_b64.encode()
-        else:
-            raise KeyError(f"No public key known for peer id {key_id}")
+        raise KeyError(f"No public key known for peer id {key_id}")
 
 
 @signals.async_on_peer_write.connect

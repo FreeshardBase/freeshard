@@ -2,10 +2,8 @@ import pytest
 from pydantic import BaseModel, computed_field
 
 from shard_core.data_model.app_meta import Lifecycle, VMSize
-from tests.conftest import requires_test_env
 
 
-@requires_test_env("full")
 def test_computed_field_model():
     class TestModel(BaseModel):
         normal_field: str
@@ -22,7 +20,6 @@ def test_computed_field_model():
     assert instance_dict["prop_field_included"] == "fooprop"
 
 
-@requires_test_env("full")
 def test_lifecycle():
     Lifecycle(always_on=True)
     Lifecycle(idle_time_for_shutdown=5)
@@ -34,7 +31,6 @@ def test_lifecycle():
         Lifecycle(always_on=True, idle_time_for_shutdown=10)
 
 
-@requires_test_env("full")
 def test_vm_size():
     assert VMSize.XS < VMSize.S
     assert VMSize.S < VMSize.M

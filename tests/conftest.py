@@ -1,8 +1,11 @@
+import os
+
+os.environ.setdefault("CONFIG", "tests/config.toml")
+
 import asyncio
 import importlib
 import json
 import logging
-import os
 import re
 import shutil
 from contextlib import contextmanager
@@ -12,6 +15,7 @@ from logging import LogRecord
 from pathlib import Path
 from typing import List, AsyncGenerator
 
+import psycopg
 import pytest
 import pytest_asyncio
 import responses
@@ -20,7 +24,6 @@ from asgi_lifespan import LifespanManager
 from httpx import AsyncClient, ASGITransport
 from requests import PreparedRequest
 from responses import RequestsMock
-from tinydb.storages import MemoryStorage
 
 from shard_core.data_model.app_meta import VMSize
 from shard_core.data_model.backend.shard_model import (
@@ -32,6 +35,7 @@ from shard_core.data_model.backend.shard_model import (
 from shard_core import app_factory
 from shard_core.data_model.identity import OutputIdentity, Identity
 from shard_core.data_model.profile import Profile
+from shard_core.database import database
 from shard_core.service import websocket, app_installation, telemetry
 from shard_core.service.app_tools import get_installed_apps_path
 from shard_core.settings import Settings, set_settings, reset_settings
@@ -82,15 +86,51 @@ def settings_override(override: dict):
         set_settings(old)
 
 
+@pytest.fixture(scope="session")
+def docker_compose_file():
+    return str(Path(__file__).parent / "docker-compose.yml")
+
+
+@pytest.fixture(scope="session")
+def docker_compose_project_name():
+    return "shard-core-test"
+
+
+def is_responsive(conninfo):
+    try:
+        conn = psycopg.connect(conninfo)
+        conn.close()
+        return True
+    except psycopg.OperationalError:
+        return False
+
+
+@pytest.fixture(scope="session")
+def postgres_db(docker_services):
+    """Start Postgres via pytest-docker and wait until it is responsive."""
+    port = docker_services.port_for("postgres", 5432)
+    conninfo = f"host=localhost port={port} dbname=shard_core_test user=shard_core_test password=shard_core_test"
+    docker_services.wait_until_responsive(
+        timeout=30.0,
+        pause=0.5,
+        check=lambda: is_responsive(conninfo),
+    )
+    return {
+        "host": "localhost",
+        "port": port,
+        "dbname": "shard_core_test",
+        "user": "shard_core_test",
+        "password": "shard_core_test",
+    }
+
+
 @pytest.fixture(autouse=True, scope="session")
-def setup_all():
-    # Logging in with each api_client hit a rate limit or something.
-    # We do it one time here, and then patch the login function to noop for each api_client
+def setup_all(postgres_db):
     asyncio.run(app_installation.login_docker_registries())
 
 
 @pytest.fixture(autouse=True)
-def config_override(tmp_path, request):
+def config_override(tmp_path, request, postgres_db):
     print(f"\nUsing temp path: {tmp_path}")
 
     # Detects the variable named *config_override* of a test module
@@ -100,13 +140,42 @@ def config_override(tmp_path, request):
     function_override_mark = request.node.get_closest_marker("config_override")
     function_override = function_override_mark.args[0] if function_override_mark else {}
 
-    base = _TestSettings(path_root=str(tmp_path / "path_root"))
+    _truncate_all_tables(postgres_db)
+
+    base = _TestSettings(
+        path_root=str(tmp_path / "path_root"),
+        db=postgres_db,
+    )
     combined = _apply_model_dict(base, {**module_override, **function_override})
     set_settings(combined)
 
     yield
 
     reset_settings()
+
+
+def _truncate_all_tables(postgres_db: dict):
+    conninfo = (
+        f"host={postgres_db['host']} port={postgres_db['port']} "
+        f"dbname={postgres_db['dbname']} user={postgres_db['user']} password={postgres_db['password']}"
+    )
+    with psycopg.connect(conninfo, autocommit=True) as conn:
+        rows = conn.execute(
+            "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
+        ).fetchall()
+        tables = [r[0] for r in rows if not r[0].startswith("_yoyo")]
+        if tables:
+            conn.execute(f"TRUNCATE {', '.join(tables)} RESTART IDENTITY CASCADE")
+
+
+@pytest_asyncio.fixture
+async def db():
+    """Initialize and tear down the database for tests that don't use api_client."""
+    await database.init_database()
+    try:
+        yield
+    finally:
+        await database.shutdown_database()
 
 
 @pytest_asyncio.fixture
@@ -126,7 +195,6 @@ async def api_client(requests_mock, mocker) -> AsyncGenerator[AsyncClient]:
 
     async with docker_network_portal():
         app = app_factory.create_app()
-        # for the LifeSpanManager, see: https://github.com/encode/httpx/issues/1024
         async with (
             LifespanManager(app, startup_timeout=20),
             AsyncClient(
@@ -134,9 +202,6 @@ async def api_client(requests_mock, mocker) -> AsyncGenerator[AsyncClient]:
             ) as client,
         ):
             whoareyou = (await client.get("/public/meta/whoareyou")).json()
-            # Cookies are scoped for the domain,
-            # so we have to configure the TestClient with the correct domain.
-            # This way, the TestClient remembers cookies
             client.base_url = f'https://{whoareyou["domain"]}'
             await wait_until_all_apps_installed(client)
             yield client
@@ -146,43 +211,29 @@ async def api_client(requests_mock, mocker) -> AsyncGenerator[AsyncClient]:
 async def app_client(mocker) -> AsyncGenerator[AsyncClient]:
     """Lightweight fixture that creates the FastAPI app WITHOUT running the lifespan.
 
-    No Docker network is created or needed.  When the CI environment variable is set
-    (as in GitHub Actions), TinyDB uses MemoryStorage instead of file-based storage so
-    there is no file I/O overhead.
+    Database is initialized directly (no Docker network needed).
     """
-    # Reload modules with global state so each test starts from a clean slate,
-    # just like the api_client fixture does.
     importlib.reload(websocket)
     importlib.reload(app_installation.worker)
     importlib.reload(telemetry)
 
-    if os.environ.get("CI"):
-        # Patch get_db to use in-memory storage so tests run without file I/O
-        import tinydb
-        from tinydb_serialization import SerializationMiddleware
-        from tinydb_serialization.serializers import DateTimeSerializer
+    # Initialize the database (migrations + pool) and create default identity
+    await database.init_database()
+    try:
+        from shard_core.service import identity
 
-        _memory_serialization = SerializationMiddleware(MemoryStorage)
-        _memory_serialization.register_serializer(DateTimeSerializer(), "TinyDate")
-        _shared_memory_db = tinydb.TinyDB(storage=_memory_serialization)
+        await identity.init_default_identity()
 
-        @contextmanager
-        def _memory_get_db():
-            yield _shared_memory_db
+        app = app_factory.create_app()
 
-        mocker.patch("shard_core.database.database.get_db", _memory_get_db)
-
-    # create_app() calls database.init_database() and identity.init_default_identity()
-    # internally; we do NOT run the lifespan so no Docker operations are triggered.
-    app = app_factory.create_app()
-
-    # Determine the domain from whoareyou so cookies work correctly
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="https://init", timeout=10
-    ) as client:
-        whoareyou = (await client.get("/public/meta/whoareyou")).json()
-        client.base_url = f'https://{whoareyou["domain"]}'
-        yield client
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="https://init", timeout=10
+        ) as client:
+            whoareyou = (await client.get("/public/meta/whoareyou")).json()
+            client.base_url = f'https://{whoareyou["domain"]}'
+            yield client
+    finally:
+        await database.shutdown_database()
 
 
 mock_profile = Profile(
@@ -238,9 +289,7 @@ def requests_mock_context(*, shard: ShardDb = None, profile: Profile = None):
                 f"{controller_base_url}/api/shards/self/resize",
                 callback=requests_mock_resize,
             )
-            rsps.post(
-                f"{management_api}/app_usage",
-            )
+            rsps.post(f"{management_api}/app_usage")
             rsps.get(
                 f"{management_api}/sharedSecret",
                 body=json.dumps({"shared_secret": management_shared_secret}),
@@ -355,17 +404,3 @@ def memory_logger():
     root_logger.addHandler(memory_handler)
     yield memory_handler
     root_logger.removeHandler(memory_handler)
-
-
-def requires_test_env(*envs):
-    import os
-
-    if env := os.environ.get("TEST_ENV"):
-        return pytest.mark.skipif(
-            env not in list(envs),
-            reason=f"Test requires TEST_ENV to be one of {envs}",
-        )
-    else:
-        return pytest.mark.skip(
-            reason=f"Test requires TEST_ENV to be one of {envs}",
-        )

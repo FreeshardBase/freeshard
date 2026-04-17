@@ -2,11 +2,9 @@ import docker
 from fastapi import status
 
 from shard_core.data_model.app_meta import InstalledApp, Status
-from tests.conftest import requires_test_env
 from tests.util import retry_async, wait_until_app_installed
 
 
-@requires_test_env("full")
 async def test_app_starts_and_stops(requests_mock, api_client):
     docker_client = docker.from_env()
     app_name = "quick_stop"
@@ -79,7 +77,6 @@ async def test_app_starts_and_stops(requests_mock, api_client):
     )
 
 
-@requires_test_env("full")
 async def test_always_on_app_starts(requests_mock, api_client):
     docker_client = docker.from_env()
     app_name = "always_on"

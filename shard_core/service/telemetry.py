@@ -15,7 +15,7 @@ last_send: datetime.datetime = datetime.datetime.now(datetime.timezone.utc)
 
 @on_terminal_auth.connect
 @on_request_to_app.connect
-def record_request(_):
+async def record_request(_):
     if not settings().telemetry.enabled:
         return
 

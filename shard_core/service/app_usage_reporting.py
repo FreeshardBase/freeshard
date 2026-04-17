@@ -4,9 +4,10 @@ from datetime import datetime, date, timedelta
 
 from requests import HTTPError
 from starlette import status
-from tinydb import Query
 
-from shard_core.database.database import installed_apps_table, app_usage_track_table
+from shard_core.database.connection import db_conn
+from shard_core.database import installed_apps as db_installed_apps
+from shard_core.database import app_usage as db_app_usage
 from shard_core.data_model.app_meta import InstalledApp
 from shard_core.data_model.app_usage import AppUsageTrack, AppUsageReport
 from shard_core.settings import settings
@@ -16,13 +17,14 @@ log = logging.getLogger(__name__)
 
 
 async def track_currently_installed_apps():
-    with installed_apps_table() as installed_apps:  # type: Table
-        all_apps = [InstalledApp.model_validate(a) for a in installed_apps.all()]
+    async with db_conn() as conn:
+        all_apps_rows = await db_installed_apps.get_all(conn)
+    all_apps = [InstalledApp.model_validate(a) for a in all_apps_rows]
     track = AppUsageTrack(
         timestamp=datetime.utcnow(), installed_apps=[app.name for app in all_apps]
     )
-    with app_usage_track_table() as tracks:  # type: Table
-        tracks.insert(track.model_dump())
+    async with db_conn() as conn:
+        await db_app_usage.insert(conn, track.model_dump())
     log.debug(f"created app usage track for {len(track.installed_apps)} apps")
 
 
@@ -36,17 +38,15 @@ async def report_app_usage():
 
     report = AppUsageReport(year=start.year, month=start.month, usage={})
 
-    with app_usage_track_table() as tracks:  # type: Table
-        relevant_tracks = tracks.search(
-            (start <= Query().timestamp) & (Query().timestamp < end)
-        )
+    async with db_conn() as conn:
+        relevant_tracks = await db_app_usage.search_by_time_range(conn, start, end)
 
     if not relevant_tracks:
         log.warning("no app usage tracks found for reporting")
         return
 
     for t in relevant_tracks:
-        for app in AppUsageTrack.model_validate(t).installed_apps:
+        for app in t["installed_apps"]:
             if app not in report.usage:
                 report.usage[app] = 0
             report.usage[app] += 1

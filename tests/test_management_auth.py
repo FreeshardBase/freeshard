@@ -10,11 +10,11 @@ from shard_core.service.freeshard_controller import (
 
 async def test_refresh_shared_secret(app_client: AsyncClient, requests_mock):
     with pytest.raises(KeyError):
-        database.get_value(STORE_KEY_FREESHARD_CONTROLLER_SHARED_KEY)
+        await database.get_value(STORE_KEY_FREESHARD_CONTROLLER_SHARED_KEY)
 
     await freeshard_controller.refresh_shared_secret()
 
-    assert database.get_value(STORE_KEY_FREESHARD_CONTROLLER_SHARED_KEY)
+    assert await database.get_value(STORE_KEY_FREESHARD_CONTROLLER_SHARED_KEY)
 
 
 async def test_auth_call_success_with_shared_secret(

@@ -6,8 +6,7 @@ from requests import PreparedRequest, Request
 from requests_http_signature import HTTPSignatureAuth
 
 from shard_core.data_model.identity import OutputIdentity
-from tests.conftest import requires_test_env
-from tests.util import verify_signature_auth, modify_request_like_traefik_forward_auth
+from tests.util import verify_signature_auth, modify_request_like_traefik_forward_auth, install_app
 
 
 async def test_call_peer_from_app_basic(app_client, peer_mock_requests):
@@ -46,10 +45,8 @@ async def test_call_peer_from_app_post(app_client, peer_mock_requests):
     assert received_request.body == b"foo data bar"
 
 
-@requires_test_env("full")
 async def test_peer_auth_basic(api_client: AsyncClient, peer_mock_requests):
-    response = await api_client.post("protected/apps/mock_app")
-    response.raise_for_status()
+    await install_app(api_client, "mock_app")
 
     peer = peer_mock_requests.identity
     peer_auth = HTTPSignatureAuth(
@@ -81,5 +78,5 @@ async def test_peer_auth_basic(api_client: AsyncClient, peer_mock_requests):
     response = await api_client.send(request_to_auth)
     response.raise_for_status()
     assert response.headers["X-Ptl-Client-Type"] == "peer"
-    assert response.headers["X-Ptl-Client-Id"] == peer.id
+    assert peer.id.startswith(response.headers["X-Ptl-Client-Id"])
     assert response.headers["X-Ptl-Client-Name"] == peer.name

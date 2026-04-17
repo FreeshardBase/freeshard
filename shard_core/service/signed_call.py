@@ -14,15 +14,15 @@ log = logging.getLogger(__name__)
 async def signed_request(
     *args, identity: Identity = None, **kwargs
 ) -> requests.Response:
-    auth = get_signature_auth(identity)
+    auth = await get_signature_auth(identity)
     response = await asyncio.to_thread(
         requests.request, *args, auth=auth, stream=True, **kwargs
     )
     return response
 
 
-def get_signature_auth(identity: Identity = None):
-    identity = identity or identity_service.get_default_identity()
+async def get_signature_auth(identity: Identity = None):
+    identity = identity or await identity_service.get_default_identity()
     return HTTPSignatureAuth(
         signature_algorithm=algorithms.RSA_PSS_SHA512,
         key_id=identity.short_id,

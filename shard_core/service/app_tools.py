@@ -3,10 +3,9 @@ import json
 import logging
 from pathlib import Path
 
-from tinydb import Query
-
 import shard_core.data_model.profile
-from shard_core.database.database import installed_apps_table
+from shard_core.database.connection import db_conn
+from shard_core.database import installed_apps as db_installed_apps
 from shard_core.data_model.app_meta import (
     Status,
     AppMeta,
@@ -30,9 +29,9 @@ async def docker_create_app_containers(name: str):
 
 @throttle(5)
 async def docker_start_app(name: str):
-    with installed_apps_table() as installed_apps:
-        # todo: think more about how to handle different states
-        app_status = installed_apps.get(Query().name == name)["status"]
+    async with db_conn() as conn:
+        app = await db_installed_apps.get_by_name(conn, name)
+        app_status = app["status"] if app else None
 
     if app_status in [Status.STOPPED, Status.RUNNING, Status.DOWN]:
         log.debug(f"starting app {name=}")
@@ -63,44 +62,45 @@ async def docker_start_app(name: str):
                 )
             else:
                 raise
-        with installed_apps_table() as installed_apps:
-            installed_apps.update({"status": Status.RUNNING}, Query().name == name)
-        signals.on_apps_update.send()
+        async with db_conn() as conn:
+            await db_installed_apps.update_status(conn, name, Status.RUNNING)
+        await signals.on_apps_update.send_async()
     else:
         log.debug(f"app {name=} has status {app_status}, skipping start")
 
 
 async def docker_stop_app(name: str, set_status: bool = True):
-    with installed_apps_table() as installed_apps:
-        # todo: think more about how to handle different states
-        app_status = installed_apps.get(Query().name == name)["status"]
+    async with db_conn() as conn:
+        app = await db_installed_apps.get_by_name(conn, name)
+        app_status = app["status"] if app else None
     if app_status in [Status.RUNNING, Status.UNINSTALLING]:
         await subprocess("docker-compose", "stop", cwd=get_installed_apps_path() / name)
         if set_status:
-            with installed_apps_table() as installed_apps:
-                installed_apps.update({"status": Status.STOPPED}, Query().name == name)
-        signals.on_apps_update.send()
+            async with db_conn() as conn:
+                await db_installed_apps.update_status(conn, name, Status.STOPPED)
+        await signals.on_apps_update.send_async()
     else:
         log.debug(f"app {name=} has {app_status=}, skipping stop")
 
 
 async def docker_shutdown_app(name: str, set_status: bool = True, force: bool = False):
-    with installed_apps_table() as installed_apps:
-        # todo: think more about how to handle different states
-        app_status = installed_apps.get(Query().name == name)["status"]
+    async with db_conn() as conn:
+        app = await db_installed_apps.get_by_name(conn, name)
+        app_status = app["status"] if app else None
     if force or app_status in [Status.STOPPED, Status.UNINSTALLING]:
         await subprocess("docker-compose", "down", cwd=get_installed_apps_path() / name)
         if set_status:
-            with installed_apps_table() as installed_apps:
-                installed_apps.update({"status": Status.DOWN}, Query().name == name)
-        signals.on_apps_update.send()
+            async with db_conn() as conn:
+                await db_installed_apps.update_status(conn, name, Status.DOWN)
+        await signals.on_apps_update.send_async()
     else:
         log.debug(f"app {name=} has {app_status=}, skipping shutdown")
 
 
 async def docker_stop_all_apps():
-    with installed_apps_table() as installed_apps:
-        apps = [InstalledApp.model_validate(a) for a in installed_apps.all()]
+    async with db_conn() as conn:
+        all_apps = await db_installed_apps.get_all(conn)
+    apps = [InstalledApp.model_validate(a) for a in all_apps]
     tasks = [docker_stop_app(app.name) for app in apps]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     for app, result in zip(apps, results):
@@ -109,8 +109,9 @@ async def docker_stop_all_apps():
 
 
 async def docker_shutdown_all_apps(force: bool = False):
-    with installed_apps_table() as installed_apps:
-        apps = [InstalledApp.model_validate(a) for a in installed_apps.all()]
+    async with db_conn() as conn:
+        all_apps = await db_installed_apps.get_all(conn)
+    apps = [InstalledApp.model_validate(a) for a in all_apps]
     tasks = [docker_shutdown_app(app.name, force=force) for app in apps]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     for app, result in zip(apps, results):
@@ -133,9 +134,9 @@ def get_app_metadata(app_name: str) -> AppMeta:
         raise MetadataNotFound(app_name)
 
 
-def size_is_compatible(app_size) -> bool:
+async def size_is_compatible(app_size) -> bool:
     try:
-        profile = shard_core.data_model.profile.get_profile()
+        profile = await shard_core.data_model.profile.get_profile()
     except KeyError:
         return False
     if profile is None:
@@ -168,7 +169,7 @@ async def docker_prune_images(apply_filter=True):
 
 async def scheduled_docker_prune_images():
     if not settings().apps.pruning.enabled:
-        log.debug("docker image pruning is disabled, skipping")
+        log.info("docker image pruning is disabled, skipping")
         return
     await docker_prune_images()
 

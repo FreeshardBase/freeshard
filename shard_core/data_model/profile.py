@@ -34,10 +34,10 @@ class Profile(BaseModel):
         )
 
 
-def set_profile(profile: Profile | None):
-    set_value("profile", profile.model_dump() if profile else "None")
+async def set_profile(profile: Profile | None):
+    await set_value("profile", profile.model_dump() if profile else "None")
 
 
-def get_profile() -> Profile | None:
-    value = get_value("profile")
+async def get_profile() -> Profile | None:
+    value = await get_value("profile")
     return None if value == "None" else Profile.model_validate(value)

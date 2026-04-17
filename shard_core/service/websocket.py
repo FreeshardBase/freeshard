@@ -7,7 +7,9 @@ from typing import Dict, List, Tuple
 from pydantic import BaseModel
 from starlette.websockets import WebSocket
 
-from shard_core.database.database import terminals_table, installed_apps_table
+from shard_core.database.connection import db_conn
+from shard_core.database import terminals as db_terminals
+from shard_core.database import installed_apps as db_installed_apps
 from shard_core.data_model.app_meta import InstalledApp
 from shard_core.data_model.terminal import Terminal
 from shard_core.service.app_tools import enrich_installed_app_with_meta
@@ -115,9 +117,9 @@ def send_disk_usage_update(disk_usage: DiskUsage):
 
 
 @signals.on_terminals_update.connect
-def send_terminals_update(_):
-    with terminals_table() as terminals:  # type: Table
-        all_terminals = terminals.all()
+async def send_terminals_update(_):
+    async with db_conn() as conn:
+        all_terminals = await db_terminals.get_all(conn)
     ws_worker.broadcast_message("terminals_update", all_terminals)
 
 
@@ -127,9 +129,9 @@ def send_terminal_add(terminal: Terminal):
 
 
 @signals.on_apps_update.connect
-def send_apps_update(_):
-    with installed_apps_table() as installed_apps:
-        all_apps = installed_apps.all()
+async def send_apps_update(_):
+    async with db_conn() as conn:
+        all_apps = await db_installed_apps.get_all(conn)
     enriched_apps = [
         enrich_installed_app_with_meta(InstalledApp.model_validate(app))
         for app in all_apps
