@@ -113,7 +113,7 @@ async def backup_directories(
                     directory=str(rel_directory),
                     startTime=start_time,
                     endTime=end_time,
-                    **rclone_stats,
+                    rclone_stats=rclone_stats,
                 )
             )
 
@@ -141,9 +141,7 @@ def _write_marker_blob(container_name: str, sas_token: str):
         # BlobClient.from_blob_url expects the blob path inserted before the query:
         #   https://account.blob.core.windows.net/container/_last_backup?sv=...&sig=...
         parsed = urlparse(sas_token)
-        blob_url = urlunparse(
-            parsed._replace(path=f"/{container_name}/_last_backup")
-        )
+        blob_url = urlunparse(parsed._replace(path=f"/{container_name}/_last_backup"))
         blob_client = BlobClient.from_blob_url(blob_url)
         timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
         blob_client.upload_blob(timestamp, overwrite=True)
