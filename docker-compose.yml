@@ -16,7 +16,7 @@ services:
       - POSTGRES_USER=shard_core
       - POSTGRES_PASSWORD=shard_core
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ${FREESHARD_DIR:?}/postgres_data:/var/lib/postgresql/data
     networks:
       - portal
     healthcheck:
