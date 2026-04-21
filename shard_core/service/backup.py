@@ -125,7 +125,7 @@ async def backup_directories(
             endTime=overall_end_time,
         )
         async with db_conn() as conn:
-            await db_backups.insert(conn, report.model_dump())
+            await db_backups.insert(conn, report)
         _write_marker_blob(container_name, sas_token)
         log.info("Backup done")
 

@@ -4,8 +4,10 @@ from psycopg import AsyncConnection
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
+from shard_core.data_model.backup import BackupReport
 
-async def insert(conn: AsyncConnection, report: dict) -> dict:
+
+async def insert(conn: AsyncConnection, report: BackupReport) -> dict:
     sql: LiteralString = """INSERT INTO backups (directories, start_time, end_time)
         VALUES (%(directories)s, %(start_time)s, %(end_time)s)
         RETURNING *"""
@@ -13,9 +15,11 @@ async def insert(conn: AsyncConnection, report: dict) -> dict:
         await cur.execute(
             sql,
             {
-                "directories": Jsonb(report["directories"]),
-                "start_time": report["startTime"],
-                "end_time": report["endTime"],
+                "directories": Jsonb(
+                    [d.model_dump(mode="json") for d in report.directories]
+                ),
+                "start_time": report.startTime,
+                "end_time": report.endTime,
             },
         )
         return await cur.fetchone()
