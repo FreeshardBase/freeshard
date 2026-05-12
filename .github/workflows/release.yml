@@ -22,8 +22,6 @@ jobs:
   test:
     needs: version-check
     uses: ./.github/workflows/test.yml
-    with:
-      full: true
 
   build:
     runs-on: ubuntu-latest

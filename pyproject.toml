@@ -49,9 +49,11 @@ dev = [
     "setuptools",
     "ruff",
     "pytest",
+    "pytest-cov",
     "pytest-docker",
     "pytest-mock",
     "pytest-asyncio",
+    "black",
     "yappi",
     "responses",
     "aioresponses",
@@ -71,3 +73,14 @@ log_cli = true
 asyncio_mode = "auto"
 # https://github.com/pytest-dev/pytest-asyncio/issues/924
 asyncio_default_fixture_loop_scope = "function"
+
+[tool.coverage.run]
+source = ["shard_core"]
+branch = true
+
+[tool.coverage.report]
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]

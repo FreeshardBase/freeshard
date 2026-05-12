@@ -52,9 +52,15 @@ shard_core/
 
 ```bash
 just run-dev          # FastAPI dev server on port 8080, loads local_config.toml
-just cleanup          # ruff check + black formatting
+just cleanup          # ruff check --fix + black formatting (auto-fix)
+just lint             # ruff check (no fix)
+just test [ARGS]      # pytest (real Postgres via tests/docker-compose.yml)
+just test-cov [ARGS]  # pytest with coverage (HTML in htmlcov/)
+just verify           # lint + test — single gate before claiming done
 just get-types        # Sync data models from freeshard-controller repo
 ```
+
+`just verify` is the canonical pre-merge check and matches what CI runs.
 
 ## Key Patterns
 

@@ -6,6 +6,17 @@ cleanup:
     .venv/bin/black shard_core
     .venv/bin/black tests
 
+lint:
+    .venv/bin/ruff check .
+
+test *ARGS="tests":
+    PYTHONUNBUFFERED=1 .venv/bin/pytest {{ARGS}}
+
+test-cov *ARGS="tests":
+    PYTHONUNBUFFERED=1 .venv/bin/pytest --cov=shard_core --cov-report=term --cov-report=html {{ARGS}}
+
+verify: lint test
+
 run-from-backup backup-file:
     rm -rf run
     unzip "{{backup-file}}" -d run
