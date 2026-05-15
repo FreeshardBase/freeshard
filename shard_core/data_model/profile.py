@@ -3,7 +3,10 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from shard_core.data_model.backend.shard_model import ShardBase
+from shard_core.data_model.backend.shard_model import (
+    ShardBase,
+    ShardSubscriptionSummary,
+)
 from shard_core.database.database import set_value, get_value
 from shard_core.data_model.app_meta import VMSize
 
@@ -17,6 +20,7 @@ class Profile(BaseModel):
     delete_after: Optional[datetime] = None
     vm_size: VMSize
     max_vm_size: Optional[VMSize] = None
+    subscription: Optional[ShardSubscriptionSummary] = None
 
     @classmethod
     def from_shard(cls, shard: ShardBase):
@@ -31,6 +35,7 @@ class Profile(BaseModel):
             max_vm_size=(
                 VMSize(shard.max_vm_size.value.lower()) if shard.max_vm_size else None
             ),
+            subscription=getattr(shard, "subscription", None),
         )
 
 

@@ -1,7 +1,7 @@
 import logging
 from requests.exceptions import HTTPError
 
-from shard_core.data_model.backend.shard_model import ShardBase, SasUrlResponse
+from shard_core.data_model.backend.shard_model import ShardResponse, SasUrlResponse
 from shard_core.data_model import profile
 from shard_core.settings import settings
 from shard_core.service.signed_call import signed_request
@@ -29,7 +29,7 @@ async def refresh_profile() -> profile.Profile | None:
             return None
         else:
             raise
-    shard = ShardBase.model_validate(response.json())
+    shard = ShardResponse.model_validate(response.json())
     profile_ = profile.Profile.from_shard(shard)
     await profile.set_profile(profile_)
     log.debug("refreshed profile")

@@ -30,6 +30,8 @@ from shard_core.data_model.backend.shard_model import (
     ShardStatus,
     VmSize,
     ShardDb,
+    ShardResponse,
+    ShardSubscriptionSummary,
     Cloud,
 )
 from shard_core import app_factory
@@ -261,8 +263,26 @@ mock_shard = ShardDb(
 )
 
 
+def _shard_self_response_body(
+    shard: ShardDb, subscription: ShardSubscriptionSummary | None = None
+) -> str:
+    now = datetime.now()
+    return ShardResponse(
+        **shard.model_dump(),
+        telemetry=[],
+        telemetry_start=now,
+        telemetry_end=now,
+        subscription=subscription,
+    ).model_dump_json()
+
+
 @contextmanager
-def requests_mock_context(*, shard: ShardDb = None, profile: Profile = None):
+def requests_mock_context(
+    *,
+    shard: ShardDb = None,
+    profile: Profile = None,
+    subscription: ShardSubscriptionSummary | None = None,
+):
     from shard_core.settings import settings
 
     management_api = "https://management-mock"
@@ -296,7 +316,7 @@ def requests_mock_context(*, shard: ShardDb = None, profile: Profile = None):
             )
             rsps.get(
                 f"{controller_base_url}/api/shards/self",
-                body=(shard or mock_shard).model_dump_json(),
+                body=_shard_self_response_body(shard or mock_shard, subscription),
             )
             rsps.post(f"{controller_base_url}/api/feedback")
             rsps.get(f"{controller_base_url}/api/foo")
