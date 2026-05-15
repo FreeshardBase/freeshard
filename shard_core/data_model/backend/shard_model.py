@@ -2,12 +2,12 @@
 
 from datetime import datetime
 from enum import StrEnum, auto
-from functools import total_ordering
 from typing import List
 
 from pydantic import BaseModel
 
 from .permission_model import PermissionHolder
+from .subscription_model import SubscriptionStatus
 from .telemetry_model import Telemetry
 
 
@@ -32,7 +32,6 @@ class ShardStatus(StrEnum):
 _VM_SIZE_ORDER = ["xs", "s", "m", "l", "xl"]
 
 
-@total_ordering
 class VmSize(StrEnum):
     XS = auto()
     S = auto()
@@ -40,10 +39,28 @@ class VmSize(StrEnum):
     L = auto()
     XL = auto()
 
+    def _idx(self) -> int:
+        return _VM_SIZE_ORDER.index(self.value)
+
     def __lt__(self, other: object) -> bool:
         if not isinstance(other, VmSize):
             return NotImplemented
-        return _VM_SIZE_ORDER.index(self.value) < _VM_SIZE_ORDER.index(other.value)
+        return self._idx() < other._idx()
+
+    def __le__(self, other: object) -> bool:
+        if not isinstance(other, VmSize):
+            return NotImplemented
+        return self._idx() <= other._idx()
+
+    def __gt__(self, other: object) -> bool:
+        if not isinstance(other, VmSize):
+            return NotImplemented
+        return self._idx() > other._idx()
+
+    def __ge__(self, other: object) -> bool:
+        if not isinstance(other, VmSize):
+            return NotImplemented
+        return self._idx() >= other._idx()
 
     def __eq__(self, other: object) -> bool:
         return str.__eq__(self, other)
@@ -58,7 +75,7 @@ class Cloud(StrEnum):
     OVHCLOUD = auto()
 
 
-class ShardBase(PermissionHolder, BaseModel):
+class ShardBase(BaseModel):
     machine_id: str | None
     hash_id: str | None = None
     domain: str | None = None
@@ -81,6 +98,10 @@ class ShardBase(PermissionHolder, BaseModel):
     auto_managed: bool = True
     core_version: str | None = None
     last_seen_backup: datetime | None = None
+    subscription_id: int | None = None
+    price_cents: int | None = None
+    pending_vm_size: VmSize | None = None
+    pending_price_cents: int | None = None
 
     @property
     def short_id(self) -> str:
@@ -91,8 +112,28 @@ class ShardDb(ShardBase):
     id: int
 
 
-class ShardResponse(ShardDb):
+class ShardWithPermissions(ShardDb, PermissionHolder):
+    """ShardDb enriched with permissions loaded from the DB."""
+
+    pass
+
+
+class ShardSubscriptionSummary(BaseModel):
+    status: SubscriptionStatus
+    price_cents: int
+    currency: str
+    next_billing_date: datetime | None = None
+    payer_email: str | None = None
+    pending_vm_size: VmSize | None = None
+    pending_price_cents: int | None = None
+    paypal_manage_url: str
+
+
+class ShardResponse(ShardWithPermissions):
     telemetry: List[Telemetry]
+    telemetry_start: datetime
+    telemetry_end: datetime
+    subscription: ShardSubscriptionSummary | None = None
 
 
 class ShardUpdate(BaseModel):
@@ -100,6 +141,7 @@ class ShardUpdate(BaseModel):
     max_vm_size: VmSize | None = None
     delete_after: datetime | None = None
     status: ShardStatus | None = None
+    core_version: str | None = None
 
 
 class ShardCreateDb(BaseModel):
@@ -131,6 +173,10 @@ class ShardUpdateDb(BaseModel):
     time_assigned: datetime | None = None
     core_version: str | None = None
     last_seen_backup: datetime | None = None
+    subscription_id: int | None = None
+    price_cents: int | None = None
+    pending_vm_size: VmSize | None = None
+    pending_price_cents: int | None = None
 
 
 class AppUsageReport(BaseModel):
@@ -154,6 +200,10 @@ class SasUrlResponse(BaseModel):
 class AssignShardRequest(BaseModel):
     promo_code: str | None = None
     owner_name: str | None = None
+    owner_email: str | None = None
+
+
+class AssignTrialRequest(BaseModel):
     owner_email: str | None = None
 
 
@@ -191,6 +241,15 @@ class AddPubkeyRequest(BaseModel):
     pubkey: str
 
 
+class BulkUpgradeCoreRequest(BaseModel):
+    shard_ids: list[int]
+
+
+class BulkUpgradeCoreResponse(BaseModel):
+    upgraded: int
+    skipped: int
+
+
 class InvalidShardStatus(Exception):
     pass
 
@@ -206,12 +265,6 @@ class ShardLifecycleEventDb(BaseModel):
     error_traceback: str | None = None
 
 
-class ShardLifecycleEventResponse(BaseModel):
-    id: int
-    shard_id: int
-    timestamp: datetime
-    status_to: ShardStatus
-    actor: str
-    details: str | None = None
-    error_message: str | None = None
-    error_traceback: str | None = None
+class ShardLifecycleEventResponse(ShardLifecycleEventDb):
+    actor_owner_name: str | None = None
+    actor_db_id: int | None = None

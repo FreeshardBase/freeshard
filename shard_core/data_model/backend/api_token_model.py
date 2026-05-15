@@ -9,13 +9,17 @@ from pydantic import BaseModel
 from .permission_model import PermissionHolder, Permission
 
 
-class ApiTokenResult(PermissionHolder, BaseModel):
+class ApiTokenDb(BaseModel):
     id: uuid.UUID
     name: str
     created: datetime
     token: str
     owner_hash_id: str
     owner_name: str | None
+
+
+class ApiTokenResult(ApiTokenDb, PermissionHolder):
+    pass
 
 
 class ApiTokenCreate(BaseModel):

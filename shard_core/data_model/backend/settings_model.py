@@ -12,6 +12,10 @@ from .shard_model import Cloud
 class SettingKey(StrEnum):
     MIN_NR_OF_STANDBY_SHARDS = auto()
     NEW_INSTANCE_SIZE = auto()
+    AUTO_PROVISIONING_ENABLED = auto()
+    NEW_SHARD_CORE_VERSION = auto()
+    TRIAL_MAX_VM_SIZE = auto()
+    SUBSCRIBED_MAX_VM_SIZE = auto()
 
 
 class Setting(BaseModel):
