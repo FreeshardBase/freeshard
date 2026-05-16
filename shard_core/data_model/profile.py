@@ -20,6 +20,7 @@ class Profile(BaseModel):
     delete_after: Optional[datetime] = None
     vm_size: VMSize
     max_vm_size: Optional[VMSize] = None
+    volume_size_gb: int | None = None
     subscription: Optional[ShardSubscriptionSummary] = None
 
     @classmethod
@@ -35,6 +36,7 @@ class Profile(BaseModel):
             max_vm_size=(
                 VMSize(shard.max_vm_size.value.lower()) if shard.max_vm_size else None
             ),
+            volume_size_gb=getattr(shard, "volume_size_gb", None),
             subscription=getattr(shard, "subscription", None),
         )
 
