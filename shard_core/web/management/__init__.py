@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from . import apps, pairing_code
+from . import apps, notify, pairing_code
 
 router = APIRouter(
     prefix="/management",
@@ -8,4 +8,5 @@ router = APIRouter(
 )
 
 router.include_router(apps.router)
+router.include_router(notify.router)
 router.include_router(pairing_code.router)
