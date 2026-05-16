@@ -39,3 +39,11 @@ async def test_profile_without_subscription_is_none(
     response.raise_for_status()
     profile = Profile.model_validate(response.json())
     assert profile.subscription is None
+
+
+async def test_profile_includes_volume_size_gb(requests_mock, app_client: AsyncClient):
+    response = await app_client.get("protected/management/profile")
+    response.raise_for_status()
+    profile = Profile.model_validate(response.json())
+    assert profile.volume_size_gb == conftest.mock_shard.volume_size_gb
+    assert profile.volume_size_gb == 30

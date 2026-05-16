@@ -260,6 +260,7 @@ mock_shard = ShardDb(
     status=ShardStatus.ASSIGNED,
     shared_secret="foosecretbar",
     cloud=Cloud.OVHCLOUD,
+    volume_size_gb=30,
 )
 
 
