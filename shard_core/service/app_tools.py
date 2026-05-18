@@ -15,7 +15,7 @@ from shard_core.data_model.app_meta import (
 from shard_core.settings import settings
 from shard_core.util import signals
 from shard_core.util.misc import throttle
-from shard_core.util.subprocess import subprocess, SubprocessError
+from shard_core.util.subprocess import subprocess, SubprocessError, compose_command
 
 log = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 async def docker_create_app_containers(name: str):
     log.debug(f"creating containers for app {name}")
     await subprocess(
-        "docker-compose", "up", "--no-start", cwd=get_installed_apps_path() / name
+        *compose_command(), "up", "--no-start", cwd=get_installed_apps_path() / name
     )
 
 
@@ -37,7 +37,7 @@ async def docker_start_app(name: str):
         log.debug(f"starting app {name=}")
         try:
             await subprocess(
-                "docker-compose", "up", "-d", cwd=get_installed_apps_path() / name
+                *compose_command(), "up", "-d", cwd=get_installed_apps_path() / name
             )
         except SubprocessError as e:
             if "network" in str(e) and "not found" in str(e):
@@ -45,20 +45,20 @@ async def docker_start_app(name: str):
                     f"stale network reference for app {name=}, recreating containers"
                 )
                 await subprocess(
-                    "docker-compose", "down", cwd=get_installed_apps_path() / name
+                    *compose_command(), "down", cwd=get_installed_apps_path() / name
                 )
                 await subprocess(
-                    "docker-compose", "up", "-d", cwd=get_installed_apps_path() / name
+                    *compose_command(), "up", "-d", cwd=get_installed_apps_path() / name
                 )
             elif "Conflict" in str(e) and "already in use" in str(e):
                 log.warning(
                     f"stale containers for app {name=}, removing and recreating"
                 )
                 await subprocess(
-                    "docker-compose", "down", cwd=get_installed_apps_path() / name
+                    *compose_command(), "down", cwd=get_installed_apps_path() / name
                 )
                 await subprocess(
-                    "docker-compose", "up", "-d", cwd=get_installed_apps_path() / name
+                    *compose_command(), "up", "-d", cwd=get_installed_apps_path() / name
                 )
             else:
                 raise
@@ -74,7 +74,9 @@ async def docker_stop_app(name: str, set_status: bool = True):
         app = await db_installed_apps.get_by_name(conn, name)
         app_status = app["status"] if app else None
     if app_status in [Status.RUNNING, Status.UNINSTALLING]:
-        await subprocess("docker-compose", "stop", cwd=get_installed_apps_path() / name)
+        await subprocess(
+            *compose_command(), "stop", cwd=get_installed_apps_path() / name
+        )
         if set_status:
             async with db_conn() as conn:
                 await db_installed_apps.update_status(conn, name, Status.STOPPED)
@@ -88,7 +90,9 @@ async def docker_shutdown_app(name: str, set_status: bool = True, force: bool = 
         app = await db_installed_apps.get_by_name(conn, name)
         app_status = app["status"] if app else None
     if force or app_status in [Status.STOPPED, Status.UNINSTALLING]:
-        await subprocess("docker-compose", "down", cwd=get_installed_apps_path() / name)
+        await subprocess(
+            *compose_command(), "down", cwd=get_installed_apps_path() / name
+        )
         if set_status:
             async with db_conn() as conn:
                 await db_installed_apps.update_status(conn, name, Status.DOWN)
