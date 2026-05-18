@@ -1,4 +1,4 @@
-import docker
+from python_on_whales import DockerClient
 from fastapi import status
 
 from shard_core.data_model.app_meta import InstalledApp, Status
@@ -6,7 +6,7 @@ from tests.util import retry_async, wait_until_app_installed
 
 
 async def test_app_starts_and_stops(requests_mock, api_client):
-    docker_client = docker.from_env()
+    docker_client = DockerClient()
     app_name = "quick_stop"
 
     response = await api_client.post(f"protected/apps/{app_name}")
@@ -14,7 +14,7 @@ async def test_app_starts_and_stops(requests_mock, api_client):
 
     await wait_until_app_installed(api_client, app_name)
 
-    assert docker_client.containers.get(app_name).status == "created"
+    assert docker_client.container.inspect(app_name).state.status == "created"
     assert (
         InstalledApp.model_validate(
             (await api_client.get(f"protected/apps/{app_name}")).json()
@@ -32,7 +32,7 @@ async def test_app_starts_and_stops(requests_mock, api_client):
     response.raise_for_status()
 
     async def assert_app_running():
-        assert docker_client.containers.get(app_name).status == "running"
+        assert docker_client.container.inspect(app_name).state.status == "running"
         assert (
             InstalledApp.model_validate(
                 (await api_client.get(f"protected/apps/{app_name}")).json()
@@ -41,7 +41,7 @@ async def test_app_starts_and_stops(requests_mock, api_client):
         )
 
     async def assert_app_exited():
-        assert docker_client.containers.get(app_name).status == "exited"
+        assert docker_client.container.inspect(app_name).state.status == "exited"
         assert (
             InstalledApp.model_validate(
                 (await api_client.get(f"protected/apps/{app_name}")).json()
@@ -78,7 +78,7 @@ async def test_app_starts_and_stops(requests_mock, api_client):
 
 
 async def test_always_on_app_starts(requests_mock, api_client):
-    docker_client = docker.from_env()
+    docker_client = DockerClient()
     app_name = "always_on"
 
     response = await api_client.post(f"protected/apps/{app_name}")
@@ -87,7 +87,7 @@ async def test_always_on_app_starts(requests_mock, api_client):
     await wait_until_app_installed(api_client, app_name)
 
     async def assert_app_running():
-        assert docker_client.containers.get(app_name).status == "running"
+        assert docker_client.container.inspect(app_name).state.status == "running"
         assert (
             InstalledApp.model_validate(
                 (await api_client.get(f"protected/apps/{app_name}")).json()

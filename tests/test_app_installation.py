@@ -1,6 +1,6 @@
-import docker
 import pytest
-from docker.errors import NotFound
+from python_on_whales import DockerClient
+from python_on_whales.exceptions import NoSuchContainer
 from fastapi import status
 from httpx import AsyncClient
 
@@ -21,7 +21,7 @@ async def test_get_initial_apps(api_client: AsyncClient):
 
 
 async def test_install_app(api_client: AsyncClient):
-    docker_client = docker.from_env()
+    docker_client = DockerClient()
     app_name = "mock_app"
 
     response = await api_client.post(f"protected/apps/{app_name}")
@@ -29,7 +29,7 @@ async def test_install_app(api_client: AsyncClient):
 
     await wait_until_app_installed(api_client, app_name)
 
-    docker_client.containers.get(app_name)
+    docker_client.container.inspect(app_name)
 
     response = (await api_client.get("protected/apps")).json()
     assert len(response) == 4
@@ -66,8 +66,8 @@ async def test_install_app_twice(api_client: AsyncClient):
 
 
 async def test_uninstall_app(api_client: AsyncClient):
-    docker_client = docker.from_env()
-    docker_client.containers.get("filebrowser")
+    docker_client = DockerClient()
+    docker_client.container.inspect("filebrowser")
 
     response = await api_client.delete("protected/apps/filebrowser")
     assert response.status_code == status.HTTP_204_NO_CONTENT
@@ -77,12 +77,12 @@ async def test_uninstall_app(api_client: AsyncClient):
     response = (await api_client.get("protected/apps")).json()
     assert len(response) == 2
 
-    with pytest.raises(NotFound):
-        docker_client.containers.get("filebrowser")
+    with pytest.raises(NoSuchContainer):
+        docker_client.container.inspect("filebrowser")
 
 
 async def test_uninstall_running_app(api_client: AsyncClient):
-    docker_client = docker.from_env()
+    docker_client = DockerClient()
     app_name = "mock_app"
 
     response = await api_client.post(f"protected/apps/{app_name}")
@@ -108,13 +108,13 @@ async def test_uninstall_running_app(api_client: AsyncClient):
     response = (await api_client.get("protected/apps")).json()
     assert len(response) == 3  # Initial apps are still installed
 
-    with pytest.raises(NotFound):
-        docker_client.containers.get(app_name)
+    with pytest.raises(NoSuchContainer):
+        docker_client.container.inspect(app_name)
 
 
 async def test_install_custom_app(api_client: AsyncClient):
     app_name = "mock_app"
-    docker_client = docker.from_env()
+    docker_client = DockerClient()
 
     app_zip = mock_app_store_path() / app_name / f"{app_name}.zip"
     with open(app_zip, "rb") as f:
@@ -127,7 +127,7 @@ async def test_install_custom_app(api_client: AsyncClient):
 
     await wait_until_app_installed(api_client, app_name)
 
-    docker_client.containers.get(app_name)
+    docker_client.container.inspect(app_name)
 
     response = (await api_client.get("protected/apps")).json()
     assert len(response) == 4

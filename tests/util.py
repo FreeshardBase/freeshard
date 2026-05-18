@@ -15,7 +15,8 @@ from requests import PreparedRequest
 from requests_http_signature import HTTPSignatureAuth
 
 from shard_core.data_model.app_meta import InstalledApp, Status
-from shard_core.util.subprocess import subprocess, SubprocessError
+from python_on_whales import DockerClient
+from python_on_whales.exceptions import DockerException
 
 WAITING_DOCKER_IMAGE = "nginx:alpine"
 
@@ -137,9 +138,10 @@ def modify_request_like_traefik_forward_auth(request: PreparedRequest) -> Reques
 
 @asynccontextmanager
 async def docker_network_portal():
+    docker_client = DockerClient()
     try:
-        await subprocess("docker", "network", "create", "portal")
-    except SubprocessError:
+        await asyncio.to_thread(docker_client.network.create, "portal")
+    except DockerException:
         pass  # network already exists
     try:
         yield
@@ -149,26 +151,19 @@ async def docker_network_portal():
 
 async def _force_remove_docker_network(network: str):
     """Disconnect all containers from a network, then remove it."""
+    docker_client = DockerClient()
     try:
-        output = await subprocess(
-            "docker",
-            "network",
-            "inspect",
-            network,
-            "--format",
-            "{{range .Containers}}{{.Name}} {{end}}",
-        )
-        container_names = output.split()
-        for name in container_names:
+        net = await asyncio.to_thread(docker_client.network.inspect, network)
+        for container in (net.containers or {}).values():
             try:
-                await subprocess("docker", "network", "disconnect", "-f", network, name)
-            except SubprocessError:
+                await asyncio.to_thread(docker_client.network.disconnect, network, container.name, force=True)
+            except DockerException:
                 pass
-    except SubprocessError:
+    except DockerException:
         pass  # network doesn't exist, nothing to do
     try:
-        await subprocess("docker", "network", "rm", network)
-    except SubprocessError:
+        await asyncio.to_thread(docker_client.network.remove, network)
+    except DockerException:
         pass
 
 
