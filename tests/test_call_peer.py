@@ -6,7 +6,11 @@ from requests import PreparedRequest, Request
 from requests_http_signature import HTTPSignatureAuth
 
 from shard_core.data_model.identity import OutputIdentity
-from tests.util import verify_signature_auth, modify_request_like_traefik_forward_auth, install_app
+from tests.util import (
+    verify_signature_auth,
+    modify_request_like_traefik_forward_auth,
+    install_app,
+)
 
 
 async def test_call_peer_from_app_basic(app_client, peer_mock_requests):

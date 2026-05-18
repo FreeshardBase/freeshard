@@ -1,0 +1,58 @@
+---
+server:
+  address: 'tcp://:9091/'
+
+log:
+  level: 'info'
+
+authentication_backend:
+  file:
+    path: '/config/users_database.yml'
+    watch: true
+
+session:
+  secret: '{{ session_secret }}'
+  cookies:
+    - name: 'authelia_session'
+      domain: '{{ domain }}'
+      authelia_url: '{{ protocol }}://auth.{{ domain }}'
+      expiration: '1h'
+      inactivity: '5m'
+
+storage:
+  encryption_key: '{{ storage_encryption_key }}'
+  local:
+    path: '/config/db.sqlite3'
+
+identity_validation:
+  reset_password:
+    jwt_secret: '{{ jwt_secret }}'
+
+regulation:
+  max_retries: 3
+  find_time: '2 minutes'
+  ban_time: '5 minutes'
+
+access_control:
+  default_policy: 'one_factor'
+
+notifier:
+  filesystem:
+    filename: '/config/notifications.txt'
+
+identity_providers:
+  oidc:
+    hmac_secret: '{{ oidc_hmac_secret }}'
+    jwks:
+      - key_id: 'main'
+        algorithm: 'RS256'
+        use: 'sig'
+        key: '/config/oidc.pem'
+    cors:
+      endpoints:
+        - 'userinfo'
+        - 'authorization'
+        - 'token'
+        - 'revocation'
+        - 'introspection'
+    clients: []

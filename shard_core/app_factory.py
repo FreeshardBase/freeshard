@@ -15,6 +15,7 @@ from .database.connection import db_conn
 from .database import terminals as db_terminals
 from .service import (
     app_installation,
+    authelia,
     identity,
     app_lifecycle,
     peer,
@@ -34,6 +35,7 @@ from .service.app_tools import (
     docker_shutdown_all_apps,
     scheduled_docker_prune_images,
 )
+from .data_model.identity import SafeIdentity
 from .service.backup import start_backup
 from .service.pairing import make_pairing_code
 from .settings import settings
@@ -86,6 +88,11 @@ async def lifespan(_):
     await migration.migrate()
     await app_installation.refresh_init_apps()
     await backup.ensure_backup_passphrase()
+
+    i = await identity.get_default_identity()
+    portal = SafeIdentity.from_identity(i)
+    await authelia.ensure_authelia_secrets()
+    await authelia.render_authelia_config(portal)
     try:
         await portal_controller.refresh_profile()
     except (ConnectionError, HTTPError, ValidationError) as e:

@@ -69,6 +69,20 @@ services:
       postgres:
         condition: service_healthy
 
+  authelia:
+    image: authelia/authelia:4.38
+    container_name: authelia
+    restart: always
+    volumes:
+      - ${FREESHARD_DIR:?}/core/authelia:/config
+    networks:
+      - portal
+    expose:
+      - 9091
+    depends_on:
+      shard_core:
+        condition: service_healthy
+
   web-terminal:
     image: ghcr.io/freeshardbase/web-terminal:0.37.4
     container_name: web-terminal

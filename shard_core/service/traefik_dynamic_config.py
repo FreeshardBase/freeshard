@@ -76,6 +76,12 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
             middlewares=["auth-private"],
             tls=make_http_cert_resolver(portal),
         ),
+        "authelia": t.HttpRouter(
+            rule=f"Host(`auth.{portal.domain}`)",
+            entryPoints=[http_entrypoint],
+            service="authelia",
+            tls=make_http_cert_resolver(portal),
+        ),
     }
 
     _middlewares = {
@@ -122,6 +128,20 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
                 )
             )
         ),
+        "authelia-forwardauth": t.HttpMiddleware(
+            root=t.HttpMiddlewareItem9(
+                forwardAuth=t.ForwardAuthMiddleware(
+                    address="http://authelia:9091/api/authz/forward-auth",
+                    trustForwardHeader=True,
+                    authResponseHeaders=[
+                        "Remote-User",
+                        "Remote-Groups",
+                        "Remote-Name",
+                        "Remote-Email",
+                    ],
+                )
+            )
+        ),
         "app-error": t.HttpMiddleware(
             root=t.HttpMiddlewareItem8(
                 errors=t.ErrorsMiddleware(
@@ -147,6 +167,13 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
                 )
             )
         ),
+        "authelia": t.HttpService(
+            root=t.HttpServiceItem(
+                loadBalancer=t.HttpLoadBalancerService(
+                    servers=[t.Server(url="http://authelia:9091/")]
+                )
+            )
+        ),
     }
     model.http = t.Http(routers=_routers, middlewares=_middlewares, services=_services)
 
@@ -168,7 +195,7 @@ def _add_router(
             rule=f"Host(`{app.name}.{portal.domain}`)",
             entryPoints=[http_entrypoint],
             service=f"{app.name}_{ep_value}",
-            middlewares=["app-error", "auth"],
+            middlewares=["app-error", "authelia-forwardauth"],
             tls=make_http_cert_resolver(portal),
         )
     elif entrypoint.entrypoint_port == EntrypointPort.MQTTS_1883:
