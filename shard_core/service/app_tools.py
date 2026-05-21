@@ -28,12 +28,13 @@ async def docker_create_app_containers(name: str):
 
 
 @throttle(5)
-async def docker_start_app(name: str):
-    async with db_conn() as conn:
-        app = await db_installed_apps.get_by_name(conn, name)
-        app_status = app["status"] if app else None
+async def docker_start_app(name: str, status: str | None = None):
+    if status is None:
+        async with db_conn() as conn:
+            app = await db_installed_apps.get_by_name(conn, name)
+            status = app["status"] if app else None
 
-    if app_status in [Status.STOPPED, Status.RUNNING, Status.DOWN]:
+    if status in [Status.STOPPED, Status.RUNNING, Status.DOWN]:
         log.debug(f"starting app {name=}")
         try:
             await subprocess(
@@ -66,7 +67,7 @@ async def docker_start_app(name: str):
             await db_installed_apps.update_status(conn, name, Status.RUNNING)
         await signals.on_apps_update.send_async()
     else:
-        log.debug(f"app {name=} has status {app_status}, skipping start")
+        log.debug(f"app {name=} has status {status}, skipping start")
 
 
 async def docker_stop_app(name: str, set_status: bool = True):

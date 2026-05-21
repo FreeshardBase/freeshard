@@ -13,6 +13,7 @@ from shard_core.database.connection import db_conn
 from shard_core.database import identities as db_identities
 from shard_core.data_model.identity import Identity, OutputIdentity, InputIdentity
 from shard_core.service import identity as identity_service, identity
+from shard_core.util.signals import on_identity_update
 from shard_core.service.assets import put_asset
 from shard_core.service.avatar import find_avatar_file
 
@@ -79,6 +80,7 @@ async def put_identity(i: InputIdentity):
                     if k != "id"
                 }
                 updated = await db_identities.update(conn, i.id, update_data)
+                await on_identity_update.send_async()
                 return Identity(**updated)
             else:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)

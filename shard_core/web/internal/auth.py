@@ -17,11 +17,31 @@ from shard_core.service.freeshard_controller import (
     validate_shared_secret,
     SharedSecretInvalid,
 )
-from shard_core.util.signals import on_terminal_auth, on_request_to_app, on_peer_auth
+from shard_core.util.signals import (
+    on_terminal_auth,
+    on_request_to_app,
+    on_peer_auth,
+    on_apps_update,
+    on_identity_update,
+)
 
 log = logging.getLogger(__name__)
 
 router = APIRouter()
+
+_identity_cache: Optional[SafeIdentity] = None
+_app_cache: dict[str, Optional[InstalledApp]] = {}
+
+
+@on_identity_update.connect
+async def _invalidate_identity_cache(_):
+    global _identity_cache
+    _identity_cache = None
+
+
+@on_apps_update.connect
+async def _invalidate_app_cache(_):
+    _app_cache.clear()
 
 
 @router.get("/authenticate_terminal", status_code=status.HTTP_200_OK)
@@ -101,18 +121,21 @@ async def _match_app(x_forwarded_host) -> InstalledApp:
 
 
 async def _get_identity():
-    async with db_conn() as conn:
-        default_row = await db_identities.get_default(conn)
-    default_identity = Identity(**default_row)
-    return SafeIdentity.from_identity(default_identity)
+    global _identity_cache
+    if _identity_cache is None:
+        async with db_conn() as conn:
+            default_row = await db_identities.get_default(conn)
+        default_identity = Identity(**default_row)
+        _identity_cache = SafeIdentity.from_identity(default_identity)
+    return _identity_cache
 
 
 async def _find_app(app_name) -> Optional[InstalledApp]:
-    async with db_conn() as conn:
-        result = await db_installed_apps.get_by_name(conn, app_name)
-    if result:
-        return InstalledApp(**result)
-    return None
+    if app_name not in _app_cache:
+        async with db_conn() as conn:
+            result = await db_installed_apps.get_by_name(conn, app_name)
+        _app_cache[app_name] = InstalledApp(**result) if result else None
+    return _app_cache[app_name]
 
 
 def _match_path(uri, app: InstalledApp) -> Path:
