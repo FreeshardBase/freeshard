@@ -3,9 +3,9 @@ import logging
 from functools import lru_cache
 from pathlib import Path
 
-import docker
 import jinja2
-from docker import errors as docker_errors
+from python_on_whales import DockerClient
+from python_on_whales.exceptions import NoSuchContainer
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
@@ -79,8 +79,8 @@ async def get_splash_behaviour(request: Request):
 def get_container_status(app_name):
     docker_client = get_docker_client()
     try:
-        status = docker_client.containers.get(app_name).status
-    except docker_errors.NotFound:
+        status = docker_client.container.inspect(app_name).state.status
+    except NoSuchContainer:
         status = "unknown"
     return status
 
@@ -93,7 +93,7 @@ def get_app_name(request):
 
 @lru_cache()
 def get_docker_client():
-    return docker.from_env()
+    return DockerClient()
 
 
 @lru_cache()

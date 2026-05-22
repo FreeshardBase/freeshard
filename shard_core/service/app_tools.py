@@ -3,6 +3,9 @@ import json
 import logging
 from pathlib import Path
 
+from python_on_whales import DockerClient
+from python_on_whales.exceptions import DockerException
+
 import shard_core.data_model.profile
 from shard_core.database.connection import db_conn
 from shard_core.database import installed_apps as db_installed_apps
@@ -15,16 +18,14 @@ from shard_core.data_model.app_meta import (
 from shard_core.settings import settings
 from shard_core.util import signals
 from shard_core.util.misc import throttle
-from shard_core.util.subprocess import subprocess, SubprocessError
 
 log = logging.getLogger(__name__)
 
 
 async def docker_create_app_containers(name: str):
     log.debug(f"creating containers for app {name}")
-    await subprocess(
-        "docker-compose", "up", "--no-start", cwd=get_installed_apps_path() / name
-    )
+    client = DockerClient(compose_project_directory=get_installed_apps_path() / name)
+    await asyncio.to_thread(client.compose.up, start=False)
 
 
 @throttle(5)
@@ -35,31 +36,22 @@ async def docker_start_app(name: str):
 
     if app_status in [Status.STOPPED, Status.RUNNING, Status.DOWN]:
         log.debug(f"starting app {name=}")
+        client = DockerClient(compose_project_directory=get_installed_apps_path() / name)
         try:
-            await subprocess(
-                "docker-compose", "up", "-d", cwd=get_installed_apps_path() / name
-            )
-        except SubprocessError as e:
+            await asyncio.to_thread(client.compose.up, detach=True)
+        except DockerException as e:
             if "network" in str(e) and "not found" in str(e):
                 log.warning(
                     f"stale network reference for app {name=}, recreating containers"
                 )
-                await subprocess(
-                    "docker-compose", "down", cwd=get_installed_apps_path() / name
-                )
-                await subprocess(
-                    "docker-compose", "up", "-d", cwd=get_installed_apps_path() / name
-                )
+                await asyncio.to_thread(client.compose.down)
+                await asyncio.to_thread(client.compose.up, detach=True)
             elif "Conflict" in str(e) and "already in use" in str(e):
                 log.warning(
                     f"stale containers for app {name=}, removing and recreating"
                 )
-                await subprocess(
-                    "docker-compose", "down", cwd=get_installed_apps_path() / name
-                )
-                await subprocess(
-                    "docker-compose", "up", "-d", cwd=get_installed_apps_path() / name
-                )
+                await asyncio.to_thread(client.compose.down)
+                await asyncio.to_thread(client.compose.up, detach=True)
             else:
                 raise
         async with db_conn() as conn:
@@ -74,7 +66,8 @@ async def docker_stop_app(name: str, set_status: bool = True):
         app = await db_installed_apps.get_by_name(conn, name)
         app_status = app["status"] if app else None
     if app_status in [Status.RUNNING, Status.UNINSTALLING]:
-        await subprocess("docker-compose", "stop", cwd=get_installed_apps_path() / name)
+        client = DockerClient(compose_project_directory=get_installed_apps_path() / name)
+        await asyncio.to_thread(client.compose.stop)
         if set_status:
             async with db_conn() as conn:
                 await db_installed_apps.update_status(conn, name, Status.STOPPED)
@@ -88,7 +81,8 @@ async def docker_shutdown_app(name: str, set_status: bool = True, force: bool = 
         app = await db_installed_apps.get_by_name(conn, name)
         app_status = app["status"] if app else None
     if force or app_status in [Status.STOPPED, Status.UNINSTALLING]:
-        await subprocess("docker-compose", "down", cwd=get_installed_apps_path() / name)
+        client = DockerClient(compose_project_directory=get_installed_apps_path() / name)
+        await asyncio.to_thread(client.compose.down)
         if set_status:
             async with db_conn() as conn:
                 await db_installed_apps.update_status(conn, name, Status.DOWN)
@@ -154,15 +148,15 @@ def enrich_installed_app_with_meta(installed_app: InstalledApp) -> InstalledAppW
 
 
 async def docker_prune_images(apply_filter=True):
-    command = ["docker", "image", "prune", "-fa"]
-    if apply_filter:
-        command.extend(["--filter", f"until={settings().apps.pruning.max_age}h"])
+    filters = {"until": f"{settings().apps.pruning.max_age}h"} if apply_filter else {}
     try:
-        stdout = await subprocess(*command)
-    except SubprocessError as e:
+        output = await asyncio.to_thread(
+            DockerClient().image.prune, all=True, filters=filters
+        )
+    except DockerException as e:
         log.error(f"failed to prune docker images: {e}")
         return
-    lines = stdout.splitlines()
+    lines = output.splitlines()
     log.info(f"docker images pruned, {lines[-1]}")
     return lines[-1]
 

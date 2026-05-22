@@ -2,8 +2,7 @@ import logging
 from functools import lru_cache
 from typing import List
 
-import docker
-from docker.models.containers import Container
+from python_on_whales import DockerClient, Container
 from fastapi import APIRouter, Request
 from starlette.responses import StreamingResponse
 
@@ -33,14 +32,16 @@ async def call_peer(id_: str, rest: str, request: Request):
 def _get_app_for_ip_address(ip_address: str):
     # todo: test this
     docker_client = _get_docker_client()
-    docker_client.networks.get("portal")
-    containers: List[Container] = docker_client.containers.list()
+    docker_client.network.inspect("portal")
+    containers: List[Container] = docker_client.container.list()
     for c in containers:
-        if c.attrs["NetworkSettings"]["Networks"]["portal"]["IPAddress"] == ip_address:
+        networks = c.network_settings.networks or {}
+        portal_net = networks.get("portal")
+        if portal_net and portal_net.ip_address == ip_address:
             return c.name
     raise RuntimeError(f"no running container found for address {ip_address}")
 
 
 @lru_cache()
 def _get_docker_client():
-    return docker.from_env()
+    return DockerClient()

@@ -25,7 +25,7 @@ dependencies = [
     "pydantic>=2,<3",
     "Jinja2",
     "pyyaml",
-    "docker",
+    "python-on-whales",
     "python-gitlab",
     "cachetools",
     "blinker",

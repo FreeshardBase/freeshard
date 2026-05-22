@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from shard_core.database import database
@@ -6,7 +7,8 @@ from shard_core.database import installed_apps as db_installed_apps
 from shard_core.data_model.app_meta import InstallationReason, InstalledApp, Status
 from shard_core.util import signals
 from shard_core.settings import settings
-from shard_core.util.subprocess import subprocess, SubprocessError
+from python_on_whales import DockerClient
+from python_on_whales.exceptions import DockerException
 from . import util, worker
 from .exceptions import AppAlreadyInstalled, AppDoesNotExist, AppNotInstalled
 
@@ -122,12 +124,11 @@ async def refresh_init_apps():
 
 async def login_docker_registries():
     registries = settings().apps.registries
+    client = DockerClient()
     for r in registries:
         try:
-            await subprocess(
-                "docker", "login", "-u", r.username, "-p", r.password, r.uri
-            )
-        except (SubprocessError, OSError) as e:
+            await asyncio.to_thread(client.login, server=r.uri, username=r.username, password=r.password)
+        except (DockerException, OSError) as e:
             log.error(f"could not log in to registry {r.uri}: {e}")
         else:
             log.debug(f"logged in to registry {r.uri}")
