@@ -4,7 +4,7 @@ from shard_core.database.connection import db_conn
 from shard_core.database import identities as db_identities
 from shard_core.data_model.identity import Identity
 from shard_core.service.portal_controller import refresh_profile
-from shard_core.util.signals import async_on_first_terminal_add
+from shard_core.util.signals import async_on_first_terminal_add, on_identity_update
 
 log = logging.getLogger(__name__)
 
@@ -19,6 +19,7 @@ async def init_default_identity():
             default_identity.is_default = True
             await db_identities.insert(conn, default_identity.model_dump())
             log.info(f"created initial default identity {default_identity.id}")
+            await on_identity_update.send_async()
             return default_identity
         else:
             row = await db_identities.get_default(conn)
@@ -36,6 +37,14 @@ async def make_default(id):
         await db_identities.update(conn, last_default_row["id"], {"is_default": False})
         await db_identities.update(conn, id, {"is_default": True})
         log.info(f"set as default {id}")
+    await on_identity_update.send_async()
+
+
+async def update_identity(id: str, update_data: dict) -> Identity:
+    async with db_conn() as conn:
+        updated = await db_identities.update(conn, id, update_data)
+    await on_identity_update.send_async()
+    return Identity(**updated)
 
 
 async def get_default_identity() -> Identity:
@@ -63,4 +72,4 @@ async def enrich_identity_from_profile(_):
         if profile.owner_email:
             update_data["email"] = profile.owner_email
         if update_data:
-            await db_identities.update(conn, default["id"], update_data)
+            await update_identity(default["id"], update_data)

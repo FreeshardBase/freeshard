@@ -69,20 +69,19 @@ async def get_avatar_by_identity(id):
 
 @router.put("", response_model=OutputIdentity, status_code=status.HTTP_201_CREATED)
 async def put_identity(i: InputIdentity):
-    async with db_conn() as conn:
-        if i.id:
+    if i.id:
+        async with db_conn() as conn:
             existing = await db_identities.get_by_id(conn, i.id)
-            if existing:
-                update_data = {
-                    k: v
-                    for k, v in i.model_dump(exclude_unset=True).items()
-                    if k != "id"
-                }
-                updated = await db_identities.update(conn, i.id, update_data)
-                return Identity(**updated)
-            else:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-        else:
+        if not existing:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        update_data = {
+            k: v
+            for k, v in i.model_dump(exclude_unset=True).items()
+            if k != "id"
+        }
+        return await identity_service.update_identity(i.id, update_data)
+    else:
+        async with db_conn() as conn:
             new_identity = Identity.create(**i.model_dump(exclude_unset=True))
             await db_identities.insert(conn, new_identity.model_dump())
             log.info(f"added {new_identity}")

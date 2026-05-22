@@ -6,6 +6,7 @@ on_terminal_add = Signal()
 on_terminal_auth = Signal()
 
 on_apps_update = Signal()
+on_identity_update = Signal()
 on_request_to_app = Signal()
 on_app_install_error = Signal()
 

@@ -165,6 +165,7 @@ async def update_last_access(app: InstalledApp):
 
     async with db_conn() as conn:
         await db_installed_apps.update_last_access(conn, app.name, now)
+    app.last_access = now
 
 
 if __name__ == "__main__":

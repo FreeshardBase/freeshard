@@ -25,6 +25,8 @@ async def make_and_open_connection_pool():
             user=db.user,
             password=db.password,
         ),
+        max_size=20,
+        timeout=10,
         open=False,
     )
     await connection_pool.open()
