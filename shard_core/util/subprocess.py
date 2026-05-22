@@ -1,7 +1,28 @@
 import asyncio
+import functools
 import logging
+import subprocess as _sp
 
 log = logging.getLogger(__name__)
+
+
+@functools.lru_cache(maxsize=1)
+def _detect_compose_command() -> tuple[str, ...]:
+    try:
+        result = _sp.run(
+            ["docker", "compose", "version"],
+            capture_output=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return ("docker", "compose")
+    except (FileNotFoundError, _sp.TimeoutExpired):
+        pass
+    return ("docker-compose",)
+
+
+def compose_command() -> tuple[str, ...]:
+    return _detect_compose_command()
 
 
 async def subprocess(*args, cwd=None):
