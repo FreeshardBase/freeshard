@@ -13,7 +13,6 @@ from shard_core.database.connection import db_conn
 from shard_core.database import identities as db_identities
 from shard_core.data_model.identity import Identity, OutputIdentity, InputIdentity
 from shard_core.service import identity as identity_service, identity
-from shard_core.util.signals import on_identity_update
 from shard_core.service.assets import put_asset
 from shard_core.service.avatar import find_avatar_file
 
@@ -70,21 +69,19 @@ async def get_avatar_by_identity(id):
 
 @router.put("", response_model=OutputIdentity, status_code=status.HTTP_201_CREATED)
 async def put_identity(i: InputIdentity):
-    async with db_conn() as conn:
-        if i.id:
+    if i.id:
+        async with db_conn() as conn:
             existing = await db_identities.get_by_id(conn, i.id)
-            if existing:
-                update_data = {
-                    k: v
-                    for k, v in i.model_dump(exclude_unset=True).items()
-                    if k != "id"
-                }
-                updated = await db_identities.update(conn, i.id, update_data)
-                await on_identity_update.send_async()
-                return Identity(**updated)
-            else:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-        else:
+        if not existing:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        update_data = {
+            k: v
+            for k, v in i.model_dump(exclude_unset=True).items()
+            if k != "id"
+        }
+        return await identity_service.update_identity(i.id, update_data)
+    else:
+        async with db_conn() as conn:
             new_identity = Identity.create(**i.model_dump(exclude_unset=True))
             await db_identities.insert(conn, new_identity.model_dump())
             log.info(f"added {new_identity}")

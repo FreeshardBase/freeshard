@@ -40,6 +40,13 @@ async def make_default(id):
     await on_identity_update.send_async()
 
 
+async def update_identity(id: str, update_data: dict) -> Identity:
+    async with db_conn() as conn:
+        updated = await db_identities.update(conn, id, update_data)
+    await on_identity_update.send_async()
+    return Identity(**updated)
+
+
 async def get_default_identity() -> Identity:
     async with db_conn() as conn:
         row = await db_identities.get_default(conn)
@@ -65,5 +72,4 @@ async def enrich_identity_from_profile(_):
         if profile.owner_email:
             update_data["email"] = profile.owner_email
         if update_data:
-            await db_identities.update(conn, default["id"], update_data)
-            await on_identity_update.send_async()
+            await update_identity(default["id"], update_data)

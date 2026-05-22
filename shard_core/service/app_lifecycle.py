@@ -30,8 +30,7 @@ async def ensure_app_is_running(app: InstalledApp):
         global last_access_dict
         last_access_dict[app.name] = time.time()
         task = asyncio.create_task(
-            docker_start_app(app.name, status=app.status),
-            name=f"ensure {app.name} is running",
+            docker_start_app(app.name), name=f"ensure {app.name} is running"
         )
         background_tasks.add(task)
         task.add_done_callback(background_tasks.discard)
