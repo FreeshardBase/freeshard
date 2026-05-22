@@ -19,6 +19,7 @@ async def init_default_identity():
             default_identity.is_default = True
             await db_identities.insert(conn, default_identity.model_dump())
             log.info(f"created initial default identity {default_identity.id}")
+            await on_identity_update.send_async()
             return default_identity
         else:
             row = await db_identities.get_default(conn)
