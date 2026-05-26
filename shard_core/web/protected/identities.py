@@ -75,9 +75,7 @@ async def put_identity(i: InputIdentity):
         if not existing:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
         update_data = {
-            k: v
-            for k, v in i.model_dump(exclude_unset=True).items()
-            if k != "id"
+            k: v for k, v in i.model_dump(exclude_unset=True).items() if k != "id"
         }
         return await identity_service.update_identity(i.id, update_data)
     else:

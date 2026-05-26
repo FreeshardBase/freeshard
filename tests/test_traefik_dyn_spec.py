@@ -14,6 +14,7 @@ async def test_template_is_written(api_client):
 
         assert set(out_middlewares.keys()) == {
             "app-error",
+            "app-proxy-prefix",
             "auth",
             "strip",
             "auth-public",
@@ -45,4 +46,4 @@ async def test_template_is_written(api_client):
             "paperless-ngx_http",
             "immich_http",
         }
-        assert out_routers_http["filebrowser_http"]["service"] == "filebrowser_http"
+        assert out_routers_http["filebrowser_http"]["service"] == "shard_core"

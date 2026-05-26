@@ -131,6 +131,11 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
                 )
             )
         ),
+        "app-proxy-prefix": t.HttpMiddleware(
+            root=t.HttpMiddlewareItem(
+                addPrefix=t.AddPrefixMiddleware(prefix="/internal/app_proxy")
+            )
+        ),
     }
     _services = {
         "shard_core": t.HttpService(
@@ -167,8 +172,8 @@ def _add_router(
         model.http.routers[f"{app.name}_{ep_value}"] = t.HttpRouter(
             rule=f"Host(`{app.name}.{portal.domain}`)",
             entryPoints=[http_entrypoint],
-            service=f"{app.name}_{ep_value}",
-            middlewares=["app-error", "auth"],
+            service="shard_core",
+            middlewares=["auth", "app-proxy-prefix"],
             tls=make_http_cert_resolver(portal),
         )
     elif entrypoint.entrypoint_port == EntrypointPort.MQTTS_1883:
