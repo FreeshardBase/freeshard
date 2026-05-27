@@ -27,8 +27,17 @@ async def call_backend(rest: str, request: Request):
     url = f"{base_url}/{rest}"
 
     body = await request.body()
+    # Forward only the Content-Type so proxied writes reach the controller with
+    # the original media type. Host/Content-Length/signature headers are managed
+    # by requests and the signer. Content-Type is not a signed component, so
+    # forwarding it does not invalidate the signature.
+    content_type = request.headers.get("content-type")
     response = await signed_request(
-        request.method, url, data=body, params=dict(request.query_params)
+        request.method,
+        url,
+        data=body,
+        params=dict(request.query_params),
+        headers={"content-type": content_type} if content_type else None,
     )
 
     log.debug(f"called backend: {url} -> {response.status_code}")
