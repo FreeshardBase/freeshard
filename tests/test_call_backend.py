@@ -31,3 +31,19 @@ async def test_call_backend_with_query_strings(requests_mock, app_client):
         if call.request.path_url.startswith(path)
     ][0]
     assert received_request.params == params
+
+
+async def test_call_backend_forwards_content_type(requests_mock, app_client):
+    path = "/api/feedback"
+    response = await app_client.post(
+        f"internal/call_backend{path}",
+        json={"hello": "world"},
+    )
+    response.raise_for_status()
+
+    received_request = [
+        call.request
+        for call in requests_mock.calls
+        if call.request.path_url.startswith(path)
+    ][0]
+    assert received_request.headers["Content-Type"] == "application/json"
