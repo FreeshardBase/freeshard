@@ -11,6 +11,8 @@ async def test_status_404(api_client):
     )
     assert response.status_code == status.HTTP_404_NOT_FOUND
     assert "404" in response.text
+    # No upstream data when called without proxy (Traefik error-page path)
+    assert 'id="upstream-response"' not in response.text
 
 
 async def test_status_500(api_client):
@@ -21,3 +23,5 @@ async def test_status_500(api_client):
     )
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     assert "500" in response.text
+    # No upstream data when called without proxy (Traefik error-page path)
+    assert 'id="upstream-response"' not in response.text

@@ -15,7 +15,6 @@ from shard_core.database import (
 )
 from shard_core.database.tinydb_migration import migrate_tinydb_data
 
-
 SAMPLE_TINYDB = Path(__file__).parent.parent / "fixtures" / "sample_tinydb.json"
 
 

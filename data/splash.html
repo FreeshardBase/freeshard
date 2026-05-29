@@ -10,6 +10,7 @@
 <h3>{{ display_status }}</h3>
 </div>
 <p>{{ status_code }} - {{ container_status }}</p>
+{% if upstream_json is not none %}<script type="application/json" id="upstream-response">{{ upstream_json }}</script>{% endif %}
 <script>
     function timeRefresh(time) {
         const doReload = '{{ do_reload }}' === 'True';
