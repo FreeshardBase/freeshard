@@ -123,6 +123,8 @@ class ShardSubscriptionSummary(BaseModel):
     price_cents: int
     currency: str
     next_billing_date: datetime | None = None
+    last_payment_failed_at: datetime | None = None
+    ended: datetime | None = None
     payer_email: str | None = None
     pending_vm_size: VmSize | None = None
     pending_price_cents: int | None = None
