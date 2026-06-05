@@ -136,6 +136,9 @@ class ShardResponse(ShardWithPermissions):
     telemetry_start: datetime
     telemetry_end: datetime
     subscription: ShardSubscriptionSummary | None = None
+    billing_enabled: bool = False
+    paypal_client_id: str | None = None
+    paypal_environment: str | None = None  # "sandbox" | "live"
 
 
 class ShardUpdate(BaseModel):

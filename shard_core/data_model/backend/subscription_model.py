@@ -55,6 +55,7 @@ class SubscriptionUpdateDb(BaseModel):
 
 
 class SubscribeResponse(BaseModel):
+    subscription_id: str
     approval_url: str
     expected_price_cents: int
 
@@ -63,3 +64,4 @@ class ResizeResponse(BaseModel):
     approval_url: str | None = None
     expected_price_cents: int | None = None
     current_price_cents: int | None = None
+    subscription_id: str | None = None

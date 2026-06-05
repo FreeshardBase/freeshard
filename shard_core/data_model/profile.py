@@ -22,6 +22,9 @@ class Profile(BaseModel):
     max_vm_size: Optional[VMSize] = None
     volume_size_gb: int | None = None
     subscription: Optional[ShardSubscriptionSummary] = None
+    billing_enabled: bool = False
+    paypal_client_id: Optional[str] = None
+    paypal_environment: Optional[str] = None
 
     @classmethod
     def from_shard(cls, shard: ShardBase):
@@ -38,6 +41,9 @@ class Profile(BaseModel):
             ),
             volume_size_gb=getattr(shard, "volume_size_gb", None),
             subscription=getattr(shard, "subscription", None),
+            billing_enabled=getattr(shard, "billing_enabled", False),
+            paypal_client_id=getattr(shard, "paypal_client_id", None),
+            paypal_environment=getattr(shard, "paypal_environment", None),
         )
 
 
