@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from . import (
     apps,
+    authelia_users,
     backup,
     feedback,
     identities,
@@ -20,6 +21,7 @@ router = APIRouter(
 )
 
 router.include_router(apps.router)
+router.include_router(authelia_users.router)
 router.include_router(backup.router)
 router.include_router(feedback.router)
 router.include_router(identities.router)
