@@ -1,6 +1,11 @@
 entryPoints:
   http:
     address: ":80"
+    # See traefik.yml: finite read timeout reaps abandoned/slowloris connections
+    # so traefik does not leak file descriptors until accept() hits EMFILE.
+    transport:
+      respondingTimeouts:
+        readTimeout: "300s"
   mqtt:
     address: ":8883"
 
