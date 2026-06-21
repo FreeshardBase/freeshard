@@ -1,6 +1,15 @@
 entryPoints:
   http:
     address: ":80"
+    # Finite read timeout so abandoned/slowloris connections (constant on a
+    # public IP from internet scanners) are reaped instead of holding a file
+    # descriptor forever. Without it traefik leaks fds until accept() fails with
+    # EMFILE and the shard goes unreachable. 300s stays generous for slow/large
+    # uploads; writeTimeout is left at its default (0) so large downloads, SSE,
+    # and long-poll responses are not cut off.
+    transport:
+      respondingTimeouts:
+        readTimeout: "300s"
     http:
       redirections:
         entryPoint:
@@ -8,6 +17,9 @@ entryPoints:
           scheme: https
   https:
     address: ":443"
+    transport:
+      respondingTimeouts:
+        readTimeout: "300s"
   mqtt:
     address: ":8883"
 
