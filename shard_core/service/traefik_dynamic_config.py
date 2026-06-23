@@ -70,7 +70,7 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
             tls=make_http_cert_resolver(portal),
         ),
         "traefik": t.HttpRouter(
-            rule=f"HostRegexp(`traefik.{portal.domain}`)",
+            rule=f"Host(`traefik.{portal.domain}`)",
             entryPoints=[http_entrypoint],
             service="api@internal",
             middlewares=["auth-private"],
