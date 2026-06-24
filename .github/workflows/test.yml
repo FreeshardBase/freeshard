@@ -18,13 +18,11 @@ jobs:
           python-version: '3.13'
       - name: Install dependencies
         run: |
-          python -m venv venv
-          source venv/bin/activate
-          pip install ".[dev]"
+          pip install --break-system-packages uv
+          uv sync --frozen --extra dev
       - name: Run Ruff
         run: |
-          source venv/bin/activate
-          ruff check .
+          uv run ruff check .
 
   unittest:
     runs-on: ubuntu-latest
@@ -36,13 +34,11 @@ jobs:
           python-version: '3.13'
       - name: Install dependencies
         run: |
-          python -m venv venv
-          source venv/bin/activate
-          pip install ".[dev]"
+          pip install --break-system-packages uv
+          uv sync --frozen --extra dev
       - name: Run Pytest
         env:
           CONFIG: tests/config.yml
           TEST_ENV: ${{ inputs.full && 'full' || 'sparse' }}
         run: |
-          source venv/bin/activate
-          pytest tests
+          uv run pytest tests
