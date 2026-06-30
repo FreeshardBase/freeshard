@@ -174,6 +174,10 @@ async def _backup_directory(
         stderr=asyncio.subprocess.PIPE,
     )
     stdout, stderr = await process.communicate()
+    if process.returncode != 0:
+        message = stderr.decode().strip()
+        log.error(f"rclone exited with {process.returncode}: {message}")
+        raise BackupFailedError(message)
     try:
         last_entry = stderr.decode().split("\n")[-2]  # last line ends with newline
         rclone_result = json.loads(last_entry)
@@ -224,6 +228,10 @@ async def get_backup_passphrase(terminal_id: str) -> str:
         STORE_KEY_BACKUP_PASSPHRASE_LAST_ACCESS, last_access_info.model_dump()
     )
     return passphrase
+
+
+class BackupFailedError(Exception):
+    pass
 
 
 class BackupInProgressError(Exception):
