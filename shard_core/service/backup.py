@@ -36,7 +36,7 @@ rclone
 --crypt-remote :azureblob:{container_name}
 sync {directory} :crypt:{container_name}/{directory}
 --create-empty-src-dirs --stats-log-level NOTICE --stats 1000m --use-json-log
---fast-list --azureblob-no-check-container
+--fast-list
 """
 
 CLEARTEXT_COMMAND_TEMPLATE = """
@@ -44,7 +44,7 @@ rclone
 --azureblob-sas-url {sas_token}
 sync {directory} :azureblob:{container_name}/{directory}
 --create-empty-src-dirs --stats-log-level NOTICE --stats 1000m --use-json-log
---fast-list --azureblob-no-check-container
+--fast-list
 """
 
 
