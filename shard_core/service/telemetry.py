@@ -58,7 +58,9 @@ def _build_pause_tier() -> Optional[PauseTierTelemetry]:
         return None
     swap_total_kib, swap_free_kib = _read_swap_kib()
     return PauseTierTelemetry(
-        transitions={app: dict(counters) for app, counters in m.app_transitions.items()},
+        transitions={
+            app: dict(counters) for app, counters in m.app_transitions.items()
+        },
         pause_latency_ms_p50=(
             _percentile(m.pause_latencies_ms, 0.5) if m.pause_latencies_ms else None
         ),

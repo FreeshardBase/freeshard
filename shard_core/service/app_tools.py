@@ -107,7 +107,9 @@ async def docker_unpause_app(name: str):
         await subprocess(
             *compose_command(), "unpause", cwd=get_installed_apps_path() / name
         )
-        pause_metrics.record_unpause_latency((time.monotonic() - unpause_started) * 1000)
+        pause_metrics.record_unpause_latency(
+            (time.monotonic() - unpause_started) * 1000
+        )
         pause_metrics.record_app_transition(name, Status.PAUSED, Status.RUNNING)
         async with db_conn() as conn:
             await db_installed_apps.update_status(conn, name, Status.RUNNING)
@@ -130,7 +132,9 @@ async def docker_stop_app(name: str, set_status: bool = True):
             *compose_command(), "stop", cwd=get_installed_apps_path() / name
         )
         if set_status:
-            pause_metrics.record_app_transition(name, Status(app_status), Status.STOPPED)
+            pause_metrics.record_app_transition(
+                name, Status(app_status), Status.STOPPED
+            )
             async with db_conn() as conn:
                 await db_installed_apps.update_status(conn, name, Status.STOPPED)
         await signals.on_apps_update.send_async()

@@ -67,7 +67,9 @@ async def test_running_app_pauses_after_t1(docker_mocks):
     app = _app("a", Status.RUNNING, idle=7)
     with (
         settings_override(PAUSE_ON),
-        patch.object(app_lifecycle, "get_app_metadata", return_value=_meta(Lifecycle())),
+        patch.object(
+            app_lifecycle, "get_app_metadata", return_value=_meta(Lifecycle())
+        ),
     ):
         await app_lifecycle._control_app_time(app, pause_enabled=True)
     docker_mocks["pause"].assert_awaited_once_with("a")
@@ -78,7 +80,9 @@ async def test_running_app_below_t1_is_left_alone(docker_mocks):
     app = _app("a", Status.RUNNING, idle=2)
     with (
         settings_override(PAUSE_ON),
-        patch.object(app_lifecycle, "get_app_metadata", return_value=_meta(Lifecycle())),
+        patch.object(
+            app_lifecycle, "get_app_metadata", return_value=_meta(Lifecycle())
+        ),
     ):
         await app_lifecycle._control_app_time(app, pause_enabled=True)
     docker_mocks["pause"].assert_not_awaited()
@@ -89,7 +93,9 @@ async def test_paused_app_stops_after_t2(docker_mocks):
     app = _app("a", Status.PAUSED, idle=15)
     with (
         settings_override(PAUSE_ON),
-        patch.object(app_lifecycle, "get_app_metadata", return_value=_meta(Lifecycle())),
+        patch.object(
+            app_lifecycle, "get_app_metadata", return_value=_meta(Lifecycle())
+        ),
     ):
         await app_lifecycle._control_app_time(app, pause_enabled=True)
     docker_mocks["stop"].assert_awaited_once_with("a")
@@ -100,7 +106,9 @@ async def test_paused_app_below_t2_stays_paused(docker_mocks):
     app = _app("a", Status.PAUSED, idle=7)
     with (
         settings_override(PAUSE_ON),
-        patch.object(app_lifecycle, "get_app_metadata", return_value=_meta(Lifecycle())),
+        patch.object(
+            app_lifecycle, "get_app_metadata", return_value=_meta(Lifecycle())
+        ),
     ):
         await app_lifecycle._control_app_time(app, pause_enabled=True)
     docker_mocks["stop"].assert_not_awaited()
