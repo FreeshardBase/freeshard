@@ -6,6 +6,7 @@ from pathlib import Path
 import shard_core.data_model.profile
 from shard_core.database.connection import db_conn
 from shard_core.database import installed_apps as db_installed_apps
+from shard_core.service import memory_pressure
 from shard_core.data_model.app_meta import (
     Status,
     AppMeta,
@@ -32,6 +33,11 @@ async def docker_start_app(name: str):
     async with db_conn() as conn:
         app = await db_installed_apps.get_by_name(conn, name)
         app_status = app["status"] if app else None
+
+    if app_status == Status.PAUSED:
+        # a paused app wakes by unfreezing, not by compose up
+        await docker_unpause_app(name)
+        return
 
     if app_status in [Status.STOPPED, Status.RUNNING, Status.DOWN]:
         log.debug(f"starting app {name=}")
@@ -69,11 +75,50 @@ async def docker_start_app(name: str):
         log.debug(f"app {name=} has status {app_status}, skipping start")
 
 
+async def docker_pause_app(name: str):
+    """Freeze a RUNNING app's containers and page their memory out to swap."""
+    async with db_conn() as conn:
+        app = await db_installed_apps.get_by_name(conn, name)
+        app_status = app["status"] if app else None
+    if app_status == Status.RUNNING:
+        log.debug(f"pausing app {name=}")
+        await subprocess(
+            *compose_command(), "pause", cwd=get_installed_apps_path() / name
+        )
+        await memory_pressure.reclaim_compose_stack(name)
+        async with db_conn() as conn:
+            await db_installed_apps.update_status(conn, name, Status.PAUSED)
+        await signals.on_apps_update.send_async()
+    else:
+        log.debug(f"app {name=} has {app_status=}, skipping pause")
+
+
+async def docker_unpause_app(name: str):
+    async with db_conn() as conn:
+        app = await db_installed_apps.get_by_name(conn, name)
+        app_status = app["status"] if app else None
+    if app_status == Status.PAUSED:
+        log.debug(f"unpausing app {name=}")
+        await subprocess(
+            *compose_command(), "unpause", cwd=get_installed_apps_path() / name
+        )
+        async with db_conn() as conn:
+            await db_installed_apps.update_status(conn, name, Status.RUNNING)
+        await signals.on_apps_update.send_async()
+    else:
+        log.debug(f"app {name=} has {app_status=}, skipping unpause")
+
+
 async def docker_stop_app(name: str, set_status: bool = True):
     async with db_conn() as conn:
         app = await db_installed_apps.get_by_name(conn, name)
         app_status = app["status"] if app else None
-    if app_status in [Status.RUNNING, Status.UNINSTALLING]:
+    if app_status in [Status.RUNNING, Status.PAUSED, Status.UNINSTALLING]:
+        if app_status == Status.PAUSED:
+            # a frozen container cannot be stopped — unfreeze first
+            await subprocess(
+                *compose_command(), "unpause", cwd=get_installed_apps_path() / name
+            )
         await subprocess(
             *compose_command(), "stop", cwd=get_installed_apps_path() / name
         )
@@ -90,6 +135,12 @@ async def docker_shutdown_app(name: str, set_status: bool = True, force: bool = 
         app = await db_installed_apps.get_by_name(conn, name)
         app_status = app["status"] if app else None
     if force or app_status in [Status.STOPPED, Status.UNINSTALLING]:
+        if app_status == Status.PAUSED:
+            # only reachable with force=True (process shutdown) — unfreeze so
+            # compose down can stop and remove the containers
+            await subprocess(
+                *compose_command(), "unpause", cwd=get_installed_apps_path() / name
+            )
         await subprocess(
             *compose_command(), "down", cwd=get_installed_apps_path() / name
         )
