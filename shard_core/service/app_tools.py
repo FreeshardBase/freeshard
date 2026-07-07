@@ -1,12 +1,13 @@
 import asyncio
 import json
 import logging
+import time
 from pathlib import Path
 
 import shard_core.data_model.profile
 from shard_core.database.connection import db_conn
 from shard_core.database import installed_apps as db_installed_apps
-from shard_core.service import memory_pressure
+from shard_core.service import memory_pressure, pause_metrics
 from shard_core.data_model.app_meta import (
     Status,
     AppMeta,
@@ -82,10 +83,13 @@ async def docker_pause_app(name: str):
         app_status = app["status"] if app else None
     if app_status == Status.RUNNING:
         log.debug(f"pausing app {name=}")
+        pause_started = time.monotonic()
         await subprocess(
             *compose_command(), "pause", cwd=get_installed_apps_path() / name
         )
         await memory_pressure.reclaim_compose_stack(name)
+        pause_metrics.record_pause_latency((time.monotonic() - pause_started) * 1000)
+        pause_metrics.record_app_transition(name, Status.RUNNING, Status.PAUSED)
         async with db_conn() as conn:
             await db_installed_apps.update_status(conn, name, Status.PAUSED)
         await signals.on_apps_update.send_async()
@@ -99,9 +103,12 @@ async def docker_unpause_app(name: str):
         app_status = app["status"] if app else None
     if app_status == Status.PAUSED:
         log.debug(f"unpausing app {name=}")
+        unpause_started = time.monotonic()
         await subprocess(
             *compose_command(), "unpause", cwd=get_installed_apps_path() / name
         )
+        pause_metrics.record_unpause_latency((time.monotonic() - unpause_started) * 1000)
+        pause_metrics.record_app_transition(name, Status.PAUSED, Status.RUNNING)
         async with db_conn() as conn:
             await db_installed_apps.update_status(conn, name, Status.RUNNING)
         await signals.on_apps_update.send_async()
@@ -123,6 +130,7 @@ async def docker_stop_app(name: str, set_status: bool = True):
             *compose_command(), "stop", cwd=get_installed_apps_path() / name
         )
         if set_status:
+            pause_metrics.record_app_transition(name, Status(app_status), Status.STOPPED)
             async with db_conn() as conn:
                 await db_installed_apps.update_status(conn, name, Status.STOPPED)
         await signals.on_apps_update.send_async()

@@ -6,7 +6,7 @@ from typing import Dict, List
 from shard_core.database.connection import db_conn
 from shard_core.database import installed_apps as db_installed_apps
 from shard_core.data_model.app_meta import InstalledApp, Status
-from shard_core.service import disk, memory_pressure
+from shard_core.service import disk, memory_pressure, pause_metrics
 from shard_core.service.app_tools import (
     docker_start_app,
     docker_stop_app,
@@ -54,6 +54,8 @@ async def control_apps():
     pause_enabled = lifecycle_settings.pause_enabled
     psi = memory_pressure.read_memory_pressure() if pause_enabled else 0.0
     pressure_high = pause_enabled and psi > lifecycle_settings.psi_threshold
+    if pause_enabled:
+        pause_metrics.record_psi_snapshot(psi)
 
     async with db_conn() as conn:
         all_apps = await db_installed_apps.get_all(conn)

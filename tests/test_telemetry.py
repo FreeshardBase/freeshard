@@ -49,3 +49,52 @@ async def test_telemetry_disabled(
 
         assert telemetry.no_of_requests == 0
         assert not mock_call_freeshard_controller.called
+
+
+@patch("shard_core.service.telemetry.call_freeshard_controller", new_callable=AsyncMock)
+async def test_telemetry_pause_tier_roundtrip(
+    mock_call_freeshard_controller: AsyncMock, app_client
+):
+    from shard_core.data_model.app_meta import Status
+    from shard_core.service import pause_metrics
+
+    pause_metrics.reset()
+    pause_metrics.record_app_transition("immich", Status.RUNNING, Status.PAUSED)
+    pause_metrics.record_app_transition("immich", Status.PAUSED, Status.RUNNING)
+    pause_metrics.record_app_transition("immich", Status.RUNNING, Status.PAUSED)
+    pause_metrics.record_pause_latency(100.0)
+    pause_metrics.record_pause_latency(300.0)
+    pause_metrics.record_unpause_latency(50.0)
+    pause_metrics.record_psi_snapshot(2.5)
+    pause_metrics.record_psi_snapshot(11.0)
+
+    await telemetry.send_telemetry()
+
+    body = mock_call_freeshard_controller.await_args_list[0].kwargs["body"]
+    tel = Telemetry.model_validate(json.loads(body.decode()))
+    assert tel.pause_tier is not None
+    assert tel.pause_tier.transitions["immich"]["running_to_paused"] == 2
+    assert tel.pause_tier.transitions["immich"]["paused_to_running"] == 1
+    assert tel.pause_tier.pause_latency_ms_p50 in (100.0, 300.0)
+    assert tel.pause_tier.unpause_latency_ms_p50 == 50.0
+    assert tel.pause_tier.psi_some_avg10_snapshots == [2.5, 11.0]
+
+    # accumulators reset after a successful send
+    assert pause_metrics.app_transitions == {}
+    assert pause_metrics.pause_latencies_ms == []
+    assert pause_metrics.psi_snapshots == []
+
+
+@patch("shard_core.service.telemetry.call_freeshard_controller", new_callable=AsyncMock)
+async def test_telemetry_without_pause_activity_omits_pause_tier(
+    mock_call_freeshard_controller: AsyncMock, app_client
+):
+    from shard_core.service import pause_metrics
+
+    pause_metrics.reset()
+    await telemetry.record_request("arg")
+    await telemetry.send_telemetry()
+
+    body = mock_call_freeshard_controller.await_args_list[0].kwargs["body"]
+    tel = Telemetry.model_validate(json.loads(body.decode()))
+    assert tel.pause_tier is None
