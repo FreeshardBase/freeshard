@@ -4,13 +4,13 @@ from enum import Enum
 from pathlib import Path as FilePath
 from typing import Optional, List, Dict, Union
 
-from pydantic import BaseModel, model_validator, field_validator
+from pydantic import BaseModel, model_validator
 
 from shard_core.data_model import app_meta_migration
 from shard_core.settings import settings
 from shard_core.util import signals
 
-CURRENT_VERSION = "1.2"
+CURRENT_VERSION = "1.3"
 
 
 class InstallationReason(str, Enum):
@@ -32,6 +32,7 @@ class Status(str, Enum):
     INSTALLING = "installing"
     STOPPED = "stopped"
     RUNNING = "running"
+    PAUSED = "paused"
     UNINSTALLATION_QUEUED = "uninstallation_queued"
     UNINSTALLING = "uninstalling"
     REINSTALLATION_QUEUED = "reinstallation_queued"
@@ -89,25 +90,36 @@ class Entrypoint(BaseModel):
 
 class Lifecycle(BaseModel):
     always_on: bool = False
-    idle_time_for_shutdown: Optional[int] = None
-
-    @field_validator("idle_time_for_shutdown")
-    @classmethod
-    def validate_idle_time_for_shutdown(cls, v):
-        if v and v < 5:
-            raise ValueError(f"idle_time_for_shutdown must be at least 5, was {v}")
-        return v
+    skip_pause: bool = False
+    idle_for_pause: Optional[int] = None  # None = use global default
+    idle_for_stop: Optional[int] = None  # None = use global default
 
     @model_validator(mode="after")
-    def validate_exclusivity(self):
-        if self.always_on and self.idle_time_for_shutdown is not None:
+    def validate_combinations(self):
+        if self.always_on and (
+            self.skip_pause
+            or self.idle_for_pause is not None
+            or self.idle_for_stop is not None
+        ):
             raise ValueError(
-                "if always_on is true, idle_time_for_shutdown must not be set"
+                "if always_on is true, no other lifecycle field may be set"
             )
-        if not self.always_on and self.idle_time_for_shutdown is None:
+        if self.skip_pause and self.idle_for_pause is not None:
+            raise ValueError("skip_pause and idle_for_pause are mutually exclusive")
+        if self.idle_for_pause is not None and self.idle_for_pause < 5:
             raise ValueError(
-                "if always_on is false or not set, idle_time_for_shutdown must be set"
+                f"idle_for_pause must be at least 5, was {self.idle_for_pause}"
             )
+        if self.idle_for_stop is not None and self.idle_for_stop < 5:
+            raise ValueError(
+                f"idle_for_stop must be at least 5, was {self.idle_for_stop}"
+            )
+        if (
+            self.idle_for_pause is not None
+            and self.idle_for_stop is not None
+            and self.idle_for_pause >= self.idle_for_stop
+        ):
+            raise ValueError("idle_for_pause must be less than idle_for_stop")
         return self
 
 
@@ -121,7 +133,7 @@ class AppMeta(BaseModel):
     icon: str
     entrypoints: List[Entrypoint]
     paths: Dict[str, Path]
-    lifecycle: Lifecycle = Lifecycle(idle_time_for_shutdown=60)
+    lifecycle: Lifecycle = Lifecycle()
     minimum_portal_size: VMSize = VMSize.XS
     store_info: Optional[StoreInfo] = None
 
