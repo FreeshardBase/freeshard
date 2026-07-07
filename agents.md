@@ -24,8 +24,10 @@ shard_core/
     management/         Management API auth (hosted shards only)
   service/            → Business logic
     app_installation/   App install/uninstall/reinstall + background worker queue
-    app_lifecycle.py    Auto-start/stop containers based on idle time
-    app_tools.py        Docker CLI wrapper functions
+    app_lifecycle.py    Two-tier idle control: RUNNING -> PAUSED -> STOPPED, PSI-driven LRU demotion, wake-on-request
+    app_tools.py        Docker CLI wrapper functions (start/stop/pause/unpause/down)
+    memory_pressure.py  PSI parsing (/host/pressure/memory), cgroup v2 memory.reclaim page-out
+    pause_metrics.py    In-memory pause-tier telemetry accumulators (transitions, latencies, PSI snapshots)
     pairing.py          Terminal pairing (JWT creation, code generation)
     backup.py           Azure Blob Storage backup via rclone
     peer.py             Peer shard management
@@ -77,7 +79,7 @@ Tables: `identities`, `terminals`, `installed_apps`, `peers`, `backups`, `tours`
 ### Background Tasks
 Started at app lifespan startup, stopped at shutdown:
 - `InstallationWorker` — async task queue for app install/uninstall
-- `PeriodicTask(control_apps, 30s)` — auto-start/stop app containers
+- `PeriodicTask(control_apps, 30s)` — app idle lifecycle. With `apps.lifecycle.pause_enabled` (default off): RUNNING pauses after `idle_for_pause` (cgroup freeze + page-out to swap), PAUSED stops after `idle_for_stop`, and high memory PSI demotes the LRU app one tier per cycle. Flag off: legacy stop-only
 - `PeriodicTask(update_disk_space, 30s)` — disk monitoring
 - `CronTask(start_backup, "0 3 * * *")` — daily backup with random delay
 - `CronTask(docker_prune_images, daily)` — image cleanup
