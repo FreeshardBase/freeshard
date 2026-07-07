@@ -45,6 +45,10 @@ class RegistrySettings(BaseModel):
 
 class AppLifecycleSettings(BaseModel):
     refresh_interval: int = 30
+    default_idle_for_pause: int = 60  # T1: RUNNING -> PAUSED, seconds
+    default_idle_for_stop: int = 1800  # T2: PAUSED -> STOPPED, seconds
+    psi_threshold: float = 10.0  # /proc/pressure/memory `some avg10` demotion trigger
+    pause_enabled: bool = False  # rollout kill-switch for the PAUSED+PAGED tier
 
 
 class AppLastAccessSettings(BaseModel):

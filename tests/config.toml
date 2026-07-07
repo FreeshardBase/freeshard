@@ -1,5 +1,7 @@
 [apps.lifecycle]
 refresh_interval = 2
+default_idle_for_pause = 5
+default_idle_for_stop = 12
 
 [apps.last_access]
 max_update_frequency = 3
