@@ -91,8 +91,8 @@ class Entrypoint(BaseModel):
 class Lifecycle(BaseModel):
     always_on: bool = False
     skip_pause: bool = False
-    idle_for_pause: Optional[int] = None  # None = use global default
-    idle_for_stop: Optional[int] = None  # None = use global default
+    idle_for_pause: int | None = None  # None = use global default
+    idle_for_stop: int | None = None  # None = use global default
 
     @model_validator(mode="after")
     def validate_combinations(self):

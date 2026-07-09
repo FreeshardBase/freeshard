@@ -98,3 +98,13 @@ async def test_telemetry_without_pause_activity_omits_pause_tier(
     body = mock_call_freeshard_controller.await_args_list[0].kwargs["body"]
     tel = Telemetry.model_validate(json.loads(body.decode()))
     assert tel.pause_tier is None
+
+
+def test_percentile_rejects_out_of_range_fraction():
+    import pytest
+
+    with pytest.raises(ValueError):
+        telemetry._percentile([1.0, 2.0], 95)
+    with pytest.raises(ValueError):
+        telemetry._percentile([1.0, 2.0], -0.1)
+    assert telemetry._percentile([1.0, 2.0, 3.0], 0.5) == 2.0

@@ -74,15 +74,17 @@ async def control_apps():
 async def _control_app_time(app: InstalledApp, pause_enabled: bool):
     app_meta = get_app_metadata(app.name)
 
+    # Low disk stops every app, always_on included — a paused or running app
+    # can otherwise fill the disk completely.
+    if disk.current_disk_usage.disk_space_low:
+        await docker_stop_app(app.name)
+        return
+
     if app_meta.lifecycle.always_on:
         if app.status != Status.RUNNING and await size_is_compatible(
             app_meta.minimum_portal_size
         ):
             await docker_start_app(app.name)
-        return
-
-    if disk.current_disk_usage.disk_space_low:
-        await docker_stop_app(app.name)
         return
 
     idle = time.time() - last_access_dict.get(app.name, 0.0)
@@ -110,28 +112,36 @@ async def _control_app_time(app: InstalledApp, pause_enabled: bool):
 async def _demote_lru(apps: List[InstalledApp]):
     """Demote the least-recently-used demotable app one tier.
 
+    RUNNING apps are considered first: pausing has less user impact than
+    stopping, and paused apps mostly have older last-access times — a single
+    LRU sort across both tiers would systematically stop paused apps instead.
+    Only when nothing is left to pause does the LRU paused app get stopped.
+
     One demotion per control cycle: the next cycle re-reads PSI and demotes
     again only if pressure is still high, so a spike frees memory gradually
     instead of stopping everything at once.
     """
-    candidates = []
+    running = []
+    paused = []
     for app in apps:
         app_meta = get_app_metadata(app.name)
         if app_meta.lifecycle.always_on:
             continue
         if time.time() - last_access_dict.get(app.name, 0.0) <= RECENT_ACCESS_GRACE:
             continue
-        if app.status not in (Status.RUNNING, Status.PAUSED):
-            continue
-        candidates.append(app)
-    candidates.sort(key=lambda app: last_access_dict.get(app.name, 0.0))
-    if not candidates:
-        return
-    victim = candidates[0]
-    if victim.status == Status.RUNNING:
+        if app.status == Status.RUNNING:
+            running.append(app)
+        elif app.status == Status.PAUSED:
+            paused.append(app)
+
+    def lru(candidates: List[InstalledApp]) -> InstalledApp:
+        return min(candidates, key=lambda app: last_access_dict.get(app.name, 0.0))
+
+    if running:
+        victim = lru(running)
         if get_app_metadata(victim.name).lifecycle.skip_pause:
             await docker_stop_app(victim.name)
         else:
             await docker_pause_app(victim.name)
-    elif victim.status == Status.PAUSED:
-        await docker_stop_app(victim.name)
+    elif paused:
+        await docker_stop_app(lru(paused).name)

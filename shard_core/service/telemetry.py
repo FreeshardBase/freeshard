@@ -30,6 +30,8 @@ async def record_request(_):
 
 
 def _percentile(samples: List[float], fraction: float) -> float:
+    if not 0.0 <= fraction <= 1.0:
+        raise ValueError(f"fraction must be between 0 and 1, was {fraction}")
     ordered = sorted(samples)
     return ordered[round(fraction * (len(ordered) - 1))]
 

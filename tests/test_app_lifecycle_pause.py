@@ -172,6 +172,27 @@ async def test_always_on_app_is_started_not_paused(docker_mocks):
     docker_mocks["stop"].assert_not_awaited()
 
 
+async def test_low_disk_stops_even_always_on_apps(docker_mocks):
+    app = _app("a", Status.RUNNING, idle=0)
+    with (
+        settings_override(PAUSE_ON),
+        patch.object(
+            app_lifecycle,
+            "get_app_metadata",
+            return_value=_meta(Lifecycle(always_on=True)),
+        ),
+        patch.object(
+            app_lifecycle.disk,
+            "current_disk_usage",
+            app_lifecycle.disk.DiskUsage(total_gb=10, free_gb=0.1, disk_space_low=True),
+        ),
+    ):
+        await app_lifecycle._control_app_time(app, pause_enabled=True)
+    docker_mocks["stop"].assert_awaited_once_with("a")
+    docker_mocks["start"].assert_not_awaited()
+    docker_mocks["pause"].assert_not_awaited()
+
+
 async def test_demote_lru_pauses_least_recently_used_running_app(docker_mocks):
     apps = [
         _app("newer", Status.RUNNING, idle=100),
@@ -185,7 +206,9 @@ async def test_demote_lru_pauses_least_recently_used_running_app(docker_mocks):
     docker_mocks["stop"].assert_not_awaited()
 
 
-async def test_demote_lru_stops_a_paused_victim(docker_mocks):
+async def test_demote_lru_prefers_pausing_running_over_stopping_paused(docker_mocks):
+    # the paused app is older, but pausing a running app has less user impact
+    # than stopping a paused one — running apps are demoted first
     apps = [
         _app("running", Status.RUNNING, idle=100),
         _app("paused", Status.PAUSED, idle=200),
@@ -194,7 +217,20 @@ async def test_demote_lru_stops_a_paused_victim(docker_mocks):
         app_lifecycle, "get_app_metadata", return_value=_meta(Lifecycle())
     ):
         await app_lifecycle._demote_lru(apps)
-    docker_mocks["stop"].assert_awaited_once_with("paused")
+    docker_mocks["pause"].assert_awaited_once_with("running")
+    docker_mocks["stop"].assert_not_awaited()
+
+
+async def test_demote_lru_stops_lru_paused_when_nothing_left_to_pause(docker_mocks):
+    apps = [
+        _app("paused_newer", Status.PAUSED, idle=100),
+        _app("paused_older", Status.PAUSED, idle=200),
+    ]
+    with patch.object(
+        app_lifecycle, "get_app_metadata", return_value=_meta(Lifecycle())
+    ):
+        await app_lifecycle._demote_lru(apps)
+    docker_mocks["stop"].assert_awaited_once_with("paused_older")
     docker_mocks["pause"].assert_not_awaited()
 
 
