@@ -34,6 +34,10 @@ password = "bk11Ws.8OGakl-~t.7bKh5l9EYXTbHw.0T"
 
 [apps.lifecycle]
 refresh_interval = 10
+default_idle_for_pause = 60
+default_idle_for_stop = 10800
+psi_threshold = 10.0
+pause_enabled = false
 
 [apps]
 initial_apps = ["filebrowser", "immich", "paperless-ngx"]

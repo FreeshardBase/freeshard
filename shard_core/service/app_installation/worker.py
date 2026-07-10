@@ -17,6 +17,7 @@ from shard_core.service.app_tools import (
     docker_create_app_containers,
     docker_stop_app,
     docker_shutdown_app,
+    docker_unpause_app,
 )
 from shard_core.settings import settings
 from shard_core.util import signals
@@ -123,6 +124,12 @@ async def _install_app_from_existing_zip(app_name: str):
 
 async def _uninstall_app(app_name: str):
     try:
+        installed_app = await get_app_from_db(app_name)
+        if installed_app.status == Status.PAUSED:
+            # unfreeze while the status still says PAUSED — once it flips to
+            # UNINSTALLING nothing knows the containers are frozen, and a
+            # frozen stack can be neither stopped nor removed
+            await docker_unpause_app(app_name)
         await update_app_status(app_name, Status.UNINSTALLING)
     except KeyError:
         log.warning(f"during uninstallation of {app_name}: app not found in database")

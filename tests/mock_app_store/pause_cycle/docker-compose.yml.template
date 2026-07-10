@@ -1,0 +1,15 @@
+version: '3.5'
+
+networks:
+    portal:
+        external: true
+
+services:
+    pause_cycle:
+        restart: always
+        image: nginx:alpine
+        container_name: pause_cycle
+        volumes:
+        - "{{ fs.app_data }}:/data"
+        networks:
+        - portal

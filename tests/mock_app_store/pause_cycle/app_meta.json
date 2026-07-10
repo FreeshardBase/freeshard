@@ -1,0 +1,26 @@
+{
+  "v": "1.3",
+  "app_version": "0.1.0",
+  "name": "pause_cycle",
+  "pretty_name": "Pause Cycle",
+  "icon": "icon.svg",
+  "entrypoints": [
+    {
+      "container_name": "pause_cycle",
+      "container_port": 80,
+      "entrypoint_port": "http"
+    }
+  ],
+  "paths": {
+    "": {
+      "access": "private"
+    },
+    "/pub": {
+      "access": "public"
+    }
+  },
+  "lifecycle": {},
+  "store_info": {
+    "description_short": "an app that pauses, then stops, on the global default tiers"
+  }
+}
