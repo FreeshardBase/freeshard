@@ -34,12 +34,12 @@ def test_migrate_1_0_to_current():
     # done by migration to 1.1
     assert app_meta_out.pretty_name == "Test"
     # done by migration to 1.3
-    assert app_meta_out.lifecycle.idle_for_stop == 60
-    assert app_meta_out.lifecycle.idle_for_pause is None
+    assert app_meta_out.lifecycle.idle_for_pause == 60
+    assert app_meta_out.lifecycle.idle_for_stop is None
     assert app_meta_out.lifecycle.skip_pause is False
 
 
-def test_migrate_1_2_to_1_3_idle_time_becomes_idle_for_stop():
+def test_migrate_1_2_to_1_3_idle_time_becomes_idle_for_pause():
     values = _base_app_meta_json(
         "1.2", {"always_on": False, "idle_time_for_shutdown": 3600}
     )
@@ -47,8 +47,8 @@ def test_migrate_1_2_to_1_3_idle_time_becomes_idle_for_stop():
 
     app_meta = AppMeta.model_validate(values)
     assert app_meta.v == "1.3"
-    assert app_meta.lifecycle.idle_for_stop == 3600
-    assert app_meta.lifecycle.idle_for_pause is None
+    assert app_meta.lifecycle.idle_for_pause == 3600
+    assert app_meta.lifecycle.idle_for_stop is None
 
 
 def test_migrate_1_2_to_1_3_always_on_stays_always_on():
@@ -88,6 +88,6 @@ def test_all_mock_app_store_metas_migrate():
             assert app_meta.lifecycle.always_on is True, zip_path
         elif "idle_time_for_shutdown" in old_lifecycle:
             assert (
-                app_meta.lifecycle.idle_for_stop
+                app_meta.lifecycle.idle_for_pause
                 == old_lifecycle["idle_time_for_shutdown"]
             ), zip_path
