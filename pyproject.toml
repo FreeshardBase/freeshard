@@ -42,6 +42,7 @@ dependencies = [
     "python-multipart",
     "aiofiles",
     "httpx",
+    "authlib>=1.7.2,<1.8",
 ]
 
 [project.optional-dependencies]
