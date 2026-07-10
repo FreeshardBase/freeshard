@@ -8,13 +8,14 @@ from psycopg.types.json import Jsonb
 
 
 async def upsert_client(conn: AsyncConnection, client: dict) -> dict:
+    """Insert the client, or refresh its configuration if the app already has
+    one — existing client_id/client_secret are preserved so reinstalls and
+    re-renders keep working credentials."""
     sql: LiteralString = """INSERT INTO oidc_clients
         (client_id, client_secret, app_name, redirect_uris, scope, token_endpoint_auth_method)
         VALUES (%(client_id)s, %(client_secret)s, %(app_name)s, %(redirect_uris)s,
                 %(scope)s, %(token_endpoint_auth_method)s)
         ON CONFLICT (app_name) DO UPDATE SET
-            client_id = EXCLUDED.client_id,
-            client_secret = EXCLUDED.client_secret,
             redirect_uris = EXCLUDED.redirect_uris,
             scope = EXCLUDED.scope,
             token_endpoint_auth_method = EXCLUDED.token_endpoint_auth_method
@@ -31,6 +32,18 @@ async def get_client(conn: AsyncConnection, client_id: str) -> dict | None:
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(sql, (client_id,))
         return await cur.fetchone()
+
+
+async def get_client_by_app_name(conn: AsyncConnection, app_name: str) -> dict | None:
+    sql: LiteralString = "SELECT * FROM oidc_clients WHERE app_name = %s"
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(sql, (app_name,))
+        return await cur.fetchone()
+
+
+async def remove_client_by_app_name(conn: AsyncConnection, app_name: str):
+    sql: LiteralString = "DELETE FROM oidc_clients WHERE app_name = %s"
+    await conn.execute(sql, (app_name,))
 
 
 # --- authorization codes ------------------------------------------------------
