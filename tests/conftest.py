@@ -222,9 +222,10 @@ async def app_client(mocker) -> AsyncGenerator[AsyncClient]:
     # Initialize the database (migrations + pool) and create default identity
     await database.init_database()
     try:
-        from shard_core.service import identity
+        from shard_core.service import identity, user
 
         await identity.init_default_identity()
+        await user.ensure_owner_user()
 
         app = app_factory.create_app()
 
