@@ -59,7 +59,7 @@ async def test_ensure_owner_user_backfills_missing_email(db):
                 "email": None,
                 "role": Role.OWNER.value,
             },
-        )
+        )  # simulates the 0002 SQL backfill (no synthesized email)
 
     owner = await user.ensure_owner_user()
 
@@ -72,4 +72,4 @@ async def test_pairing_binds_terminal_to_owner(app_client: AsyncClient):
     async with db_conn() as conn:
         owner = await db_users.get_owner(conn)
         terminal = await db_terminals.get_by_name(conn, "T1")
-    assert terminal["user_id"] == owner["id"]
+    assert terminal["user_id"] == owner.id
