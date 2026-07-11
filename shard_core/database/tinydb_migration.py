@@ -72,8 +72,9 @@ async def migrate_tinydb_data():
     async with db_conn() as conn:
         await _migrate_kv_store(conn, data.get("_default", {}))
         await _migrate_identities(conn, data.get("identities", {}))
+        owner_id = await _ensure_owner_user(conn)
         await _migrate_installed_apps(conn, data.get("installed_apps", {}))
-        await _migrate_terminals(conn, data.get("terminals", {}))
+        await _migrate_terminals(conn, data.get("terminals", {}), owner_id)
         await _migrate_peers(conn, data.get("peers", {}))
         await _migrate_backups(conn, data.get("backups", {}))
         await _migrate_tours(conn, data.get("tours", {}))
@@ -121,15 +122,32 @@ async def _migrate_installed_apps(conn: AsyncConnection, records: dict):
     log.info(f"migrated {len(records)} installed apps")
 
 
-async def _migrate_terminals(conn: AsyncConnection, records: dict):
+async def _ensure_owner_user(conn: AsyncConnection) -> int | None:
+    """Terminals require a user (NOT NULL); create the owner from the just-
+    migrated default identity, mirroring the 0002 migration's backfill."""
+    cur = await conn.execute("SELECT id FROM users WHERE role = 'owner'")
+    row = await cur.fetchone()
+    if row:
+        return row[0]
+    cur = await conn.execute("""INSERT INTO users (username, display_name, email, role)
+           SELECT 'owner', COALESCE(name, 'Shard Owner'), email, 'owner'
+           FROM identities WHERE is_default = TRUE
+           RETURNING id""")
+    row = await cur.fetchone()
+    return row[0] if row else None
+
+
+async def _migrate_terminals(
+    conn: AsyncConnection, records: dict, owner_id: int | None
+):
     for record in records.values():
         filtered = _filter_keys(record, _TERMINAL_COLUMNS)
         filtered.setdefault("icon", "unknown")
         await conn.execute(
-            """INSERT INTO terminals (id, name, icon, last_connection)
-               VALUES (%(id)s, %(name)s, %(icon)s, %(last_connection)s)
+            """INSERT INTO terminals (id, name, icon, last_connection, user_id)
+               VALUES (%(id)s, %(name)s, %(icon)s, %(last_connection)s, %(user_id)s)
                ON CONFLICT (id) DO NOTHING""",
-            filtered,
+            {**filtered, "user_id": owner_id},
         )
     log.info(f"migrated {len(records)} terminals")
 
