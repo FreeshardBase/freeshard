@@ -1,6 +1,6 @@
 from httpx import AsyncClient
 
-from shard_core.data_model.terminal import Terminal
+from shard_core.data_model.user import Role, User
 from shard_core.database.connection import db_conn
 from shard_core.database import identities as db_identities
 from shard_core.database import terminals as db_terminals
@@ -12,16 +12,15 @@ from tests.util import pair_new_terminal
 async def test_ensure_owner_user_creates_owner_from_default_identity(db):
     default_identity = await identity.init_default_identity()
 
-    await user.ensure_owner_user()
+    owner = await user.ensure_owner_user()
 
-    async with db_conn() as conn:
-        owner = await db_users.get_owner(conn)
-    assert owner["id"] == default_identity.id
-    assert owner["role"] == "owner"
-    assert owner["username"] == "owner"
-    assert owner["display_name"] == default_identity.name
-    assert owner["email"] == f"owner@{default_identity.domain}"
-    assert owner["disabled"] is False
+    assert isinstance(owner, User)
+    assert isinstance(owner.id, int)
+    assert owner.role == Role.OWNER
+    assert owner.username == "owner"
+    assert owner.display_name == default_identity.name
+    assert owner.email == f"owner@{default_identity.domain}"
+    assert owner.disabled is False
 
 
 async def test_ensure_owner_user_keeps_identity_email(db):
@@ -31,35 +30,40 @@ async def test_ensure_owner_user_keeps_identity_email(db):
             conn, default_identity.id, {"email": "max@freeshard.net"}
         )
 
-    await user.ensure_owner_user()
+    owner = await user.ensure_owner_user()
 
-    async with db_conn() as conn:
-        owner = await db_users.get_owner(conn)
-    assert owner["email"] == "max@freeshard.net"
+    assert owner.email == "max@freeshard.net"
 
 
 async def test_ensure_owner_user_is_idempotent(db):
     await identity.init_default_identity()
 
-    await user.ensure_owner_user()
-    await user.ensure_owner_user()
+    first = await user.ensure_owner_user()
+    second = await user.ensure_owner_user()
 
+    assert first.id == second.id
     async with db_conn() as conn:
         assert await db_users.count(conn) == 1
 
 
-async def test_ensure_owner_user_backfills_terminal_user_id(db):
-    await identity.init_default_identity()
-    legacy_terminal = Terminal.create("legacy")
+async def test_ensure_owner_user_backfills_missing_email(db):
+    """Migration-created owners (existing shards) start without a synthesized
+    email; ensure_owner_user fills it on the next startup."""
+    default_identity = await identity.init_default_identity()
     async with db_conn() as conn:
-        await db_terminals.insert(conn, legacy_terminal.model_dump())
+        await db_users.insert(
+            conn,
+            {
+                "username": "owner",
+                "display_name": default_identity.name,
+                "email": None,
+                "role": Role.OWNER.value,
+            },
+        )
 
-    await user.ensure_owner_user()
+    owner = await user.ensure_owner_user()
 
-    async with db_conn() as conn:
-        owner = await db_users.get_owner(conn)
-        row = await db_terminals.get_by_id(conn, legacy_terminal.id)
-    assert row["user_id"] == owner["id"]
+    assert owner.email == f"owner@{default_identity.domain}"
 
 
 async def test_pairing_binds_terminal_to_owner(app_client: AsyncClient):

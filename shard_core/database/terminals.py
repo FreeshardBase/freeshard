@@ -36,11 +36,6 @@ async def insert(conn: AsyncConnection, terminal: dict) -> dict:
         return await cur.fetchone()
 
 
-async def set_user_id_where_null(conn: AsyncConnection, user_id: str):
-    sql: LiteralString = "UPDATE terminals SET user_id = %s WHERE user_id IS NULL"
-    await conn.execute(sql, (user_id,))
-
-
 async def update(conn: AsyncConnection, id: str, data: dict) -> dict | None:
     set_clauses = []
     params = {"_id": id}

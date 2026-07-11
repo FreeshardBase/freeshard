@@ -21,13 +21,13 @@ class Terminal(BaseModel):
     name: str
     icon: Icon = Icon.UNKNOWN
     last_connection: Optional[datetime] = None
-    user_id: Optional[str] = None
+    user_id: Optional[int] = None
 
     def __str__(self):
         return f"Terminal[{self.id}, {self.name}]"
 
     @classmethod
-    def create(cls, name: str, user_id: Optional[str] = None) -> "Terminal":
+    def create(cls, name: str, user_id: Optional[int] = None) -> "Terminal":
         return Terminal(
             id=human_encoding.random_string(6),
             name=name,

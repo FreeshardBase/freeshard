@@ -31,10 +31,9 @@ async def add_terminal(code: str, terminal: InputTerminal, response: Response):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED) from e
 
     async with db_conn() as conn:
+        # the owner user always exists here — created at startup, before pairing
         owner = await db_users.get_owner(conn)
-        new_terminal = Terminal.create(
-            terminal.name, user_id=owner["id"] if owner else None
-        )
+        new_terminal = Terminal.create(terminal.name, user_id=owner["id"])
         await db_terminals.insert(conn, new_terminal.model_dump())
         is_first_terminal = await db_terminals.count(conn) == 1
 
