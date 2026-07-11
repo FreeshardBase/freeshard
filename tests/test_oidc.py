@@ -144,7 +144,7 @@ async def test_discovery_document(app_client: AsyncClient):
     assert "public" in disco["subject_types_supported"]
     assert "RS256" in disco["id_token_signing_alg_values_supported"]
     assert "openid" in disco["scopes_supported"]
-    assert "S256" in disco["code_challenge_methods_supported"]
+    assert disco["code_challenge_methods_supported"] == ["S256"]
     assert {"authorization_code", "refresh_token"} <= set(
         disco["grant_types_supported"]
     )
@@ -313,6 +313,12 @@ async def test_refresh_rotation(app_client: AsyncClient):
     )
     assert r.status_code in (400, 401), r.text
 
+    # ...and its replay is treated as compromise: the whole family dies
+    r = await app_client.get(
+        USERINFO, headers={"Authorization": f"Bearer {new_tok['access_token']}"}
+    )
+    assert r.status_code == 401, "family not revoked after refresh-token reuse"
+
 
 # --- negatives -----------------------------------------------------------------------
 
@@ -406,6 +412,67 @@ async def test_scope_narrowing(app_client: AsyncClient):
     granted = set((tok.get("scope") or "").split())
     assert "email" not in granted, f"scope escalation: granted {granted}"
     assert {"openid", "profile"} <= granted
+
+
+async def test_plain_pkce_rejected(app_client: AsyncClient):
+    """RFC 9700: only S256 — 'plain' sends the verifier in cleartext."""
+    await pair_new_terminal(app_client)
+    oidc_client = await make_client()
+    verifier = secrets.token_urlsafe(32)
+    params, r = await authorize(
+        app_client,
+        oidc_client,
+        verifier,
+        code_challenge=verifier,
+        code_challenge_method="plain",
+    )
+    if 300 <= r.status_code < 400:
+        query = parse_qs(urlparse(r.headers["location"]).query)
+        assert "code" not in query, "code issued for plain PKCE"
+        assert "error" in query
+    else:
+        assert r.status_code == 400, r.text
+
+
+async def test_failed_redemption_burns_code(app_client: AsyncClient):
+    """Any redemption attempt consumes the code — a PKCE-failing attempt
+    must not leave the code redeemable."""
+    await pair_new_terminal(app_client)
+    oidc_client = await make_client()
+    verifier = secrets.token_urlsafe(32)
+    code = await get_code(app_client, oidc_client, verifier)
+
+    r = await exchange_code(app_client, oidc_client, code, "wrong-" + verifier)
+    assert r.status_code == 400, r.text
+
+    r = await exchange_code(app_client, oidc_client, code, verifier)
+    assert r.status_code == 400, "code survived a failed redemption attempt"
+
+
+async def test_code_reuse_revokes_issued_tokens(app_client: AsyncClient):
+    """Reuse of a redeemed code signals interception — tokens issued to the
+    grant must be revoked (RFC 9700)."""
+    await pair_new_terminal(app_client)
+    oidc_client = await make_client()
+    verifier = secrets.token_urlsafe(32)
+    code = await get_code(app_client, oidc_client, verifier)
+
+    r = await exchange_code(app_client, oidc_client, code, verifier)
+    assert r.status_code == 200, r.text
+    tok = r.json()
+
+    r = await app_client.get(
+        USERINFO, headers={"Authorization": f"Bearer {tok['access_token']}"}
+    )
+    assert r.status_code == 200
+
+    r = await exchange_code(app_client, oidc_client, code, verifier)
+    assert r.status_code == 400, r.text
+
+    r = await app_client.get(
+        USERINFO, headers={"Authorization": f"Bearer {tok['access_token']}"}
+    )
+    assert r.status_code == 401, "tokens not revoked after code reuse"
 
 
 # --- storage hardening -----------------------------------------------------------------

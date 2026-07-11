@@ -265,11 +265,31 @@ class ShardAuthCodeGrant(grants.AuthorizationCodeGrant):
         )
 
     def query_authorization_code(self, code, client):
-        row = _run(_with_conn(db_oidc.get_code, hash_secret(code), client.client_id))
+        # atomic burn-on-query: any redemption attempt (even one that later
+        # fails PKCE) consumes the code, and two concurrent requests can't
+        # both get it (RFC 9700 single-use)
+        row = _run(_with_conn(db_oidc.redeem_code, hash_secret(code), client.client_id))
+        if row is None:
+            stale = _run(
+                _with_conn(db_oidc.get_code, hash_secret(code), client.client_id)
+            )
+            if stale and stale["redeemed"]:
+                # reuse of a redeemed code signals interception — kill every
+                # token issued to this (client, user) grant
+                _run(
+                    _with_conn(
+                        db_oidc.revoke_all_for_grant,
+                        client.client_id,
+                        stale["user_sub"],
+                    )
+                )
+            return None
         return AuthorizationCode.from_row(code, row)
 
     def delete_authorization_code(self, authorization_code):
-        _run(_with_conn(db_oidc.delete_code, hash_secret(authorization_code.code)))
+        # already consumed atomically in query_authorization_code; the row is
+        # kept (redeemed) for reuse detection until it expires
+        pass
 
     def authenticate_user(self, authorization_code):
         return _run(_user_from_id_async(authorization_code.user_sub))
@@ -282,7 +302,18 @@ class ShardRefreshTokenGrant(grants.RefreshTokenGrant):
         row = _run(
             _with_conn(db_oidc.get_token_by_refresh_hash, hash_secret(refresh_token))
         )
-        if row and row["issued_at"] + REFRESH_TOKEN_LIFETIME > time.time():
+        if row is None:
+            return None
+        if row["revoked"]:
+            # replay of a rotated-out refresh token — revoke the whole family
+            # so a thief who rotated first doesn't keep a live token
+            _run(
+                _with_conn(
+                    db_oidc.revoke_all_for_grant, row["client_id"], row["user_sub"]
+                )
+            )
+            return None
+        if row["issued_at"] + REFRESH_TOKEN_LIFETIME > time.time():
             return _TokenRecord(row)
         return None
 
@@ -381,6 +412,12 @@ def _query_client(client_id: str):
     return OidcClient.from_row(_run(_with_conn(db_oidc.get_client, client_id)))
 
 
+class S256CodeChallenge(CodeChallenge):
+    # 'plain' (Authlib's default second method) sends challenge == verifier in
+    # cleartext, defeating PKCE's interception protection (RFC 9700 wants S256)
+    SUPPORTED_CODE_CHALLENGE_METHOD = ["S256"]
+
+
 def build_authorization_server(server_cls=AuthorizationServer) -> AuthorizationServer:
     """server_cls lets the web layer pass its framework-adapter subclass."""
     server = server_cls(scopes_supported=SUPPORTED_SCOPES)
@@ -389,7 +426,7 @@ def build_authorization_server(server_cls=AuthorizationServer) -> AuthorizationS
     server.register_token_generator("default", _generate_bearer_token)
     server.register_grant(
         ShardAuthCodeGrant,
-        [CodeChallenge(required=True), ShardOpenIDCode(require_nonce=False)],
+        [S256CodeChallenge(required=True), ShardOpenIDCode(require_nonce=False)],
     )
     server.register_grant(ShardRefreshTokenGrant)
     return server
@@ -460,5 +497,5 @@ def discovery_document() -> dict:
             "client_secret_post",
             "none",
         ],
-        "code_challenge_methods_supported": ["S256", "plain"],
+        "code_challenge_methods_supported": ["S256"],
     }
