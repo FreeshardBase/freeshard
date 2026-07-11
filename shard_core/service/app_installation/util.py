@@ -12,6 +12,7 @@ from shard_core.database import installed_apps as db_installed_apps
 from shard_core.database import identities as db_identities
 from shard_core.data_model.app_meta import Status, InstalledApp
 from shard_core.data_model.identity import Identity, SafeIdentity
+from shard_core.service import oidc_provider
 from shard_core.service.app_installation.exceptions import AppInIllegalStatus
 from shard_core.service.app_tools import get_installed_apps_path, get_app_metadata
 from shard_core.settings import settings
@@ -90,12 +91,18 @@ async def render_docker_compose_template(app: InstalledApp):
     default_identity = Identity(**default_row)
     portal = SafeIdentity.from_identity(default_identity)
 
+    oidc = None
+    app_meta = get_app_metadata(app.name)
+    if app_meta.oidc:
+        oidc = await oidc_provider.ensure_app_client(app.name, app_meta.oidc, portal)
+
     app_dir = get_installed_apps_path() / app.name
     template = jinja2.Template((app_dir / "docker-compose.yml.template").read_text())
     (app_dir / "docker-compose.yml").write_text(
         template.render(
             fs=fs,
             portal=portal,
+            oidc=oidc,
         )
     )
 

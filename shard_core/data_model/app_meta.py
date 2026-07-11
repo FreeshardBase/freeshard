@@ -88,6 +88,13 @@ class Entrypoint(BaseModel):
     entrypoint_port: EntrypointPort
 
 
+class OidcMeta(BaseModel):
+    # entries may reference {{ portal.domain }}, rendered at client registration
+    redirect_uris: List[str]
+    public_client: bool = False
+    scope: str = "openid profile email"
+
+
 class Lifecycle(BaseModel):
     always_on: bool = False
     skip_pause: bool = False
@@ -136,6 +143,7 @@ class AppMeta(BaseModel):
     lifecycle: Lifecycle = Lifecycle()
     minimum_portal_size: VMSize = VMSize.XS
     store_info: Optional[StoreInfo] = None
+    oidc: Optional[OidcMeta] = None
 
     @model_validator(mode="before")
     @classmethod

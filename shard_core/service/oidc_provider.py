@@ -22,6 +22,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
+import jinja2
 from authlib.oauth2.rfc6749 import (
     AuthorizationServer,
     ClientMixin,
@@ -34,6 +35,7 @@ from authlib.oidc.core.grants import OpenIDCode
 from joserfc.jwk import RSAKey
 
 from shard_core.database import kv_store
+from shard_core.settings import settings
 from shard_core.database import oidc as db_oidc
 from shard_core.database import users as db_users
 from shard_core.database.connection import db_conn
@@ -441,7 +443,8 @@ async def register_client(
     public_client: bool = False,
     scope: str = "openid profile email",
 ) -> dict:
-    """Create (or replace) the OIDC client for an installed app.
+    """Create the OIDC client for an installed app, or refresh its
+    configuration — credentials are preserved if the app already has one.
 
     The client secret is stored plaintext: docker-compose templates consume it
     on every startup re-render, and it sits in the app's compose env on the
@@ -459,9 +462,36 @@ async def register_client(
         ),
     }
     async with db_conn() as conn:
-        await db_oidc.upsert_client(conn, row)
+        stored = await db_oidc.upsert_client(conn, row)
     log.info(f"registered OIDC client for app {app_name}")
-    return row
+    return stored
+
+
+def issuer_for_domain(domain: str, disable_ssl: bool = False) -> str:
+    protocol = "http" if disable_ssl else "https"
+    # Traefik routes <domain>/core/* to shard_core with /core/ stripped
+    return f"{protocol}://{domain}/core/public/oidc"
+
+
+async def ensure_app_client(app_name: str, oidc_meta, portal) -> dict:
+    """Register/refresh the app's OIDC client and return the docker-compose
+    template context: client_id, client_secret, issuer."""
+    redirect_uris = [
+        jinja2.Template(uri).render(portal=portal) for uri in oidc_meta.redirect_uris
+    ]
+    client = await register_client(
+        app_name,
+        redirect_uris,
+        public_client=oidc_meta.public_client,
+        scope=oidc_meta.scope,
+    )
+    return {
+        "client_id": client["client_id"],
+        "client_secret": client["client_secret"],
+        "issuer": issuer_for_domain(
+            portal.domain, disable_ssl=settings().traefik.disable_ssl
+        ),
+    }
 
 
 async def userinfo_for_access_token(access_token: str) -> dict | None:

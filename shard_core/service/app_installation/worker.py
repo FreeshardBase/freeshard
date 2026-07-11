@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from shard_core.database.connection import db_conn
 from shard_core.database import installed_apps as db_installed_apps
+from shard_core.database import oidc as db_oidc
 from shard_core.data_model.app_meta import Status
 from shard_core.service.app_tools import (
     get_installed_apps_path,
@@ -145,6 +146,8 @@ async def _uninstall_app(app_name: str):
     log.debug(f"removing app {app_name} from database")
     async with db_conn() as conn:
         await db_installed_apps.remove(conn, app_name)
+        # cascades to the app's codes and tokens
+        await db_oidc.remove_client_by_app_name(conn, app_name)
     await write_traefik_dyn_config()
     await signals.on_apps_update.send_async()
     log.info(f"uninstalled {app_name}")

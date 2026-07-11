@@ -1,0 +1,28 @@
+{
+  "v": "1.0",
+  "app_version": "0.1.0",
+  "name": "oidc_app",
+  "icon": "icon.svg",
+  "entrypoints": [
+    {
+      "container_name": "oidc_app",
+      "container_port": 80,
+      "entrypoint_port": "http"
+    }
+  ],
+  "paths": {
+    "": {
+      "access": "private"
+    }
+  },
+  "oidc": {
+    "redirect_uris": ["https://oidc_app.{{ portal.domain }}/callback"]
+  },
+  "lifecycle": {
+    "always_on": false,
+    "idle_time_for_shutdown": 3600
+  },
+  "store_info": {
+    "description_short": "an oidc-enabled app for testing"
+  }
+}
