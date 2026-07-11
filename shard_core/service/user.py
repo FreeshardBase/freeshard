@@ -32,11 +32,11 @@ async def ensure_owner_user() -> User:
                     "role": Role.OWNER.value,
                 },
             )
-            log.info(f"created owner user {owner['id']}")
-        elif owner["email"] is None:
+            log.info(f"created owner user {owner.id}")
+        elif owner.email is None:
             identity_row = await db_identities.get_default(conn)
             identity = Identity(**identity_row)
             owner = await db_users.update(
-                conn, owner["id"], {"email": f"owner@{identity.domain}"}
+                conn, owner.id, {"email": f"owner@{identity.domain}"}
             )
-    return User(**owner)
+    return owner
