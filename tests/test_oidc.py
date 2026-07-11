@@ -118,7 +118,7 @@ async def jwks_keyset(client: AsyncClient) -> KeySet:
     return KeySet.import_key_set(r.json())
 
 
-async def get_owner() -> dict:
+async def get_owner():
     async with db_conn() as conn:
         return await db_users.get_owner(conn)
 
@@ -189,7 +189,7 @@ async def test_confidential_code_pkce_flow(app_client: AsyncClient):
     assert claims["iss"] == await expected_issuer()
     assert claims["aud"] == [oidc_client["client_id"]]
     assert claims["nonce"] == params["nonce"]
-    assert claims["sub"] == str(owner["id"])
+    assert claims["sub"] == str(owner.id)
     assert claims["exp"] > claims["iat"]
 
 
@@ -261,9 +261,9 @@ async def test_userinfo(app_client: AsyncClient):
     )
     assert r.status_code == 200
     info = r.json()
-    assert info["sub"] == str(owner["id"])
-    assert info["email"] == owner["email"]
-    assert info["preferred_username"] == owner["username"]
+    assert info["sub"] == str(owner.id)
+    assert info["email"] == owner.email
+    assert info["preferred_username"] == owner.username
 
     r = await app_client.get(
         USERINFO, headers={"Authorization": "Bearer garbage-token"}
@@ -367,7 +367,7 @@ async def test_token_expired_code(app_client: AsyncClient):
                 "client_id": oidc_client["client_id"],
                 "redirect_uri": REDIRECT_URI,
                 "scope": "openid",
-                "user_sub": owner["id"],
+                "user_sub": owner.id,
                 "nonce": None,
                 "code_challenge": s256(verifier),
                 "code_challenge_method": "S256",

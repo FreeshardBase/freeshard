@@ -37,6 +37,7 @@ from shard_core.database import kv_store
 from shard_core.database import oidc as db_oidc
 from shard_core.database import users as db_users
 from shard_core.database.connection import db_conn
+from shard_core.data_model.user import User
 
 log = logging.getLogger(__name__)
 
@@ -79,14 +80,14 @@ class ShardUser:
     email: str | None = None
 
     @classmethod
-    def from_row(cls, row: dict | None):
-        if row is None or row["disabled"]:
+    def from_user(cls, user: User | None):
+        if user is None or user.disabled:
             return None
         return cls(
-            id=row["id"],
-            username=row["username"],
-            display_name=row["display_name"],
-            email=row["email"],
+            id=user.id,
+            username=user.username,
+            display_name=user.display_name,
+            email=user.email,
         )
 
     @property
@@ -100,7 +101,7 @@ class ShardUser:
 
 async def _user_from_id_async(user_id: int) -> ShardUser | None:
     async with db_conn() as conn:
-        return ShardUser.from_row(await db_users.get_by_id(conn, user_id))
+        return ShardUser.from_user(await db_users.get_by_id(conn, user_id))
 
 
 @dataclass
@@ -431,7 +432,7 @@ async def userinfo_for_access_token(access_token: str) -> dict | None:
         row = await db_oidc.get_token_by_access_hash(conn, hash_secret(access_token))
         if row is None or row["issued_at"] + row["expires_in"] < time.time():
             return None
-        user = ShardUser.from_row(await db_users.get_by_id(conn, row["user_sub"]))
+        user = ShardUser.from_user(await db_users.get_by_id(conn, row["user_sub"]))
     if user is None:
         return None
     return dict(

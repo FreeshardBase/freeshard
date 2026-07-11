@@ -130,7 +130,7 @@ async def _session_user(authorization: str | None) -> ShardUser | None:
     if terminal.user_id is None:
         return None
     async with db_conn() as conn:
-        return ShardUser.from_row(await db_users.get_by_id(conn, terminal.user_id))
+        return ShardUser.from_user(await db_users.get_by_id(conn, terminal.user_id))
 
 
 # --- token endpoint rate limit ------------------------------------------------------
