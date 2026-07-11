@@ -21,7 +21,8 @@ CREATE TABLE IF NOT EXISTS oidc_codes (
     code_challenge TEXT,
     code_challenge_method TEXT,
     auth_time BIGINT NOT NULL,
-    expires_at TIMESTAMPTZ NOT NULL
+    expires_at TIMESTAMPTZ NOT NULL,
+    redeemed BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE TABLE IF NOT EXISTS oidc_tokens (
