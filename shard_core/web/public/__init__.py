@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from . import health, meta, pair
+from . import health, meta, oidc, pair
 
 router = APIRouter(
     prefix="/public",
@@ -9,4 +9,5 @@ router = APIRouter(
 
 router.include_router(health.router)
 router.include_router(meta.router)
+router.include_router(oidc.router)
 router.include_router(pair.router)

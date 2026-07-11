@@ -47,6 +47,9 @@ ENV PATH="/app/.venv/bin:$PATH"
 HEALTHCHECK --start-period=5s --interval=30s --timeout=5s CMD curl -f http://localhost/public/health
 
 #ENV FLASK_APP=shard_core
+# Trust X-Forwarded-* from the in-network Traefik so request URLs are https;
+# Authlib refuses OAuth flows on plain http (InsecureTransportError).
+ENV FORWARDED_ALLOW_IPS=*
 EXPOSE 80
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["fastapi", "run", "--port", "80", "shard_core/app.py"]
