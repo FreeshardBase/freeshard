@@ -189,7 +189,7 @@ async def test_confidential_code_pkce_flow(app_client: AsyncClient):
     assert claims["iss"] == await expected_issuer()
     assert claims["aud"] == [oidc_client["client_id"]]
     assert claims["nonce"] == params["nonce"]
-    assert claims["sub"] == owner["id"]
+    assert claims["sub"] == str(owner["id"])
     assert claims["exp"] > claims["iat"]
 
 
@@ -261,7 +261,7 @@ async def test_userinfo(app_client: AsyncClient):
     )
     assert r.status_code == 200
     info = r.json()
-    assert info["sub"] == owner["id"]
+    assert info["sub"] == str(owner["id"])
     assert info["email"] == owner["email"]
     assert info["preferred_username"] == owner["username"]
 

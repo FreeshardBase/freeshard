@@ -2,8 +2,7 @@
 
 Authorization server for first-party app clients: authorization-code + PKCE +
 refresh, RS256 id_tokens, discovery, JWKS, userinfo. Users come from the
-`users` table (phase 1); the OIDC `sub` is the user id, which for the owner is
-the shard's default identity id.
+`users` table (phase 1); the OIDC `sub` is the stringified numeric user id.
 
 Built on Authlib's framework-agnostic server classes; see
 `shard_core.web.public.oidc` for the FastAPI adapter. Authlib's server core is
@@ -74,7 +73,7 @@ def _run(coro):
 class ShardUser:
     """The resource owner: a row from the users table."""
 
-    sub: str
+    id: int
     username: str
     display_name: str
     email: str | None = None
@@ -84,19 +83,24 @@ class ShardUser:
         if row is None or row["disabled"]:
             return None
         return cls(
-            sub=row["id"],
+            id=row["id"],
             username=row["username"],
             display_name=row["display_name"],
             email=row["email"],
         )
 
+    @property
+    def sub(self) -> str:
+        # OIDC subject claims are strings; the numeric user id is the identity
+        return str(self.id)
+
     def get_user_id(self):
         return self.sub
 
 
-async def _user_from_sub_async(sub: str) -> ShardUser | None:
+async def _user_from_id_async(user_id: int) -> ShardUser | None:
     async with db_conn() as conn:
-        return ShardUser.from_row(await db_users.get_by_id(conn, sub))
+        return ShardUser.from_row(await db_users.get_by_id(conn, user_id))
 
 
 @dataclass
@@ -166,7 +170,7 @@ class AuthorizationCode(AuthorizationCodeMixin):
     client_id: str
     redirect_uri: str | None
     scope: str | None
-    user_sub: str
+    user_sub: int
     nonce: str | None
     code_challenge: str | None
     code_challenge_method: str | None
@@ -248,7 +252,7 @@ class ShardAuthCodeGrant(grants.AuthorizationCodeGrant):
                     # the client's allowed scope — payload.scope would let a client
                     # escalate beyond its registered scope
                     "scope": request.scope,
-                    "user_sub": request.user.sub,
+                    "user_sub": request.user.id,
                     "nonce": data.get("nonce"),
                     "code_challenge": data.get("code_challenge"),
                     "code_challenge_method": data.get("code_challenge_method"),
@@ -267,7 +271,7 @@ class ShardAuthCodeGrant(grants.AuthorizationCodeGrant):
         _run(_with_conn(db_oidc.delete_code, hash_secret(authorization_code.code)))
 
     def authenticate_user(self, authorization_code):
-        return _run(_user_from_sub_async(authorization_code.user_sub))
+        return _run(_user_from_id_async(authorization_code.user_sub))
 
 
 class ShardRefreshTokenGrant(grants.RefreshTokenGrant):
@@ -282,7 +286,7 @@ class ShardRefreshTokenGrant(grants.RefreshTokenGrant):
         return None
 
     def authenticate_user(self, credential):
-        return _run(_user_from_sub_async(credential.row["user_sub"]))
+        return _run(_user_from_id_async(credential.row["user_sub"]))
 
     def revoke_old_credential(self, credential):
         _run(_with_conn(db_oidc.revoke_token, credential.row["access_token_hash"]))
@@ -363,7 +367,7 @@ def _save_token(token: dict, request):
                     else None
                 ),
                 "client_id": request.client.client_id,
-                "user_sub": request.user.sub,
+                "user_sub": request.user.id,
                 "scope": token.get("scope"),
                 "issued_at": int(time.time()),
                 "expires_in": token["expires_in"],
