@@ -3,8 +3,10 @@ from typing import LiteralString
 from psycopg import AsyncConnection
 from psycopg.rows import dict_row
 
+_UPDATABLE_COLUMNS = {"username", "display_name", "email", "role", "disabled"}
 
-async def get_by_id(conn: AsyncConnection, id: str) -> dict | None:
+
+async def get_by_id(conn: AsyncConnection, id: int) -> dict | None:
     sql: LiteralString = "SELECT * FROM users WHERE id = %s"
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(sql, (id,))
@@ -19,11 +21,27 @@ async def get_owner(conn: AsyncConnection) -> dict | None:
 
 
 async def insert(conn: AsyncConnection, user: dict) -> dict:
-    sql: LiteralString = """INSERT INTO users (id, username, display_name, email, role)
-        VALUES (%(id)s, %(username)s, %(display_name)s, %(email)s, %(role)s)
+    sql: LiteralString = """INSERT INTO users (username, display_name, email, role)
+        VALUES (%(username)s, %(display_name)s, %(email)s, %(role)s)
         RETURNING *"""
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(sql, user)
+        return await cur.fetchone()
+
+
+async def update(conn: AsyncConnection, id: int, data: dict) -> dict | None:
+    set_clauses = []
+    params = {"_id": id}
+    for key, value in data.items():
+        if key not in _UPDATABLE_COLUMNS:
+            raise ValueError(f"Invalid column: {key}")
+        set_clauses.append(f"{key} = %({key})s")
+        params[key] = value
+    if not set_clauses:
+        return await get_by_id(conn, id)
+    sql = f"UPDATE users SET {', '.join(set_clauses)} WHERE id = %(_id)s RETURNING *"
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(sql, params)
         return await cur.fetchone()
 
 
