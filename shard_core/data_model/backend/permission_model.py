@@ -23,6 +23,8 @@ class Permission(StrEnum):
     MODIFY_SETTING = auto()
     SUPPORT_SHARD = auto()
     SSH_SHARD = auto()
+    OPEN_DIAGNOSTIC = auto()
+    RUN_DIAGNOSTIC = auto()
 
 
 class PermissionHolder(BaseModel):
