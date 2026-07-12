@@ -18,6 +18,7 @@ from shard_core.database.connection import (
 )
 from shard_core.database.migration import migrate
 from shard_core.database.tinydb_migration import migrate_tinydb_data
+from shard_core.database.db_snapshot import restore_db_snapshot
 from shard_core.database import kv_store
 
 log = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ async def init_database():
     migrate()
     await make_and_open_connection_pool()
     await migrate_tinydb_data()
+    await restore_db_snapshot()
     log.info("database initialized")
 
 
