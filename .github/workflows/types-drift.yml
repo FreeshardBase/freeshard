@@ -1,14 +1,10 @@
 name: Backend types drift check
 
 on:
+  # All PRs, not path-filtered: the release/version-bump PR does not touch
+  # backend/, so a path filter would skip exactly the PR that ships. Running
+  # on every PR guarantees main is drift-free at each merge.
   pull_request:
-    paths:
-      - '.github/workflows/types-drift.yml'
-      - 'shard_core/data_model/backend/**'
-      - 'justfile'
-  schedule:
-    # Daily: surface drift when freeshard-controller advances with no PR here.
-    - cron: '0 6 * * *'
   workflow_dispatch:
 
 jobs:
