@@ -61,7 +61,7 @@ class SubscribeResponse(BaseModel):
 
 
 class ResizeResponse(BaseModel):
-    approval_url: str | None = None
     expected_price_cents: int | None = None
     current_price_cents: int | None = None
     subscription_id: str | None = None
+    plan_id: str | None = None
