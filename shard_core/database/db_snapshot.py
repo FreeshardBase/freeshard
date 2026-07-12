@@ -55,7 +55,9 @@ async def write_db_snapshot():
         snapshot = {}
         for table in tables:
             async with conn.cursor(row_factory=dict_row) as cur:
-                await cur.execute(sql.SQL("SELECT * FROM {}").format(sql.Identifier(table)))
+                await cur.execute(
+                    sql.SQL("SELECT * FROM {}").format(sql.Identifier(table))
+                )
                 snapshot[table] = await cur.fetchall()
 
     path = _snapshot_path()
@@ -64,7 +66,9 @@ async def write_db_snapshot():
     tmp_path.write_text(json.dumps(snapshot, cls=_DateTimeEncoder))
     tmp_path.replace(path)
     total = sum(len(rows) for rows in snapshot.values())
-    log.info(f"wrote DB snapshot ({total} rows across {len(snapshot)} tables) to {path}")
+    log.info(
+        f"wrote DB snapshot ({total} rows across {len(snapshot)} tables) to {path}"
+    )
 
 
 async def restore_db_snapshot():
@@ -132,8 +136,10 @@ async def _insert_row(
 ):
     values = {c: _adapt_value(v, col_types.get(c)) for c, v in row.items()}
     columns = list(values)
-    query = sql.SQL("INSERT INTO {table} ({columns}) VALUES ({placeholders}) "
-                    "ON CONFLICT DO NOTHING").format(
+    query = sql.SQL(
+        "INSERT INTO {table} ({columns}) VALUES ({placeholders}) "
+        "ON CONFLICT DO NOTHING"
+    ).format(
         table=sql.Identifier(table),
         columns=sql.SQL(", ").join(map(sql.Identifier, columns)),
         placeholders=sql.SQL(", ").join(map(sql.Placeholder, columns)),
@@ -161,15 +167,13 @@ async def _reset_sequences(conn: AsyncConnection, table: str, columns: list[str]
     """Advance SERIAL sequences past the restored rows so new inserts don't collide."""
     for column in columns:
         async with conn.cursor() as cur:
-            await cur.execute(
-                "SELECT pg_get_serial_sequence(%s, %s)", (table, column)
-            )
+            await cur.execute("SELECT pg_get_serial_sequence(%s, %s)", (table, column))
             seq = (await cur.fetchone())[0]
             if not seq:
                 continue
             await cur.execute(
-                sql.SQL("SELECT setval(%s, (SELECT COALESCE(MAX({col}), 1) FROM {table}))").format(
-                    col=sql.Identifier(column), table=sql.Identifier(table)
-                ),
+                sql.SQL(
+                    "SELECT setval(%s, (SELECT COALESCE(MAX({col}), 1) FROM {table}))"
+                ).format(col=sql.Identifier(column), table=sql.Identifier(table)),
                 (seq,),
             )

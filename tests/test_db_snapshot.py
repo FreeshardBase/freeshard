@@ -25,10 +25,8 @@ async def _truncate_app_tables():
 async def _seed_shard_state():
     now = datetime.now(timezone.utc)
     async with db_conn() as conn:
-        await conn.execute(
-            """INSERT INTO identities (id, name, private_key, is_default)
-               VALUES ('shard-id-abc', 'default', 'PRIVATE-KEY-PEM', TRUE)"""
-        )
+        await conn.execute("""INSERT INTO identities (id, name, private_key, is_default)
+               VALUES ('shard-id-abc', 'default', 'PRIVATE-KEY-PEM', TRUE)""")
         await conn.execute(
             "INSERT INTO terminals (id, name, icon) VALUES ('term-1', 'laptop', 'x')"
         )
@@ -59,15 +57,11 @@ async def test_snapshot_roundtrip_restores_core_state(db, tmp_path):
 
         async with db_conn() as conn:
             identity = await (
-                await conn.execute(
-                    "SELECT id, private_key, is_default FROM identities"
-                )
+                await conn.execute("SELECT id, private_key, is_default FROM identities")
             ).fetchone()
             assert identity == ("shard-id-abc", "PRIVATE-KEY-PEM", True)
 
-            terminal = await (
-                await conn.execute("SELECT id FROM terminals")
-            ).fetchone()
+            terminal = await (await conn.execute("SELECT id FROM terminals")).fetchone()
             assert terminal == ("term-1",)
 
             app = await (
@@ -101,10 +95,8 @@ async def test_restore_skipped_when_db_already_populated(db, tmp_path):
         # A normal restart: the DB already holds a different identity.
         await _truncate_app_tables()
         async with db_conn() as conn:
-            await conn.execute(
-                """INSERT INTO identities (id, name, is_default)
-                   VALUES ('other-id', 'default', TRUE)"""
-            )
+            await conn.execute("""INSERT INTO identities (id, name, is_default)
+                   VALUES ('other-id', 'default', TRUE)""")
 
         await restore_db_snapshot()
 
