@@ -1,0 +1,43 @@
+name: Backend types drift check
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/types-drift.yml'
+      - 'shard_core/data_model/backend/**'
+      - 'justfile'
+  schedule:
+    # Daily: surface drift when freeshard-controller advances with no PR here.
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout shard_core
+        uses: actions/checkout@v4
+
+      - name: Checkout freeshard-controller (source of truth)
+        uses: actions/checkout@v4
+        with:
+          repository: FreeshardBase/freeshard-controller
+          ref: main
+          token: ${{ secrets.CONTROLLER_RO_TOKEN }}
+          path: freeshard-controller
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      - name: Resync vendored models from controller main
+        run: |
+          just --set SOURCE_DIR \
+            "freeshard-controller/freeshard-controller-backend/freeshard_controller/data_model" \
+            get-types
+
+      - name: Fail on drift
+        run: |
+          if ! git diff --exit-code shard_core/data_model/backend; then
+            echo "::error::shard_core/data_model/backend is out of sync with freeshard-controller main. Run 'just get-types' (with ../freeshard-controller checked out) and commit the result."
+            exit 1
+          fi
