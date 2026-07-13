@@ -81,7 +81,7 @@ def test_reclaim_container_eagain_is_debug_not_warning(
         raise OSError(errno.EAGAIN, "write could not complete without blocking")
 
     monkeypatch.setattr(Path, "write_text", _raise_eagain)
-    with caplog.at_level(logging.DEBUG):
+    with caplog.at_level(logging.DEBUG, logger=memory_pressure.log.name):
         memory_pressure._reclaim_container("eag123")
 
     assert not any(r.levelno == logging.WARNING for r in caplog.records)
@@ -96,7 +96,7 @@ def test_reclaim_container_other_oserror_warns(fake_cgroup_root, caplog, monkeyp
         raise OSError(errno.EPERM, "operation not permitted")
 
     monkeypatch.setattr(Path, "write_text", _raise_eperm)
-    with caplog.at_level(logging.DEBUG):
+    with caplog.at_level(logging.DEBUG, logger=memory_pressure.log.name):
         memory_pressure._reclaim_container("err123")
 
     assert any(
