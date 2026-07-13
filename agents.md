@@ -125,6 +125,7 @@ Host-side: `settings().path_root_host` (typically `/home/shard`).
 - `@field_validator` for single-field, `@model_validator(mode="after")` for cross-field
 - `@computed_field` @property for derived values (e.g., `Identity.domain`, `Identity.public_key`)
 - Models in `data_model/backend/` are copied from freeshard-controller — do not edit directly, use `just get-types`
+  - The CI `drift-check` job re-runs `get-types` against controller **`origin/main`** and fails if the diff is non-empty. To fix drift: check out the controller at `origin/main` (a local `main` may be many commits behind — `git fetch` first), then run `just SOURCE_DIR=<abs path to controller>/freeshard-controller-backend/freeshard_controller/data_model get-types` from this repo and commit only the regenerated files. Never hand-edit them.
 
 ## Important Notes
 
