@@ -1,3 +1,6 @@
+import errno
+import logging
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -65,6 +68,41 @@ def test_reclaim_container_zero_usage_writes_nothing(fake_cgroup_root):
     cgroup = _make_cgroup(fake_cgroup_root, "docker/ghi789", 0)
     memory_pressure._reclaim_container("ghi789")
     assert (cgroup / "memory.reclaim").read_text() == ""
+
+
+def test_reclaim_container_eagain_is_debug_not_warning(
+    fake_cgroup_root, caplog, monkeypatch
+):
+    # Requesting the full RSS always ends in EAGAIN once nothing more can be
+    # paged out — expected on every pause, so it must not log a warning.
+    _make_cgroup(fake_cgroup_root, "docker/eag123", 4096)
+
+    def _raise_eagain(self, *args, **kwargs):
+        raise OSError(errno.EAGAIN, "write could not complete without blocking")
+
+    monkeypatch.setattr(Path, "write_text", _raise_eagain)
+    with caplog.at_level(logging.DEBUG):
+        memory_pressure._reclaim_container("eag123")
+
+    assert not any(r.levelno == logging.WARNING for r in caplog.records)
+    assert any("EAGAIN" in r.getMessage() for r in caplog.records)
+
+
+def test_reclaim_container_other_oserror_warns(fake_cgroup_root, caplog, monkeypatch):
+    # A genuine error (not EAGAIN) still surfaces as a warning.
+    _make_cgroup(fake_cgroup_root, "docker/err123", 4096)
+
+    def _raise_eperm(self, *args, **kwargs):
+        raise OSError(errno.EPERM, "operation not permitted")
+
+    monkeypatch.setattr(Path, "write_text", _raise_eperm)
+    with caplog.at_level(logging.DEBUG):
+        memory_pressure._reclaim_container("err123")
+
+    assert any(
+        r.levelno == logging.WARNING and "failed" in r.getMessage()
+        for r in caplog.records
+    )
 
 
 async def test_reclaim_compose_stack_reclaims_each_container(fake_cgroup_root):
