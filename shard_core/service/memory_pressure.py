@@ -1,4 +1,5 @@
 import asyncio
+import errno
 import logging
 import re
 from pathlib import Path
@@ -50,9 +51,18 @@ def _reclaim_container(container_id: str):
     try:
         (cgroup / "memory.reclaim").write_text(f"{current}\n")
     except OSError as e:
-        # Partial reclaim surfaces as EAGAIN once nothing more can be paged
-        # out — the pages that could move are in swap already.
-        log.warning(f"memory.reclaim incomplete for container {container_id}: {e}")
+        # We request the container's full RSS, which can never be reclaimed in
+        # whole (some pages are always resident), so memory.reclaim returns
+        # EAGAIN on essentially every pause once it has paged out what it can —
+        # that is the expected terminal signal, not a failure. Only surface a
+        # warning for genuine errors (missing file, EPERM, ...).
+        if e.errno == errno.EAGAIN:
+            log.debug(
+                f"memory.reclaim reached EAGAIN for container {container_id} "
+                "(expected — paged out what it could)"
+            )
+        else:
+            log.warning(f"memory.reclaim failed for container {container_id}: {e}")
 
 
 def _find_cgroup(container_id: str) -> Path | None:
