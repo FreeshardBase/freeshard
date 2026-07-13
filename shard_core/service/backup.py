@@ -14,6 +14,7 @@ from requests import HTTPError
 from shard_core.database import database
 from shard_core.database.connection import db_conn
 from shard_core.database import backups as db_backups
+from shard_core.database.db_snapshot import write_db_snapshot
 from shard_core.data_model.backup import (
     BackupReport,
     BackupStats,
@@ -88,6 +89,7 @@ async def backup_directories(
 
     async with BACKUP_IN_PROGESS_LOCK:
         overall_start_time = datetime.datetime.now(datetime.timezone.utc)
+        await write_db_snapshot()
         obscured_passphrase = await _get_obscured_passphrase()
         dir_stats = []
 

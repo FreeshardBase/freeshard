@@ -153,6 +153,14 @@ And that requires some manual configuration.
 
 In the `docker-compose.yml`, you need to add some environment variables to the Traefik service depending on your DNS provider. [Here is a list of providers](https://doc.traefik.io/traefik/https/acme/#providers) and the required variables.
 
+## Backup and Restore
+
+Hosted shards back up nightly via rclone: the `core/` and `user_data/` directories are synced, encrypted with the shard's backup passphrase, to Azure Blob Storage (self-hosted shards have no controller to issue a storage URL and must snapshot their `${FREESHARD_DIR}` themselves).
+
+All persistent state other than the on-disk app data lives in PostgreSQL — the shard's identity (including its private key, from which the shard ID and domain are derived), paired terminals, installed-app records, and the backup passphrase itself. The Postgres data directory is a sibling of `core/`/`user_data/` and is not synced by rclone. To close that gap, right before each backup shard_core dumps every application table to `core/db_snapshot.json`, so the database state rides along inside the encrypted backup.
+
+To restore, point a fresh shard's `${FREESHARD_DIR}` at the decrypted backup (so `core/` contains `db_snapshot.json`) and start the stack. On first boot, before generating a new identity, shard_core detects the empty database and imports the snapshot — restoring the original identity (same shard ID and domain), paired terminals, and installed-app state. Backups taken before the 0.38.0 Postgres migration instead carry `core/shard_core_db.json` (TinyDB), which is imported by the same first-boot mechanism.
+
 ## Development
 
 Make sure to set up your Python environment and install dependencies using the tools of your choice.

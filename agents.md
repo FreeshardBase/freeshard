@@ -70,6 +70,8 @@ async with db_conn() as conn:
 
 Tables: `identities`, `terminals`, `installed_apps`, `peers`, `backups`, `tours`, `app_usage_tracks`, `kv_store`.
 
+Postgres data is not part of the rclone backup set (which only syncs `core/`/`user_data/`). To keep it, `database/db_snapshot.py` dumps all application tables to `core/db_snapshot.json` before each backup, and `init_database()` restores it on a fresh shard (before the default identity is generated, so the restored identity survives). Pre-0.38 backups are restored from TinyDB by `tinydb_migration.py` instead.
+
 ### Authentication (4 levels)
 - `/public/*` — No auth
 - `/protected/*` — JWT in `authorization` cookie (from terminal pairing)
