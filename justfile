@@ -24,7 +24,8 @@ get-types:
 
 @set-version version:
     just _set-version-files {{version}}
-    git add .
+    uv lock
+    git add pyproject.toml docker-compose.yml uv.lock
     git commit -m "set version to {{version}}"
     echo "Version set to {{version}} and committed"
 
