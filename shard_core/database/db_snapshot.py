@@ -49,8 +49,13 @@ async def write_db_snapshot():
 
     Written atomically (temp file + rename) so an interrupted write never leaves
     a corrupt snapshot that a later restore would read.
+
+    All tables are read inside a single REPEATABLE READ transaction so the
+    snapshot is a consistent point-in-time image even if the shard writes to
+    these tables while the backup runs (the same isolation ``pg_dump`` uses).
     """
     async with db_conn() as conn:
+        await conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
         tables = await _list_data_tables(conn)
         snapshot = {}
         for table in tables:
@@ -62,7 +67,7 @@ async def write_db_snapshot():
 
     path = _snapshot_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_suffix(".json.tmp")
+    tmp_path = path.parent / (path.name + ".tmp")
     tmp_path.write_text(json.dumps(snapshot, cls=_DateTimeEncoder))
     tmp_path.replace(path)
     total = sum(len(rows) for rows in snapshot.values())
