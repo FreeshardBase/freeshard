@@ -1,6 +1,8 @@
 import io
 import logging
 import mimetypes
+import tempfile
+from pathlib import Path
 from typing import List
 
 import aiofiles
@@ -11,9 +13,11 @@ from shard_core.database.connection import db_conn
 from shard_core.database import installed_apps as db_installed_apps
 from shard_core.data_model.app_meta import InstalledAppWithMeta, InstalledApp
 from shard_core.service import app_installation
+from shard_core.service.app_installation.app_zip import validate_app_zip
 from shard_core.service.app_installation.exceptions import (
     AppAlreadyInstalled,
     AppNotInstalled,
+    InvalidAppZip,
 )
 from shard_core.service.app_tools import (
     get_installed_apps_path,
@@ -112,17 +116,26 @@ async def install_custom_app(file: UploadFile):
             detail="Only zip files are supported",
         )
 
-    file_path = get_installed_apps_path() / file.filename[:-4] / file.filename
-    file_path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        upload_path = Path(tmp_dir) / "upload.zip"
+        async with aiofiles.open(upload_path, "wb") as f:
+            while chunk := await file.read(64 * 1024):
+                await f.write(chunk)
 
-    async with aiofiles.open(file_path, "wb") as f:
-        while chunk := await file.read(1024):
-            await f.write(chunk)
+        try:
+            app_meta = validate_app_zip(upload_path)
+        except InvalidAppZip as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"The uploaded app is invalid: {e}",
+            )
 
-    try:
-        await app_installation.install_app_from_existing_zip(file.filename[:-4])
-    except app_installation.exceptions.AppAlreadyInstalled:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"App {file.filename[:-4]} is already installed",
-        )
+        try:
+            await app_installation.install_app_from_uploaded_zip(
+                app_meta.name, upload_path
+            )
+        except AppAlreadyInstalled:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"App {app_meta.name} is already installed",
+            )
