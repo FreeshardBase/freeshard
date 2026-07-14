@@ -12,3 +12,7 @@ class AppNotInstalled(Exception):
 
 class AppInIllegalStatus(Exception):
     pass
+
+
+class InvalidAppZip(Exception):
+    pass
