@@ -48,6 +48,9 @@ shard_core/
   util/               → Shared utilities
     async_util.py       BackgroundTask, PeriodicTask, CronTask
     signals.py          Blinker signal definitions
+    subprocess.py       Async subprocess runner; app_compose_command() pins every app
+                        compose call to <app_dir>/docker-compose.yml and project <app>
+                        — never rely on cwd, compose walks up to the core stack
 ```
 
 ## Commands
