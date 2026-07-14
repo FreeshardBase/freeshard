@@ -84,6 +84,7 @@ async def lifespan(_):
     await render_all_docker_compose_templates()
     await app_installation.login_docker_registries()
     await migration.migrate()
+    await app_installation.reconcile_interrupted_uninstalls()
     await app_installation.refresh_init_apps()
     await backup.ensure_backup_passphrase()
     try:
