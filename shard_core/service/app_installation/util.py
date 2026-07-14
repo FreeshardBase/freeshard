@@ -20,6 +20,13 @@ from shard_core.util import signals
 
 log = logging.getLogger(__name__)
 
+# apps in these states have no complete installation on disk to route to
+_NOT_ROUTED_STATUS = {
+    Status.INSTALLATION_QUEUED.value,
+    Status.UNINSTALLING.value,
+    Status.ERROR.value,
+}
+
 
 async def get_app_from_db(app_name: str) -> InstalledApp:
     async with db_conn() as conn:
@@ -105,13 +112,16 @@ async def write_traefik_dyn_config():
     async with db_conn() as conn:
         all_apps = await db_installed_apps.get_all(conn)
     installed_apps = [
-        InstalledApp(**a) for a in all_apps if a["status"] != Status.INSTALLATION_QUEUED
+        InstalledApp(**a) for a in all_apps if a["status"] not in _NOT_ROUTED_STATUS
     ]
-    app_infos = [
-        AppInfo(get_app_metadata(a.name), installed_app=a)
-        for a in installed_apps
-        if a.status != Status.ERROR
-    ]
+    app_infos = []
+    for app in installed_apps:
+        try:
+            app_infos.append(AppInfo(get_app_metadata(app.name), installed_app=app))
+        except Exception as e:
+            log.warning(
+                f"skipping app {app.name} in traefik config, its metadata could not be loaded: {e!r}"
+            )
 
     async with db_conn() as conn:
         default_row = await db_identities.get_default(conn)
