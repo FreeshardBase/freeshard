@@ -6,6 +6,17 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from shard_core.service import memory_pressure
+from shard_core.settings import settings
+
+
+def _make_app_compose_file(app_name: str) -> Path:
+    """reclaim only runs right after a successful `compose pause`, so the app's
+    compose file is always there — app_compose_command refuses to run without it."""
+    app_dir = Path(settings().path_root) / "core" / "installed_apps" / app_name
+    app_dir.mkdir(parents=True, exist_ok=True)
+    (app_dir / "docker-compose.yml").write_text("services:\n  a:\n    image: nginx\n")
+    return app_dir
+
 
 PSI_SAMPLE = """some avg10=12.34 avg60=5.67 avg300=1.23 total=123456
 full avg10=3.21 avg60=1.11 avg300=0.42 total=65432
@@ -108,6 +119,7 @@ def test_reclaim_container_other_oserror_warns(fake_cgroup_root, caplog, monkeyp
 async def test_reclaim_compose_stack_reclaims_each_container(fake_cgroup_root):
     cgroup_a = _make_cgroup(fake_cgroup_root, "docker/aaa", 100)
     cgroup_b = _make_cgroup(fake_cgroup_root, "docker/bbb", 200)
+    _make_app_compose_file("someapp")
     with patch.object(
         memory_pressure, "subprocess", new=AsyncMock(return_value="aaa\nbbb\n\n")
     ):
