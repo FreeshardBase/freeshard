@@ -1,8 +1,37 @@
+import shutil
 from pathlib import Path
 
+import pytest
 import yaml
 
+from shard_core.data_model.app_meta import Status
+from shard_core.database.connection import db_conn
+from shard_core.database import installed_apps as db_installed_apps
+from shard_core.service.app_installation.util import write_traefik_dyn_config
+from shard_core.service.app_tools import get_installed_apps_path
 from shard_core.settings import settings
+
+pytestmark = pytest.mark.asyncio
+
+
+def _read_traefik_dyn() -> dict:
+    with open(
+        Path(settings().path_root) / "core" / "traefik_dyn" / "traefik_dyn.yml", "r"
+    ) as f:
+        return yaml.safe_load(f)
+
+
+@pytest.mark.parametrize("status", [Status.UNINSTALLATION_QUEUED, Status.UNINSTALLING])
+async def test_app_being_uninstalled_gets_no_router(api_client, status):
+    async with db_conn() as conn:
+        await db_installed_apps.update_status(conn, "filebrowser", status)
+    shutil.rmtree(get_installed_apps_path() / "filebrowser")
+
+    await write_traefik_dyn_config()
+
+    output = _read_traefik_dyn()
+    assert "filebrowser_http" not in output["http"]["routers"]
+    assert "filebrowser_http" not in output["http"]["services"]
 
 
 async def test_template_is_written(api_client):

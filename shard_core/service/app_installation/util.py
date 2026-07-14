@@ -20,6 +20,16 @@ from shard_core.util import signals
 
 log = logging.getLogger(__name__)
 
+# Apps in these statuses get no traefik router. Their files are either not in place
+# yet or already being removed, so get_app_metadata() may raise — and an app that is
+# half-installed or on its way out should not receive traffic anyway.
+NOT_ROUTABLE_STATUS = {
+    Status.INSTALLATION_QUEUED,
+    Status.ERROR,
+    Status.UNINSTALLATION_QUEUED,
+    Status.UNINSTALLING,
+}
+
 
 async def get_app_from_db(app_name: str) -> InstalledApp:
     async with db_conn() as conn:
@@ -105,12 +115,10 @@ async def write_traefik_dyn_config():
     async with db_conn() as conn:
         all_apps = await db_installed_apps.get_all(conn)
     installed_apps = [
-        InstalledApp(**a) for a in all_apps if a["status"] != Status.INSTALLATION_QUEUED
+        InstalledApp(**a) for a in all_apps if a["status"] not in NOT_ROUTABLE_STATUS
     ]
     app_infos = [
-        AppInfo(get_app_metadata(a.name), installed_app=a)
-        for a in installed_apps
-        if a.status != Status.ERROR
+        AppInfo(get_app_metadata(a.name), installed_app=a) for a in installed_apps
     ]
 
     async with db_conn() as conn:
