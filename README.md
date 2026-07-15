@@ -165,8 +165,9 @@ To restore, point a fresh shard's `${FREESHARD_DIR}` at the decrypted backup (so
 
 Make sure to set up your Python environment and install dependencies using the tools of your choice.
 
-Then, export the environment variable `CONFIG=config.yml,local_config.yml` so the `local_config.yml` is loaded in addition to the default `config.yml`.
-You can modify the `local_config.yml` to your needs, e.g. to set different log levels.
+Configuration is loaded from `config.toml`, overlaid per-field by `local_config.toml` if that file exists in the working directory, and overridden by `FREESHARD_*` environment variables (nested options use a double underscore, e.g. `FREESHARD_DNS__ZONE`).
+You can modify `local_config.toml` to your needs, e.g. to set different log levels.
+Both files are read relative to the working directory, so start the server from the repository root.
 
 Run development server with 
 ```shell
