@@ -76,7 +76,7 @@ Shard Core provides a REST API separated into four parts which are accessible at
 * `/management` - Management API, can only be called from the management backend and is only relevant for hosted shards
 * `/internal` - Internal API, only accessible from the same machine e.g. by apps or the reverse proxy
 
-[API-doc](https://ptl.gitlab.io/portal_core/) of the latest stable release.
+Each shard serves the API docs for the version it is actually running, at `/redoc` and `/docs`, with the OpenAPI schema at `/openapi.json`.
 
 ### App Management
 
