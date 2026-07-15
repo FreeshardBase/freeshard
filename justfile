@@ -49,4 +49,4 @@ run-dev:
     PYTHONUNBUFFERED=1 ./.venv/bin/fastapi dev --port 8080 shard_core/app.py
 
 run-dev-for-freeshard-controller:
-    PYTHONUNBUFFERED=1 UVICORN_PORT=8001 FREESHARD_FREESHARD_CONTROLLER_BASE_URL=http://127.0.0.1:8080 ./.venv/bin/fastapi dev --port 8081 shard_core/app.py
+    PYTHONUNBUFFERED=1 UVICORN_PORT=8001 FREESHARD_FREESHARD_CONTROLLER__BASE_URL=http://127.0.0.1:8080 ./.venv/bin/fastapi dev --port 8081 shard_core/app.py
