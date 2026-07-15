@@ -69,8 +69,8 @@ endpoint, new mutating internal route), flag it in the PR.
 
 ## 2. Identity and session crypto
 
-**The signing scheme is RSA, not Ed25519.** agents.md claims Ed25519 — that is wrong;
-do not propagate it.
+**The signing scheme is RSA, not Ed25519.** agents.md claimed Ed25519 until issue #128
+corrected it; if you meet that claim anywhere else, the code wins.
 
 - Keys: RSA-4096, exponent 65537 (shard_core/service/crypto.py:52-57). Raw sign/verify uses PSS padding with MGF1(SHA256)+SHA256 (crypto.py:34-46,79-86).
 - Identity id = human-encoded SHA512 of the public key PEM (crypto.py:29-32). The encoding is 5-bits-per-char over the 32-char alphabet `abcdefghjklnpqrstvwxyz0123456789` (shard_core/service/human_encoding.py:102), giving a **103-char id** (512 bits / 5, zero-padded — verified by computation; some docs say 96, that is wrong).

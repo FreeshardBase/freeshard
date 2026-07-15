@@ -1,6 +1,6 @@
 ---
 name: freeshard-domain-reference
-description: Theory pack for shard_core's protocols and standards AS APPLIED HERE — HTTP Message Signatures (RSA-PSS, not Ed25519), shard ID / short_id derivation, Traefik forwardAuth + errors middleware + DNS-01 wildcard ACME, terminal JWT pairing, rclone crypt backups, compose-file-per-app orchestration, yoyo + psycopg3 transaction semantics, Pydantic v2 idioms. TRIGGER on "how does peer/signature auth work", "key_id / short_id / shard id", edits to shard_core/service/{crypto,signed_call,peer,pairing,backup,traefik_dynamic_config}.py, data/traefik.yml, migrations/, shard_core/settings.py, app_meta versioning, X-Forwarded-* / X-Ptl-* headers, "forwardAuth protocol mechanics" (for "why is there no auth on this route", use freeshard-architecture-contract), rclone flags, "where do transactions commit". SKIP when you need step-by-step failure triage (use freeshard-debugging-playbook), running/deploying the stack (freeshard-run-and-operate), config-key catalogs (freeshard-config-and-flags), cross-repo type sync (freeshard-ecosystem-contracts), or writing tests (freeshard-testing-and-qa).
+description: Theory pack for shard_core's protocols and standards AS APPLIED HERE — HTTP Message Signatures (RSA-PSS), shard ID / short_id derivation, Traefik forwardAuth + errors middleware + DNS-01 wildcard ACME, terminal JWT pairing, rclone crypt backups, compose-file-per-app orchestration, yoyo + psycopg3 transaction semantics, Pydantic v2 idioms. TRIGGER on "how does peer/signature auth work", "key_id / short_id / shard id", edits to shard_core/service/{crypto,signed_call,peer,pairing,backup,traefik_dynamic_config}.py, data/traefik.yml, migrations/, shard_core/settings.py, app_meta versioning, X-Forwarded-* / X-Ptl-* headers, "forwardAuth protocol mechanics" (for "why is there no auth on this route", use freeshard-architecture-contract), rclone flags, "where do transactions commit". SKIP when you need step-by-step failure triage (use freeshard-debugging-playbook), running/deploying the stack (freeshard-run-and-operate), config-key catalogs (freeshard-config-and-flags), cross-repo type sync (freeshard-ecosystem-contracts), or writing tests (freeshard-testing-and-qa).
 ---
 
 # Freeshard Domain Reference
@@ -37,19 +37,19 @@ The theory a zero-context engineer needs before touching shard_core's crypto, pr
 - Dropping semantically load-bearing headers in a sign-and-forward proxy. shard_core's `/internal/call_backend` proxy once forwarded a body without its `Content-Type`; years later a FastAPI upgrade on the controller (strict content-type parsing) turned every proxied write into a 422 while reads stayed green. When proxying, forward `Content-Type` with the body.
 - Making the key resolver async or lazy — the library calls it synchronously; that's why both sides preload/caches keys.
 
-## 2. RSA-PSS keys and shard IDs (the Ed25519 myth)
+## 2. RSA-PSS keys and shard IDs
 
-**What you must know.** `agents.md` claims Ed25519 crypto. **This is false — do not implement against it.** The code is RSA-4096 end to end. Verify yourself: `grep -ri ed25519 shard_core/` → zero hits.
+**What you must know.** The code is RSA-4096 end to end. Verify yourself: `grep -ri ed25519 shard_core/` → zero hits. `agents.md` claimed Ed25519 until issue #128 corrected it; if you meet that claim in an old branch or a stale summary, the code wins.
 
 **How this repo uses it.**
 - Key generation: `shard_core/service/crypto.py:52-57` — `rsa.generate_private_key(public_exponent=65537, key_size=4096)`.
 - Raw sign/verify (not HTTP): PSS padding, MGF1(SHA-256), SHA-256 digest (`crypto.py:34-46, 79-86`).
-- HTTP message signatures: `algorithms.RSA_PSS_SHA512` (`signed_call.py:27`, `peer.py:103`). Two different digest choices in one codebase — both RSA-PSS, neither Ed25519.
+- HTTP message signatures: `algorithms.RSA_PSS_SHA512` (`signed_call.py:27`, `peer.py:103`). Two different digest choices in one codebase — both RSA-PSS.
 - Shard ID pipeline: public key PEM bytes → SHA-512 → `human_encoding.encode` (`crypto.py:29-32`). The encoding (`shard_core/service/human_encoding.py`) maps 5 bits per character onto a 32-char alphabet `abcdefghjklnpqrstvwxyz0123456789` (line 102 — note: no `i`, `m`, `o`, `u`; chosen to avoid lookalikes). 512 bits / 5 = **103-character ID** (verified by generating a key).
 - `short_id` = first 6 chars of the ID (`shard_core/data_model/identity.py:44-47`); the shard's domain = `id[:dns.prefix_length].lower() + "." + dns.zone` with `prefix_length` defaulting to 6 (`identity.py:58-64`, `shard_core/settings.py:10-12`). So a hosted shard lives at e.g. `c0p3x5.freeshard.cloud`.
 - 6 chars × 5 bits = 30 bits of prefix. That is a deliberate usability/security compromise: the short_id is a routable DNS label and a signature `keyid`, not a security boundary by itself — trust comes from the full-ID/public-key binding (peers verify `peer_identity.id.startswith(peer.id)` on refresh, `peer.py:60-63`, and the `Peer` model validates pubkey-matches-id). Collision handling between hosted shards' short_ids would have to live controller-side — **not verifiable from this repo (unverified as of 2026-07-03)**.
 
-**Classic mistake.** Writing new signing/verification code against Ed25519 because agents.md says so, or "harmonizing" the SHA-256 raw-crypto and SHA-512 HTTP-signature digests. Both changes break every existing identity and peer relationship — key format and ID derivation are wire/storage contracts.
+**Classic mistake.** Writing new signing/verification code against Ed25519 on the strength of a stale doc, or "harmonizing" the SHA-256 raw-crypto and SHA-512 HTTP-signature digests. Both changes break every existing identity and peer relationship — key format and ID derivation are wire/storage contracts.
 
 ## 3. Traefik mechanics (forwardAuth is THE auth layer; repo compose pins v3.6, fleet runs v2.11 — see below)
 
@@ -137,7 +137,7 @@ The theory a zero-context engineer needs before touching shard_core's crypto, pr
 **What you must know.** Three v2 features carry real weight in this repo: layered `BaseSettings` sources, `@computed_field` (which puts derived properties INTO serialized output), and `model_validator(mode="before")` as a data-migration hook that rewrites raw input before validation.
 
 **How this repo uses it.**
-- Settings layering (`shard_core/settings.py:109-152`): `settings_customise_sources` builds one `TomlConfigSettingsSource` **per file** so overlay files override individual fields, not whole nested sections. Precedence: init kwargs > env (`FREESHARD_` prefix, `__` nested delimiter, e.g. `FREESHARD_TRAEFIK__DISABLE_SSL`) > `local_config.toml` (if present) > `config.toml`. Access is via the `settings()` singleton (:155-159). A `CONFIG` env var appears in the justfile/CI but is read by nothing — dead.
+- Settings layering (`shard_core/settings.py:109-152`): `settings_customise_sources` builds one `TomlConfigSettingsSource` **per file** so overlay files override individual fields, not whole nested sections. Precedence: init kwargs > env (`FREESHARD_` prefix, `__` nested delimiter, e.g. `FREESHARD_TRAEFIK__DISABLE_SSL`) > `local_config.toml` (if present) > `config.toml`. Access is via the `settings()` singleton (:155-159).
 - `@computed_field` on `Identity`/`SafeIdentity` (`shard_core/data_model/identity.py:44-64`): `short_id`, `public_key_pem`, `domain` are computed AND serialized — that's why `GET /public/meta/whoareyou` returns them and why compose templates can use `{{ portal.short_id }}`. `domain` reads `settings()` at property-access time, so identity serialization depends on live settings.
 - AppMeta version-migration chain (`shard_core/data_model/app_meta.py:128-140` + `app_meta_migration.py`): `CURRENT_VERSION = "1.2"`. A `model_validator(mode="before")` loops: while `values["v"] != CURRENT_VERSION`, look up `migrations[values["v"]]` (dict keyed by OLD version) and apply. Each migration function must set `values["v"]` to the next version or the loop raises "migration seems to be stuck". This lets years-old app-store zips (`app_meta.json` v1.0) parse today. To bump the format: add `migrate_1_2_to_1_3` to the dict under key `"1.2"`, set `CURRENT_VERSION = "1.3"`.
 - `shard_core/data_model/backend/` is a verbatim copy of controller models (`just get-types`), every file stamped `# DO NOT MODIFY`. `Profile.from_shard` uses `getattr(shard, field, default)` for newer fields (`shard_core/data_model/profile.py:42-46`) so a stale copy degrades gracefully instead of stripping fields — a real shipped failure (fields silently dropped at re-validation; fixed in commits 6d4b101 + e55ce51). Cross-repo procedure: freeshard-ecosystem-contracts.
@@ -183,5 +183,5 @@ Drift-prone facts — re-verify before relying:
 | One yoyo migration; naming `shard-core-NNNN-*` | `git ls-tree origin/main migrations/` |
 | Pool max_size=20, timeout=10 | `grep -n "max_size\|timeout" shard_core/database/connection.py` |
 | AppMeta CURRENT_VERSION "1.2" | `grep -n CURRENT_VERSION shard_core/data_model/app_meta.py` |
-| agents.md still claims Ed25519 (stale-doc warning still needed) | `grep -in ed25519 agents.md` |
+| No Ed25519 claim has crept back into agents.md | `grep -in ed25519 agents.md` (expect empty) |
 | Settings precedence env > local_config.toml > config.toml | read `settings_customise_sources` in shard_core/settings.py |

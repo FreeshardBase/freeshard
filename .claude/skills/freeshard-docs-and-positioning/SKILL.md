@@ -1,6 +1,6 @@
 ---
 name: freeshard-docs-and-positioning
-description: Maintaining Freeshard's docs of record (agents.md, README.md, docs.freeshard.net) and writing anything user- or public-facing. TRIGGER on editing agents.md or README.md, "update the docs", "is this doc still true", contradictions between a doc and the code (especially the Ed25519-vs-RSA claim), the Portal/Freeshard naming question ("should I rename portal to shard?"), portal_controller.py vs freeshard_controller.py confusion, writing PR descriptions/commit messages/release notes, or any external claim about what Freeshard is or does. SKIP when the task is the mechanics of config options (use freeshard-config-and-flags), cross-repo type-sync (use freeshard-ecosystem-contracts), release *execution* (use freeshard-run-and-operate), or change gating/review policy (use freeshard-change-control).
+description: Maintaining Freeshard's docs of record (agents.md, README.md, docs.freeshard.net) and writing anything user- or public-facing. TRIGGER on editing agents.md or README.md, "update the docs", "is this doc still true", contradictions between a doc and the code, the Portal/Freeshard naming question ("should I rename portal to shard?"), portal_controller.py vs freeshard_controller.py confusion, writing PR descriptions/commit messages/release notes, or any external claim about what Freeshard is or does. SKIP when the task is the mechanics of config options (use freeshard-config-and-flags), cross-repo type-sync (use freeshard-ecosystem-contracts), release *execution* (use freeshard-run-and-operate), or change gating/review policy (use freeshard-change-control).
 ---
 
 # Freeshard docs and positioning
@@ -27,26 +27,22 @@ When documents disagree, trust them in this order — and trust **code over all 
 | Rank | Document | Audience | Authority |
 |---|---|---|---|
 | 1 | The code + `git log` | — | Ground truth. Always wins. |
-| 2 | `agents.md` (repo root, 131 lines) | Agents/engineers working on shard_core | Primary agent-facing reference: stack, architecture, commands, patterns. Mostly accurate; known errors listed below. |
+| 2 | `agents.md` (repo root) | Agents/engineers working on shard_core | Primary agent-facing reference: stack, architecture, commands, patterns. |
 | 3 | This skill library (`.claude/skills/`) | Agents | Curated, date-stamped; defers to code. |
-| 4 | `README.md` (repo root) | Humans: overview, self-hosting, dev setup | Concept sections good; several dead mechanics (below). |
+| 4 | `README.md` (repo root) | Humans: overview, self-hosting, dev setup | Concept sections good; the dead dev-setup mechanics were fixed by issue #128. |
 | 5 | docs.freeshard.net (sibling repo `documentation/`, MkDocs Material, deployed to GitHub Pages via `.github/workflows/ci.yml`) | End users + third-party app developers | User-level truth; not an engineering reference. |
 | 6 | `/home/ubuntu/projects/freeshard/agents.md` (workspace-level, one directory up) | Agents working across repos | Useful repo map + cross-repo command reference. NOT in any git repo — exists only on the dev machine; do not cite it as a versioned source. |
 
-**Standing rule — agents.md must not rot:** when your PR changes anything agents.md describes (tech stack, architecture, key patterns, commands, file-path conventions), updating agents.md in the same PR is part of the change, not optional polish. Stale statements there cause real agent mistakes — the Ed25519 error below is the proof.
+**Standing rule — agents.md must not rot:** when your PR changes anything agents.md describes (tech stack, architecture, key patterns, commands, file-path conventions), updating agents.md in the same PR is part of the change, not optional polish. Stale statements there cause real agent mistakes. The proof: agents.md claimed Ed25519 crypto for years while the code was RSA-4096/PSS, and the claim was believed until issue #128 checked it against `crypto.py`.
 
-## Known-stale docs (as of 2026-07-03)
+## Known-stale docs (as of 2026-07-15)
 
 Fixing a stale doc is **in scope for any PR that touches the described area**. You do not need a separate issue to correct a doc you just proved wrong — but a pure doc-fix PR is also fine and cheap to review.
 
 | # | Location | Stale claim | The truth | Evidence |
 |---|---|---|---|---|
-| 1 | `agents.md:32`, `agents.md:74`, `agents.md:105` | "Ed25519 key generation / signature verification / requests are signed with Ed25519 keys" | Crypto is **RSA-4096 with PSS padding**; HTTP Message Signatures use **RSA_PSS_SHA512**. There is zero Ed25519 anywhere in `shard_core/`. | `shard_core/service/crypto.py:4-58` (`rsa.generate_private_key`, `padding.PSS`), `shard_core/service/signed_call.py:27` (`algorithms.RSA_PSS_SHA512`) |
-| 2 | `README.md:160-161` | Export `CONFIG=config.yml,local_config.yml`; edit `local_config.yml` | Dead mechanism AND dead file format. No code reads `CONFIG` (grep `shard_core/` — only an unrelated enum member matches). Config is pydantic-settings loading `config.toml` + `local_config.toml` from CWD, env prefix `FREESHARD_`, since commit e2c06a7 ("Fix #41: Replace gconf with pydantic-settings"). `agents.md:11` has the correct description. | `shard_core/settings.py:129-152`; https://github.com/FreeshardBase/freeshard/issues/41 |
-| 3 | `justfile` recipes `run-dev` and `run-dev-for-freeshard-controller` | Both export the same dead `CONFIG=config.yml,local_config.yml` | Inert for the same reason as #2. The recipes work anyway (TOML files auto-load from CWD). Related live bug in the second recipe (single-underscore env var, silently ignored) belongs to freeshard-config-and-flags. | `justfile:48,51` |
-| 4 | `README.md:79` | "[API-doc](https://ptl.gitlab.io/portal_core/) of the latest stable release" | Dead link — GitLab Pages from before the Feb 2025 GitHub migration (commit b33eada deleted `.gitlab-ci.yml`). Live API doc is the local `/docs` endpoint (`just run-dev`, then http://localhost:8080/docs). | `README.md:79` |
-| 5 | `documentation/README.md` (sibling repo) | "Documentation for Portal app developers" + GitLab Pages boilerplate, badge to ptl-public.gitlab.io | Legacy scaffold README. The repo's `agents.md` is the current reference: MkDocs Material site at docs.freeshard.net. | `documentation/README.md` vs `documentation/agents.md:1-10` |
-| 6 | `documentation/agents.md:61` | "Built and deployed via GitLab Pages" | Deploys via **GitHub** Pages: `.github/workflows/ci.yml` builds with `mkdocs build --strict` and deploys with `actions/upload-pages-artifact` / `actions/deploy-pages` on main. No `.gitlab-ci.yml` exists in the repo. | `documentation/.github/workflows/ci.yml` |
+| 1 | `documentation/README.md` (sibling repo) | "Documentation for Portal app developers" + GitLab Pages boilerplate, badge to ptl-public.gitlab.io | Legacy scaffold README. The repo's `agents.md` is the current reference: MkDocs Material site at docs.freeshard.net. | `documentation/README.md` vs `documentation/agents.md:1-10` |
+| 2 | `documentation/agents.md:61` | "Built and deployed via GitLab Pages" | Deploys via **GitHub** Pages: `.github/workflows/ci.yml` builds with `mkdocs build --strict` and deploys with `actions/upload-pages-artifact` / `actions/deploy-pages` on main. No `.gitlab-ci.yml` exists in the repo. | `documentation/.github/workflows/ci.yml` |
 
 Before repeating ANY doc claim in new writing, verify it against code first. Re-verification one-liners for this table are in "Provenance and maintenance".
 
@@ -88,7 +84,7 @@ The project was named **Portal** until the Feb 2025 rebrand (rename commit 88e58
 - `portal_controller._call_freeshard_controller` **prepends `api/`**: `url = f"{controller_base_url}/api/{path}"` (`portal_controller.py:16`). Handles profile + backup SAS URLs.
 - `freeshard_controller.call_freeshard_controller` does **not** — callers pass `api/shards/self` themselves (`freeshard_controller.py:15`). Handles the shared secret.
 
-Adding a controller call to the wrong module produces `/api/api/...` or a missing `/api/` prefix. Check which module the neighboring calls live in, and pass the path in that module's convention. (Also: `[portal_controller]` in `config.toml` is dead config — `portal_controller.py` reads `settings().freeshard_controller`; see freeshard-config-and-flags.)
+Adding a controller call to the wrong module produces `/api/api/...` or a missing `/api/` prefix. Check which module the neighboring calls live in, and pass the path in that module's convention. (Note the naming trap that survives: the `portal_controller.py` *module* is live, but it reads `settings().freeshard_controller` — there is no `[portal_controller]` config section, since issue #128 removed the dead one.)
 
 ## External positioning and claims discipline
 
@@ -122,17 +118,13 @@ Rules for anything public-facing (README, docs site, release notes, blog/newslet
 
 ## Provenance and maintenance
 
-Written 2026-07-03 against working tree at commit e55ce51 (branch `fix-profile-billing-fields`; origin/main then at 0a40684) plus sibling checkouts `documentation/` and `app-repository/` under `/home/ubuntu/projects/freeshard/`. Primary sources: repo files cited inline, `git log`/`git tag`, GitHub via `gh` (issues 41, 118; PRs 83, 90, 102, 108).
+Written 2026-07-03; known-stale table updated 2026-07-15 after issue #128 fixed the agents.md Ed25519 claim, the README/justfile CONFIG mechanism, and the README GitLab API-doc link. Originally written against working tree at commit e55ce51 (branch `fix-profile-billing-fields`; origin/main then at 0a40684) plus sibling checkouts `documentation/` and `app-repository/` under `/home/ubuntu/projects/freeshard/`. Primary sources: repo files cited inline, `git log`/`git tag`, GitHub via `gh` (issues 41, 118; PRs 83, 90, 102, 108).
 
 Drift-prone facts — re-verify before relying on them:
 
 | Fact | Re-verify with |
 |---|---|
-| agents.md still claims Ed25519 (stale rows 1) | `grep -n Ed25519 agents.md` — empty means FIXED; delete row 1 |
 | Crypto is RSA-4096/PSS, RSA_PSS_SHA512 | `grep -n "RSA_PSS\|generate_private_key" shard_core/service/signed_call.py shard_core/service/crypto.py` |
-| README still documents dead CONFIG mechanism | `grep -n "CONFIG=config.yml" README.md justfile` |
-| No code reads CONFIG env var | `grep -rn "environ\|getenv" shard_core/ --include="*.py" \| grep -i config` |
-| README dead GitLab API-doc link | `grep -n "ptl.gitlab.io" README.md` |
 | documentation repo README/agents.md staleness | `head -5 ../documentation/README.md; grep -n "GitLab Pages" ../documentation/agents.md` |
 | portal_controller `api/` prefix split | `grep -n "api/" shard_core/service/portal_controller.py shard_core/service/freeshard_controller.py` |
 | Docker network still named `portal` | `grep -n "name: portal" docker-compose.yml` |
