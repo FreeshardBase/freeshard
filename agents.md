@@ -96,6 +96,7 @@ Blinker-based async signals defined in `util/signals.py`. DB-writing handlers ar
 - `async_on_peer_write` — peer added/updated
 
 ### App Installation Flow
+0. Custom-app uploads (`POST /protected/apps`) are validated by `app_installation/app_zip.py` **before** any state is created: the zip is buffered to a temp dir, must carry `app_meta.json` + `docker-compose.yml.template` at its root (a single top-level directory is stripped), and the app name comes from the manifest, not the filename. Invalid uploads get a 400 and leave no row, no dir, no task. Extraction goes through `extract_app_zip`, which refuses members resolving outside the app dir.
 1. Request queued → `InstallationWorker` picks it up
 2. Docker Compose template rendered with Jinja2 (shard domain, data paths, etc.)
 3. Traefik dynamic config generated for the app's subdomain routing
