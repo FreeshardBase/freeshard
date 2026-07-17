@@ -145,14 +145,15 @@ The four status **allow-lists** live in shard_core/service/app_tools.py:
 
 Plus two **exclusion filters**:
 
-- `write_traefik_dyn_config` skips INSTALLATION_QUEUED and ERROR apps (app_installation/util.py:108,113)
+- `write_traefik_dyn_config` skips apps in `_NOT_ROUTED_STATUS` = INSTALLATION_QUEUED, UNINSTALLING, ERROR (app_installation/util.py:23-28,115). INSTALLING is deliberately NOT in that set: `_install_app_from_zip` writes the traefik config while the status is still INSTALLING, and no further write follows before STOPPED — filtering it would leave freshly installed apps unrouted (worker.py:118-119,184)
 - `control_apps` (idle lifecycle) skips INSTALLATION_QUEUED and INSTALLING (service/app_lifecycle.py:45)
 
 **RULE: when adding or repurposing a status, audit all six sites above.** A status
 missing from an allow-list silently no-ops (`log.debug` + skip); a status missing from
-the exclusion filters gets routed/lifecycled while half-installed —
-`write_traefik_dyn_config` calling `get_app_metadata()` on an app with missing files
-raises `MetadataNotFound` inside the lifespan (app_factory.py:83) → potential boot loop.
+the exclusion filters gets routed/lifecycled while half-installed. Since #158,
+`write_traefik_dyn_config` loads each app's metadata in `try/except` and skips the app
+with a `log.warning` — a missing/malformed `app_meta.json` no longer raises
+`MetadataNotFound` out of the lifespan (app_factory.py:83), so it can no longer boot-loop core.
 
 ## 5. Signals discipline (shard_core/util/signals.py, blinker)
 
@@ -232,7 +233,7 @@ All verified 2026-07-03:
 | Weakness | Evidence | Status |
 |---|---|---|
 | No startup reconciliation of stranded *_QUEUED / INSTALLING rows; a crash mid-install strands the row forever (manual uninstall works because `_uninstall_app` asserts nothing) | lifespan app_factory.py:78-108 has no such step; worker.py:124-128 | Open, no issue filed |
-| Stranded INSTALLING/UNINSTALLING row + missing files → `MetadataNotFound` raised uncaught in lifespan step 3 → boot loop | app_installation/util.py:110-114 filters only INSTALLATION_QUEUED and ERROR | Open |
+| Stranded INSTALLING/UNINSTALLING row + missing files → `MetadataNotFound` raised uncaught in lifespan step 3 → boot loop | app_installation/util.py:117-124 now loads metadata per app in `try/except` and skips with a warning | Fixed 2026-07-14, https://github.com/FreeshardBase/freeshard/issues/158 |
 | backup.py blocks the event loop: sync `subprocess.run(["rclone","obscure",...])` (backup.py:186-188) and sync Azure `BlobClient.upload_blob` marker write (backup.py:133-151); rclone command built via `str.split()` breaks on whitespace in SAS URL/paths (backup.py:169) | file:lines cited | Open |
 | Backup task is fire-and-forget with no strong reference — `task` is a local var and the done-callback spawns another unreferenced task (asyncio weak-ref GC footgun); contrast the correct `background_tasks` set pattern in app_lifecycle.py:32-36 | backup.py:62-78 | Open |
 | rclone exit code never checked — success inferred from parsing the last stderr line as JSON; a failure ending in valid JSON records as success, a non-JSON last line raises `JSONDecodeError` | backup.py:168-181 | Open; known trouble spot (repeated churn: commits b9dfcfd, 935250b, d6560a0) |
