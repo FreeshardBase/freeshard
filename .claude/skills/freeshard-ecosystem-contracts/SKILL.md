@@ -44,7 +44,7 @@ Naming residue: the project was formerly "Portal". `portal_controller.py`, the `
 | C4 | app-repository → shard + web-terminal | Azure blob `https://storageaccountportab0da.blob.core.windows.net/app-store/...` | None (public blob) | `store_metadata.json` + zips; format = AppMeta (section 7) |
 | C5 | controller backend → controller frontend | OpenAPI spec → generated TS client | n/a | Yes — the only generated contract in the system (section 6) |
 
-WARNING (stale doc): `agents.md` in this repo claims Ed25519 crypto. The code is **RSA-4096 with PSS padding**; signatures are `RSA_PSS_SHA512` (`shard_core/service/crypto.py`, `signed_call.py:27`). Never implement against Ed25519.
+The crypto is **RSA-4096 with PSS padding**; signatures are `RSA_PSS_SHA512` (`shard_core/service/crypto.py`, `signed_call.py:27`). agents.md claimed Ed25519 until issue #128 corrected it — never implement against Ed25519.
 
 ### C1 endpoints shard_core actually calls
 
@@ -55,7 +55,6 @@ WARNING (stale doc): `agents.md` in this repo claims Ed25519 crypto. The code is
 | `POST api/telemetry` | `service/telemetry.py:39` | |
 | `POST {settings().management.api_url}/app_usage` | `service/app_usage_reporting.py:54-55` | config.toml:58 default is a **legacy Azure Functions URL** (`ptlfunctionapp.azurewebsites.net/api/management`), not controller.freeshard.net; the fleet v18 compose sets no override env var. The controller has its own `api/app_usage` router. Where production reports actually land is unverified as of 2026-07-03 — check before touching |
 
-Related dead config: `[portal_controller]` in config.toml (settings.py:124) is defined but no code reads `settings().portal_controller` — see freeshard-config-and-flags.
 
 ## 3. The type-sync copy: `just get-types`
 
@@ -231,7 +230,7 @@ Change all six together, and recompute pinned test values from the real function
 - Actually cutting a release, running the stack, first start → **freeshard-run-and-operate**.
 - Recreating the dev environment, worktrees, uv → **freeshard-build-and-env** (it covers running `get-types` as environment setup; this skill covers *when and why*).
 - Debugging a live cross-repo failure (422s on proxied writes, profile not refreshing) → **freeshard-debugging-playbook**; past investigations → **freeshard-failure-archaeology**.
-- Config keys and env overrides (e.g. the dead `[portal_controller]` section) → **freeshard-config-and-flags**.
+- Config keys and env overrides → **freeshard-config-and-flags**.
 - Running the drift-check script and other measurement tools → **freeshard-diagnostics-and-tooling** (script lives there; this skill only points at it).
 
 ## Provenance and maintenance

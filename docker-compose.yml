@@ -63,7 +63,7 @@ services:
     environment:
       - FREESHARD_DNS__ZONE=${DNS_ZONE:?}
       - FREESHARD_TRAEFIK__ACME_EMAIL=${EMAIL:?}
-      - FREESHARD_TRAEFIK__DISABLE_SSL=${DISABLE_SSL}
+      - FREESHARD_TRAEFIK__DISABLE_SSL=${DISABLE_SSL:-false}
       - FREESHARD_PATH_ROOT_HOST=${FREESHARD_DIR:?}
     depends_on:
       postgres:

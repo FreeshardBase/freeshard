@@ -14,7 +14,6 @@ prefix_length = 6
 
 [services.backup]
 directories = ["core", "user_data"]
-included_globs = ["core/**/*", "user_data/**/*"]
 
 [services.backup.timing]
 base_schedule = "0 3 * * *"
@@ -60,9 +59,6 @@ send_interval_seconds = 300
 
 [management]
 api_url = "https://ptlfunctionapp.azurewebsites.net/api/management"
-
-[portal_controller]
-base_url = "https://portal-aca.purplemoss-96f7db40.westeurope.azurecontainerapps.io"
 
 [freeshard_controller]
 base_url = "https://controller.freeshard.net"

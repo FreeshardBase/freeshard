@@ -76,7 +76,7 @@ Shard Core provides a REST API separated into four parts which are accessible at
 * `/management` - Management API, can only be called from the management backend and is only relevant for hosted shards
 * `/internal` - Internal API, only accessible from the same machine e.g. by apps or the reverse proxy
 
-[API-doc](https://ptl.gitlab.io/portal_core/) of the latest stable release.
+Each shard serves the API docs for the version it is actually running, at `/redoc` and `/docs`, with the OpenAPI schema at `/openapi.json`.
 
 ### App Management
 
@@ -165,8 +165,9 @@ To restore, point a fresh shard's `${FREESHARD_DIR}` at the decrypted backup (so
 
 Make sure to set up your Python environment and install dependencies using the tools of your choice.
 
-Then, export the environment variable `CONFIG=config.yml,local_config.yml` so the `local_config.yml` is loaded in addition to the default `config.yml`.
-You can modify the `local_config.yml` to your needs, e.g. to set different log levels.
+Configuration is loaded from `config.toml`, overlaid per-field by `local_config.toml` if that file exists in the working directory, and overridden by `FREESHARD_*` environment variables (nested options use a double underscore, e.g. `FREESHARD_DNS__ZONE`).
+You can modify `local_config.toml` to your needs, e.g. to set different log levels.
+Both files are read relative to the working directory, so start the server from the repository root.
 
 Run development server with 
 ```shell

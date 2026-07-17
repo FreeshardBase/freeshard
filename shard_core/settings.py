@@ -20,7 +20,6 @@ class BackupTimingSettings(BaseModel):
 class BackupSettings(BaseModel):
     directories: list[str]
     timing: BackupTimingSettings
-    included_globs: list[str] = []
 
 
 class ServicesSettings(BaseModel):
@@ -87,10 +86,6 @@ class ManagementSettings(BaseModel):
     api_url: str
 
 
-class PortalControllerSettings(BaseModel):
-    base_url: str
-
-
 class FreeshardControllerSettings(BaseModel):
     base_url: str
 
@@ -127,7 +122,6 @@ class Settings(BaseSettings):
     apps: AppsSettings
     telemetry: TelemetrySettings = TelemetrySettings()
     management: ManagementSettings
-    portal_controller: Optional[PortalControllerSettings] = None
     freeshard_controller: FreeshardControllerSettings
     log: LogSettings = LogSettings()
     terminal: TerminalSettings = TerminalSettings()

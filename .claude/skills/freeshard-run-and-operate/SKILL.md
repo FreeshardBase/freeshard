@@ -49,9 +49,8 @@ Dev-server limits — know these before "testing" anything:
 
 ### Second instance for controller development
 
-`just run-dev-for-freeshard-controller` (justfile:50-51) starts a second shard_core on port 8081, intended to point at a locally running controller on port 8080. **As of 2026-07-03 the recipe is broken**: it sets `FREESHARD_FREESHARD_CONTROLLER_BASE_URL` (single underscore before `BASE_URL`), which pydantic-settings silently ignores — the instance actually talks to the production controller. The working form is `FREESHARD_FREESHARD_CONTROLLER__BASE_URL`. Details and the verification one-liner: freeshard-config-and-flags.
+`just run-dev-for-freeshard-controller` (justfile:50-51) starts a second shard_core on port 8081, intended to point at a locally running controller on port 8080. It sets `FREESHARD_FREESHARD_CONTROLLER__BASE_URL`. Until issue #128 that var had a single underscore before `BASE_URL`, which pydantic-settings silently ignored — the instance actually talked to the production controller. Details and the verification one-liner: freeshard-config-and-flags.
 
-Also note: the `CONFIG=config.yml,local_config.yml` env var in both run-dev recipes is dead — no code reads it (freeshard-config-and-flags).
 
 ## 3. Full local stack: `docker compose up`
 
@@ -65,7 +64,7 @@ cp .env.template .env
 docker compose up
 ```
 
-.env variables map to `FREESHARD_*` env vars inside the shard_core container (docker-compose.yml:63-67). `FREESHARD_DIR`, `DNS_ZONE`, `EMAIL` are fail-fast (`${VAR:?}`); `DISABLE_SSL` is not — **leaving it out of `.env` makes Settings() crash on an empty-string boolean** (see freeshard-config-and-flags).
+.env variables map to `FREESHARD_*` env vars inside the shard_core container (docker-compose.yml:63-67). `FREESHARD_DIR`, `DNS_ZONE`, `EMAIL` are fail-fast (`${VAR:?}`); `DISABLE_SSL` defaults to `false` when unset (`${DISABLE_SSL:-false}`). Until issue #128 it was unguarded, and leaving it out of `.env` crashed Settings() on an empty-string boolean (see freeshard-config-and-flags).
 
 The stack (docker-compose.yml, all on one docker network named `portal`):
 
@@ -241,6 +240,6 @@ Drift-prone facts — re-verify before relying on them:
 | Backup cron 03:00 + ≤3600s jitter | `grep -A2 'backup.timing' config.toml` |
 | Postgres-not-in-backup still open | `gh issue view 122 --json state` |
 | Semver migration still pending | `gh issue view 118 --json state` |
-| run-dev-for-freeshard-controller env var still broken (single `_`) | `grep FREESHARD_FREESHARD_CONTROLLER justfile` (broken if not `CONTROLLER__BASE_URL`) |
+| run-dev-for-freeshard-controller env var still uses the double `_` | `grep FREESHARD_FREESHARD_CONTROLLER justfile` (broken if not `CONTROLLER__BASE_URL`) |
 | Release tag==version gate exists | `grep -n 'does not match pyproject' .github/workflows/release.yml` |
 | Pairing route + 10-min first-start code | `grep -n 'pairing-code' shard_core/web/protected/terminals.py; grep -n '10 \* 60' shard_core/app_factory.py` |
