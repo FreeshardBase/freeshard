@@ -101,7 +101,7 @@ Blinker-based async signals defined in `util/signals.py`. DB-writing handlers ar
 ### App Installation Flow
 0. Custom-app uploads (`POST /protected/apps`) are validated by `app_installation/app_zip.py` **before** any state is created: the zip is buffered to a temp dir, must carry `app_meta.json` + `docker-compose.yml.template` at its root (a single top-level directory is stripped), and the app name comes from the manifest, not the filename. Invalid uploads get a 400 and leave no row, no dir, no task. Extraction goes through `extract_app_zip`, which refuses members resolving outside the app dir.
 1. Request queued → `InstallationWorker` picks it up
-2. Docker Compose template rendered with Jinja2 (shard domain, data paths, etc.)
+2. Docker Compose template rendered with Jinja2 (shard domain, data paths, per-app secrets, etc.)
 3. Traefik dynamic config generated for the app's subdomain routing
 4. `docker-compose up -d` via subprocess
 5. Status updated in PostgreSQL
@@ -119,6 +119,23 @@ Apps in `NOT_ROUTABLE_STATUS` (`app_installation/util.py`) get no Traefik router
 are either not there yet or already being removed, and `write_traefik_dyn_config`
 runs inside the lifespan — an unfiltered status whose metadata is missing raises
 `MetadataNotFound` and takes down the boot.
+
+### App compose template context
+`render_docker_compose_template` (`app_installation/util.py`) exposes three things to an
+app's `docker-compose.yml.template`: `fs.*` (host data paths), `portal` (the shard
+identity), and `secret('<name>')`. The secret helper returns an app-scoped secret,
+generating one (32 chars, `[A-Za-z0-9]`) on first reference and persisting it in the
+`app_secrets` table (`database/app_secrets.py`); the name is arbitrary and declared
+purely by referencing it. The resolver mints missing secrets synchronously during the
+single jinja pass (jinja is sync, the DB is not) and they are persisted afterwards. A
+secret is stable across
+re-renders, upgrades and restarts (it is reused, never rotated) and rides along in the DB
+snapshot backup. Secrets are kept on uninstall (so a reinstall of the same app reuses
+them, matching the app's retained `user_data`), never rotated, and never encrypted at
+rest. App-scoping is NOT a boundary against a hostile app author: the compose template is
+rendered with a non-sandboxed jinja environment (as `portal`/`fs` already are), so a
+malicious template can escape and read any app's secrets — tracked separately for a
+`SandboxedEnvironment` fix.
 
 ### Async Fire-and-Forget
 Long operations use `asyncio.create_task()` with done callbacks. No thread pools.
