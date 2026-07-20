@@ -142,7 +142,7 @@ There is **no coverage tooling** (no pytest-cov in deps) — "has tests" is judg
 ## CI: what actually runs
 
 - **snapshot.yml** — triggers on push to `**` AND pull_request to `**`. Runs test.yml (two jobs: ruff, and pytest; both on ubuntu-latest / Python 3.13, installing via `uv sync --frozen --extra dev` and running `uv run ruff check .` / `uv run pytest tests` — as of origin/main 0a40684; older branches still carry the previous `pip install ".[dev]"` variant), then builds and pushes `ghcr.io/freeshardbase/freeshard:<branch-slug>`. Because both events fire for a PR branch, **every PR effectively runs the whole suite twice**.
-- The `TEST_ENV` sparse/full input threaded through snapshot.yml → test.yml:42 is **DEAD**: nothing in shard_core or tests reads it (the consuming decorator was removed; last straggler cleaned in 639ba77). Likewise `CONFIG: tests/config.yml` in test.yml:41 is dead — nothing reads `CONFIG` (full evidence: freeshard-config-and-flags). Don't build on either; don't "fix" them in a drive-by either (see freeshard-change-control).
+- The `TEST_ENV` sparse/full input threaded through snapshot.yml → test.yml:42 is **DEAD**: nothing in shard_core or tests reads it (the consuming decorator was removed; last straggler cleaned in 639ba77). A companion dead `CONFIG: tests/config.yml` was removed by issue #128. Don't build on `TEST_ENV`; don't "fix" it in a drive-by either (see freeshard-change-control).
 - **release.yml** — triggers on GitHub release created. Gate: release tag must equal `pyproject.toml` version, else the job fails and tells you to run `just set-version <tag>` first. Then tests, then builds in container `ghcr.io/freeshardbase/cicd-image:1.0.3` and pushes `ghcr.io/freeshardbase/freeshard:<tag>`. Two commented-out jobs (`pages` redoc docs, `json-schema` Azure upload) are dead since the GitLab→GitHub migration (skipped in d309113, Feb 2025). Release procedure itself: freeshard-run-and-operate and freeshard-change-control.
 - Only secret used anywhere: `secrets.GITHUB_TOKEN` (packages:write for ghcr).
 
@@ -182,7 +182,7 @@ Drift-prone facts — re-verify before relying on them:
 | ACR creds committed and used by setup_all | `grep -n -A3 'apps.registries' config.toml; grep -n login_docker_registries tests/conftest.py` |
 | Reloaded-by-fixture module list (websocket, app_installation.worker, telemetry) | `grep -n 'importlib.reload' tests/conftest.py` |
 | Truncate-BEFORE-each-test, `_yoyo*` preserved | `grep -n -B2 -A12 '_truncate_all_tables' tests/conftest.py` |
-| TEST_ENV / CONFIG env vars still dead | `grep -rn 'TEST_ENV\|environ\[.CONFIG' shard_core/ tests/ .github/` |
+| TEST_ENV still dead | `grep -rn 'TEST_ENV' shard_core/ tests/ .github/` |
 | portal_controller / websocket still untested; backup routes still untested | `grep -rln 'portal_controller\|websocket\|protected/backup' tests/ --include='*.py'` |
 | Suite runs twice per PR (push + pull_request triggers) | `head -12 .github/workflows/snapshot.yml` |
 | No skip/xfail markers in suite | `grep -rn 'pytest.mark.skip\|pytest.mark.xfail\|pytest.skip' tests/ --include='*.py'` |

@@ -1,7 +1,3 @@
-import os
-
-os.environ.setdefault("CONFIG", "tests/config.toml")
-
 import asyncio
 import importlib
 import json

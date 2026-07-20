@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import shutil
-import zipfile
 from contextlib import suppress
 from pathlib import Path
 from typing import Literal
@@ -21,6 +20,7 @@ from shard_core.service.app_tools import (
 )
 from shard_core.settings import settings
 from shard_core.util import signals
+from .app_zip import extract_app_zip
 from .exceptions import AppDoesNotExist
 from .util import (
     update_app_status,
@@ -174,8 +174,7 @@ async def _reinstall_app(app_name: str):
 
 
 async def _install_app_from_zip(installed_app, zip_file):
-    with zipfile.ZipFile(zip_file, "r") as zip_ref:
-        zip_ref.extractall(zip_file.parent)
+    extract_app_zip(zip_file, zip_file.parent)
     await signals.on_apps_update.send_async()
     zip_file.unlink()
 

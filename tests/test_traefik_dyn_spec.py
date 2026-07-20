@@ -1,12 +1,14 @@
+import json
+import logging
 import shutil
 from pathlib import Path
 
 import pytest
 import yaml
 
-from shard_core.data_model.app_meta import Status
-from shard_core.database.connection import db_conn
+from shard_core.data_model.app_meta import InstallationReason, Status
 from shard_core.database import installed_apps as db_installed_apps
+from shard_core.database.connection import db_conn
 from shard_core.service.app_installation.util import write_traefik_dyn_config
 from shard_core.service.app_tools import get_installed_apps_path
 from shard_core.settings import settings
@@ -75,3 +77,73 @@ async def test_template_is_written(api_client):
             "immich_http",
         }
         assert out_routers_http["filebrowser_http"]["service"] == "filebrowser_http"
+
+
+def _write_app_meta(app_name: str):
+    app_path = get_installed_apps_path() / app_name
+    app_path.mkdir(parents=True, exist_ok=True)
+    (app_path / "app_meta.json").write_text(
+        json.dumps(
+            {
+                "v": "1.0",
+                "app_version": "0.1.0",
+                "name": app_name,
+                "pretty_name": app_name,
+                "icon": "icon.svg",
+                "entrypoints": [
+                    {
+                        "container_name": app_name,
+                        "container_port": 80,
+                        "entrypoint_port": "http",
+                    }
+                ],
+                "paths": {"": {"access": "public"}},
+            }
+        )
+    )
+
+
+async def _add_app_to_db(app_name: str, status: Status):
+    async with db_conn() as conn:
+        await db_installed_apps.insert(
+            conn,
+            {
+                "name": app_name,
+                "installation_reason": InstallationReason.CUSTOM.value,
+                "status": status.value,
+                "last_access": None,
+            },
+        )
+
+
+def _read_traefik_dyn_config() -> dict:
+    with open(
+        Path(settings().path_root) / "core" / "traefik_dyn" / "traefik_dyn.yml", "r"
+    ) as f:
+        return yaml.safe_load(f)
+
+
+async def test_app_with_missing_metadata_is_skipped(app_client, memory_logger):
+    _write_app_meta("healthy_app")
+    await _add_app_to_db("healthy_app", Status.RUNNING)
+    await _add_app_to_db("broken_app", Status.RUNNING)
+
+    await write_traefik_dyn_config()
+
+    routers = _read_traefik_dyn_config()["http"]["routers"]
+    assert "healthy_app_http" in routers
+    assert "broken_app_http" not in routers
+    assert [
+        r
+        for r in memory_logger.records
+        if r.levelno == logging.WARNING and "broken_app" in r.getMessage()
+    ]
+
+
+async def test_uninstalling_app_is_not_routed(app_client):
+    _write_app_meta("uninstalling_app")
+    await _add_app_to_db("uninstalling_app", Status.UNINSTALLING)
+
+    await write_traefik_dyn_config()
+
+    assert "uninstalling_app_http" not in _read_traefik_dyn_config()["http"]["routers"]

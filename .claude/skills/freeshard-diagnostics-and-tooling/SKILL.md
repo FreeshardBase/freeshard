@@ -245,7 +245,6 @@ Drift-prone facts — re-verify before relying:
 | 134 tests collected at e55ce51 (137 on origin/main), collection needs no Docker | `.venv/bin/pytest tests --collect-only -q` |
 | Test compose project `shard-core-test`, host port 5433 | `grep -n "shard-core-test" tests/conftest.py; grep -n 5433 tests/docker-compose.yml` |
 | disk_space_low threshold = free < 1 GiB on user_data, 30 s period | `sed -n '22,30p' shard_core/service/disk.py; grep -n update_disk_space shard_core/app_factory.py` |
-| justfile run-dev-for-freeshard-controller still has the single-underscore inert env var | `grep -n "FREESHARD_FREESHARD_CONTROLLER" justfile` |
 | yappi fixture exists but no test uses it | `git grep -n profile_with_yappi -- tests` |
 | Dev Board = project 3, 25/71 items from this repo, field names | `gh project item-list 3 --owner FreeshardBase --format json --limit 200 --jq '[.items[] \| keys] \| add \| unique'` |
 | `gh issue view --comments` still broken on this org | `gh issue view 24 --repo FreeshardBase/freeshard --comments` (expect projectCards GraphQL error) |

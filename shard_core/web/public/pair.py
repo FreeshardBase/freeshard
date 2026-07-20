@@ -25,9 +25,18 @@ router = APIRouter(
 async def add_terminal(code: str, terminal: InputTerminal, response: Response):
     try:
         await pairing.redeem_pairing_code(code)
-    except (KeyError, pairing.InvalidPairingCode, pairing.PairingCodeExpired) as e:
+    except pairing.PairingCodeExpired as e:
         log.info(e)
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED) from e
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            detail="This pairing code has expired. Generate a new code on your shard and try again.",
+        ) from e
+    except pairing.InvalidPairingCode as e:
+        log.info(e)
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            detail="This pairing code is not valid.",
+        ) from e
 
     new_terminal = Terminal.create(terminal.name)
     async with db_conn() as conn:

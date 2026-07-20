@@ -1,4 +1,6 @@
 import logging
+import shutil
+from pathlib import Path
 
 from shard_core.database import database
 from shard_core.database.connection import db_conn
@@ -6,6 +8,7 @@ from shard_core.database import installed_apps as db_installed_apps
 from shard_core.data_model.app_meta import InstallationReason, InstalledApp, Status
 from shard_core.util import signals
 from shard_core.settings import settings
+from shard_core.service.app_tools import get_installed_apps_path
 from shard_core.util.subprocess import subprocess, SubprocessError
 from . import util, worker
 from .exceptions import AppAlreadyInstalled, AppDoesNotExist, AppNotInstalled
@@ -42,11 +45,17 @@ async def install_app_from_store(
     log.info(f"created {installation_task}")
 
 
-async def install_app_from_existing_zip(
-    name: str, installation_reason: InstallationReason = InstallationReason.CUSTOM
+async def install_app_from_uploaded_zip(
+    name: str,
+    zip_file: Path,
+    installation_reason: InstallationReason = InstallationReason.CUSTOM,
 ):
     if await util.app_exists_in_db(name):
         raise AppAlreadyInstalled(name)
+
+    target_zip = get_installed_apps_path() / name / f"{name}.zip"
+    target_zip.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(zip_file, target_zip)
 
     async with db_conn() as conn:
         installed_app = InstalledApp(

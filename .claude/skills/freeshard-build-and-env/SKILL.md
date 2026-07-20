@@ -101,8 +101,8 @@ Verified against `justfile` as of 2026-07-03. `just` (no args) lists recipes.
 
 | Recipe | What it actually does | Gotchas |
 |---|---|---|
-| `just run-dev` | `fastapi dev --port 8080 shard_core/app.py` via `.venv/bin/fastapi`, with `PYTHONUNBUFFERED=1` | The `CONFIG=config.yml,local_config.yml` it also sets is **dead** — nothing reads `CONFIG`, and those `.yml` files don't exist (real files are `.toml`, picked up by settings.py automatically). Usage details: freeshard-run-and-operate. |
-| `just run-dev-for-freeshard-controller` | second dev instance on port 8081, *intended* to point at a local controller on 8080 | Dead-CONFIG caveat PLUS the `FREESHARD_FREESHARD_CONTROLLER_BASE_URL` var it sets is single-underscore-broken (inert) — the instance actually talks to the **production** controller. Working form: `FREESHARD_FREESHARD_CONTROLLER__BASE_URL`. See freeshard-config-and-flags. |
+| `just run-dev` | `fastapi dev --port 8080 shard_core/app.py` via `.venv/bin/fastapi`, with `PYTHONUNBUFFERED=1` | Config comes from `config.toml` plus `local_config.toml` if present, picked up by settings.py automatically. Usage details: freeshard-run-and-operate. |
+| `just run-dev-for-freeshard-controller` | second dev instance on port 8081, *intended* to point at a local controller on 8080 | Sets `FREESHARD_FREESHARD_CONTROLLER__BASE_URL=http://127.0.0.1:8080`. Until issue #128 this was a single underscore, which pydantic-settings silently ignored — the instance talked to the **production** controller. See freeshard-config-and-flags. |
 | `just cleanup` | `ruff check . --fix` then `black shard_core` and `black tests` | **Run after every code change** — it is the house formatting gate. Requires the dev extra installed (black is transitive). |
 | `just get-types` | **DESTRUCTIVE**: `rm -rf shard_core/data_model/backend`, then `cp -r` from the **LOCAL** sibling checkout `../freeshard-controller/freeshard-controller-backend/freeshard_controller/data_model`, prepending `# DO NOT MODIFY` to every file | Syncs from whatever your local controller checkout happens to be at. **You MUST `git -C ../freeshard-controller checkout main && git -C ../freeshard-controller pull` first.** A stale checkout has caused real bugs before (silently dropped billing fields — commits 6d4b101, e55ce51). As of 2026-07-03 the local controller checkout on the dev VM was verified BEHIND origin/main. Full procedure and drift checks: freeshard-ecosystem-contracts. |
 | `just set-version X.Y.Z` | rewrites `version` in pyproject.toml and the `ghcr.io/freeshardbase/freeshard:` tag in docker-compose.yml, then **`git add .` and `git commit`** | It stages EVERYTHING (`git add .`) — never run with a dirty tree. Release procedure: freeshard-change-control / freeshard-run-and-operate. |
@@ -134,18 +134,16 @@ uv run pytest tests            # CI test job (needs Docker + internet)
 
 `uv sync` without `--frozen` will also *update* uv.lock if pyproject.toml changed — fine during development, but a lockfile diff you didn't intend belongs out of your PR.
 
-Two workflow variables are dead but still present (do not cargo-cult them): `TEST_ENV=full/sparse` (its consumer was removed; push and PR runs are identical) and `CONFIG=tests/config.yml` (nothing reads `CONFIG`; the file doesn't even exist).
+One workflow variable is dead but still present (do not cargo-cult it): `TEST_ENV=full/sparse` — its consumer was removed, so push and PR runs are identical. A companion dead `CONFIG=tests/config.yml` was removed by issue #128.
 
 ## Known traps
 
 | Trap | Reality | Evidence |
 |---|---|---|
-| `CONFIG` env var looks load-bearing | It is dead — justfile, CI, tests, and the README all set it; nothing reads it (config is hardcoded: `config.toml` + `local_config.toml` if present + `FREESHARD_*` env). Full evidence and history: freeshard-config-and-flags. | `grep -rn '"CONFIG"' shard_core/` → no hits |
 | `local_config.toml` silently not applied | It is resolved via `Path("local_config.toml").exists()` — **relative to CWD**. Run the server/tests from the repo (or worktree) root, or your dev overlay (path_root=`run/`, dns.zone=localhost) vanishes and the app tries production paths. Also listed in `.dockerignore`, so it can never leak into the image — don't try to configure the container with it. | settings.py:148-152; .dockerignore |
 | Tests "just need pytest" | They need a running Docker daemon, compose v2, and internet: a session fixture does a **real `docker login`** to `portalapps.azurecr.io` using credentials committed in `config.toml:30-33`, and app-installation tests really pull images from that registry. If those credentials are ever rotated, api_client-based tests fail on pulls — that is an infra failure, not your bug. | tests/conftest.py:129-131 |
 | Concurrent test runs collide | tests/docker-compose.yml pins host port **5433** and conftest pins compose project name **`shard-core-test`**. Two worktrees running pytest simultaneously fight over both. Run suites serially across worktrees. | tests/docker-compose.yml:9; tests/conftest.py:96-98 |
 | Docker network `portal` and container names are host-global | The production compose stack, a locally running dev shard, and the test suite all use the network name `portal` and fixed container names (`postgres`, `traefik`, `shard_core`, app names like `filebrowser`). Test teardown force-removes the `portal` network — it will rip it out from under a dev shard running on the same host. | docker-compose.yml:1-3; tests/util.py:139-147 |
-| agents.md crypto claim | agents.md says Ed25519. The code is **RSA-4096 with PSS padding** (`shard_core/service/crypto.py`), and HTTP Message Signatures use `RSA_PSS_SHA512` (`shard_core/service/signed_call.py:27`). Trust the code. | crypto.py:54-56; signed_call.py:27 |
 | `scripts/generate_traefik_dyn_config_model.py` | Raises `Exception("Do no use! ...")` at import, deliberately: its output model was hand-patched (`authResponseHeadersRegex`) and regenerating would drop that field. Do not "fix" the script. | scripts/generate_traefik_dyn_config_model.py |
 | Leftover test infra after a crash | A killed pytest run leaves the test postgres and/or `portal` network behind; the next run fails on port/name conflicts. | Cleanup: `docker compose -p shard-core-test -f tests/docker-compose.yml down -v` and `docker network rm portal` |
 
@@ -196,11 +194,10 @@ Drift-prone facts — re-verify before trusting:
 | Version 0.39.2 / image tag in compose | `grep '^version' pyproject.toml && grep 'freeshardbase/freeshard:' docker-compose.yml` |
 | 137 tests collected (origin/main; 134 at e55ce51) | `.venv/bin/pytest tests --collect-only -q \| tail -1` |
 | CI installs via `uv sync --frozen --extra dev` | `git fetch origin && git show origin/main:.github/workflows/test.yml \| grep -A3 'Install dependencies'` |
-| `CONFIG` env var still dead | `grep -rn '"CONFIG"' shard_core/` (expect no hits) |
 | dev extra contents / black still transitive | `grep -A12 'dev = \[' pyproject.toml` |
 | Test postgres port 5433 / project `shard-core-test` | `grep 5433 tests/docker-compose.yml && grep -n 'shard-core-test' tests/conftest.py` |
 | ACR creds still committed & logged into | `grep -n 'azurecr' config.toml && grep -n 'login_docker_registries' tests/conftest.py shard_core/service/app_installation/__init__.py` |
 | Local controller checkout current before get-types | `git -C ../freeshard-controller rev-parse HEAD && git -C ../freeshard-controller ls-remote origin main` (hashes must match) |
 | `.worktrees/` excluded locally | `grep worktrees .git/info/exclude` |
-| Crypto still RSA-4096/PSS, not Ed25519 | `grep -n 'generate_private_key\|key_size\|RSA_PSS' shard_core/service/crypto.py shard_core/service/signed_call.py` |
+| Crypto still RSA-4096/PSS | `grep -n 'generate_private_key\|key_size\|RSA_PSS' shard_core/service/crypto.py shard_core/service/signed_call.py` |
 | tini/docker/rclone still in runtime image | `grep -n 'tini\|get.docker.com\|rclone' Dockerfile` |

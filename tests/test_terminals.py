@@ -103,6 +103,7 @@ async def test_pairing_two_with_same_name(app_client: AsyncClient):
 async def test_pairing_no_code(app_client: AsyncClient):
     response = await add_terminal(app_client, "somecode", "T1")
     assert response.status_code == 401
+    assert response.json()["detail"] == "This pairing code is not valid."
 
     response = await app_client.get("protected/terminals")
     assert len(response.json()) == 0
@@ -113,9 +114,19 @@ async def test_pairing_wrong_code(app_client: AsyncClient):
 
     response = await add_terminal(app_client, f'wrong{pairing_code["code"][5:]}', "T1")
     assert response.status_code == 401
+    assert response.json()["detail"] == "This pairing code is not valid."
 
     response = await app_client.get("protected/terminals")
     assert len(response.json()) == 0
+
+
+async def test_pairing_wrong_code_does_not_leak_valid_code(app_client: AsyncClient):
+    pairing_code = await get_pairing_code(app_client)
+
+    wrong_code = f'{(int(pairing_code["code"][0]) + 1) % 10}{pairing_code["code"][1:]}'
+    response = await add_terminal(app_client, wrong_code, "T1")
+    assert response.status_code == 401
+    assert pairing_code["code"] not in response.text
 
 
 async def test_pairing_expired_code(app_client: AsyncClient):
@@ -123,8 +134,12 @@ async def test_pairing_expired_code(app_client: AsyncClient):
 
     sleep(1.1)
 
-    response = await add_terminal(app_client, pairing_code, "T1")
+    response = await add_terminal(app_client, pairing_code["code"], "T1")
     assert response.status_code == 401
+    assert response.json()["detail"] == (
+        "This pairing code has expired. Generate a new code on your shard and try again."
+    )
+    assert pairing_code["code"] not in response.text
 
     response = await app_client.get("protected/terminals")
     assert len(response.json()) == 0

@@ -117,9 +117,14 @@ async def write_traefik_dyn_config():
     installed_apps = [
         InstalledApp(**a) for a in all_apps if a["status"] not in NOT_ROUTABLE_STATUS
     ]
-    app_infos = [
-        AppInfo(get_app_metadata(a.name), installed_app=a) for a in installed_apps
-    ]
+    app_infos = []
+    for app in installed_apps:
+        try:
+            app_infos.append(AppInfo(get_app_metadata(app.name), installed_app=app))
+        except Exception as e:
+            log.warning(
+                f"skipping app {app.name} in traefik config, its metadata could not be loaded: {e!r}"
+            )
 
     async with db_conn() as conn:
         default_row = await db_identities.get_default(conn)

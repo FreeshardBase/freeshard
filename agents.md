@@ -31,7 +31,7 @@ shard_core/
     pairing.py          Terminal pairing (JWT creation, code generation)
     backup.py           Azure Blob Storage backup via rclone
     peer.py             Peer shard management
-    crypto.py           Ed25519 key generation, signing, verification
+    crypto.py           RSA-4096 key generation, signing, verification (PSS padding)
     portal_controller.py  API calls to management portal
     freeshard_controller.py  API calls to controller
     telemetry.py        Usage metrics reporting
@@ -48,6 +48,9 @@ shard_core/
   util/               → Shared utilities
     async_util.py       BackgroundTask, PeriodicTask, CronTask
     signals.py          Blinker signal definitions
+    subprocess.py       Async subprocess runner; app_compose_command() pins every app
+                        compose call to <app_dir>/docker-compose.yml and project <app>
+                        — never rely on cwd, compose walks up to the core stack
 ```
 
 ## Commands
@@ -75,7 +78,7 @@ Postgres data is not part of the rclone backup set (which only syncs `core/`/`us
 ### Authentication (4 levels)
 - `/public/*` — No auth
 - `/protected/*` — JWT in `authorization` cookie (from terminal pairing)
-- `/internal/*` — Ed25519 signature verification (for app-to-shard and peer-to-shard calls)
+- `/internal/*` — HTTP Message Signature verification, `RSA_PSS_SHA512` (for app-to-shard and peer-to-shard calls)
 - `/management/*` — Management API auth (hosted shards only)
 
 ### Background Tasks
@@ -96,6 +99,7 @@ Blinker-based async signals defined in `util/signals.py`. DB-writing handlers ar
 - `async_on_peer_write` — peer added/updated
 
 ### App Installation Flow
+0. Custom-app uploads (`POST /protected/apps`) are validated by `app_installation/app_zip.py` **before** any state is created: the zip is buffered to a temp dir, must carry `app_meta.json` + `docker-compose.yml.template` at its root (a single top-level directory is stripped), and the app name comes from the manifest, not the filename. Invalid uploads get a 400 and leave no row, no dir, no task. Extraction goes through `extract_app_zip`, which refuses members resolving outside the app dir.
 1. Request queued → `InstallationWorker` picks it up
 2. Docker Compose template rendered with Jinja2 (shard domain, data paths, etc.)
 3. Traefik dynamic config generated for the app's subdomain routing
@@ -120,7 +124,7 @@ runs inside the lifespan — an unfiltered status whose metadata is missing rais
 Long operations use `asyncio.create_task()` with done callbacks. No thread pools.
 
 ### Service-to-Controller Communication
-`freeshard_controller.py` and `portal_controller.py` make HTTP calls to the central platform. Requests are signed with Ed25519 keys via `signed_call.py`.
+`freeshard_controller.py` and `portal_controller.py` make HTTP calls to the central platform. Requests are signed with the shard's RSA key via `signed_call.py`, using HTTP Message Signatures with `RSA_PSS_SHA512`.
 
 ## File Path Conventions
 

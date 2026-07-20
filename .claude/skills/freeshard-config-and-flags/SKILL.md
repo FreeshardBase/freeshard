@@ -1,6 +1,6 @@
 ---
 name: freeshard-config-and-flags
-description: "Catalog of every shard_core configuration axis and how overrides actually work. Use when adding/changing/reading a config option, wiring a FREESHARD_* env var, editing config.toml / local_config.toml / tests/config.toml / .env.template / docker-compose.yml environment mappings, checking whether a feature flag exists, or debugging 'my override does nothing' / 'Settings() crashes at boot'. TRIGGER on shard_core/settings.py, pydantic-settings, env_nested_delimiter, FREESHARD_ env vars, DISABLE_SSL, telemetry.enabled, apps.pruning, CONFIG env var, settings_override, config_override. SKIP when the question is about running/deploying the stack (use freeshard-run-and-operate), test fixture design beyond config overrides (use freeshard-testing-and-qa), or why a config decision was made (use freeshard-architecture-contract)."
+description: "Catalog of every shard_core configuration axis and how overrides actually work. Use when adding/changing/reading a config option, wiring a FREESHARD_* env var, editing config.toml / local_config.toml / tests/config.toml / .env.template / docker-compose.yml environment mappings, checking whether a feature flag exists, or debugging 'my override does nothing' / 'Settings() crashes at boot'. TRIGGER on shard_core/settings.py, pydantic-settings, env_nested_delimiter, FREESHARD_ env vars, DISABLE_SSL, telemetry.enabled, apps.pruning, settings_override, config_override. SKIP when the question is about running/deploying the stack (use freeshard-run-and-operate), test fixture design beyond config overrides (use freeshard-testing-and-qa), or why a config decision was made (use freeshard-architecture-contract)."
 ---
 
 # Freeshard config and flags
@@ -10,8 +10,9 @@ configuration flows through one pydantic-settings class: `Settings` in
 `shard_core/settings.py:109`. This skill is the complete catalog of every option, the override
 rules, the dead config you must not trust, and the checklist for adding an option.
 
-All file:line references and command outputs verified against the repo on 2026-07-03
-(branch state at commit e55ce51).
+Command outputs verified against the repo on 2026-07-03, and re-verified for the config surface
+on 2026-07-15 (issue #128). Line numbers in file:line references drift with every commit and are
+not re-checked on each update — treat them as a starting point and grep for the symbol.
 
 ## Precedence chain and file map
 
@@ -53,12 +54,11 @@ value falls back to the TOML files. This caused a production incident: commit 5d
 (2026-04-13) fixed `docker-compose.yml`, where single-underscore names made every self-hosted
 shard silently fall back to the hardcoded zone `freeshard.cloud` and hardcoded ACME email.
 
-**The same bug class is still live as of 2026-07-03**: the justfile recipe
-`run-dev-for-freeshard-controller` (`justfile:51`) sets
-`FREESHARD_FREESHARD_CONTROLLER_BASE_URL=http://127.0.0.1:8080` — one underscore short before
-`BASE_URL`. Verified inert: with that var set, `Settings().freeshard_controller.base_url` is
-still `https://controller.freeshard.net`. That recipe silently talks to the **production**
-controller. The working form is `FREESHARD_FREESHARD_CONTROLLER__BASE_URL`.
+The same bug class hit the justfile recipe `run-dev-for-freeshard-controller`, which set
+`FREESHARD_FREESHARD_CONTROLLER_BASE_URL` — one underscore short before `BASE_URL` — and so
+silently talked to the **production** controller. Fixed 2026-07-15 (issue #128); the recipe now
+uses `FREESHARD_FREESHARD_CONTROLLER__BASE_URL`. Both incidents were name-shape bugs that no
+error message reported, which is why the verify-one-liner below is not optional.
 
 ### Verify-an-override one-liner
 
@@ -109,7 +109,6 @@ kwarg (`tests/conftest.py:149`).
 | Option | Type | Default | Prod | Consumer |
 |---|---|---|---|---|
 | `directories` | list[str] | REQUIRED | `["core", "user_data"]` | `service/backup.py:52` — the rclone-crypt sync set. Note: Postgres data is NOT in it. |
-| `included_globs` | list[str] | `[]` | set in config.toml | **DEAD — no consumer** (see Dead config) |
 | `timing.base_schedule` | cron str | REQUIRED | `0 3 * * *` | `app_factory.py:131` (CronTask start_backup) |
 | `timing.max_random_delay` | int (s) | REQUIRED | `3600` | `app_factory.py:132`, jitter applied `util/async_util.py:93-94` |
 
@@ -143,12 +142,11 @@ kwarg (`tests/conftest.py:149`).
 | `enabled` | bool | `False` | `false` | `true` | `service/telemetry.py:19,27` — gates both request counting and sending |
 | `send_interval_seconds` | int | `300` | `300` | | `app_factory.py:136`; sends to controller `api/telemetry` (`telemetry.py:38-39`) |
 
-### [management], [portal_controller], [freeshard_controller]
+### [management], [freeshard_controller]
 
 | Section.option | Default | Prod | Consumer |
 |---|---|---|---|
 | `management.api_url` | REQUIRED | `https://ptlfunctionapp.azurewebsites.net/api/management` (legacy Azure function app) | ONLY `service/app_usage_reporting.py:54` (monthly `/app_usage` POST). `management_mock.py` mocks this API for local dev — point at it with `FREESHARD_MANAGEMENT__API_URL`. |
-| `portal_controller.base_url` | Optional (settings.py:124) | Azure Container Apps URL in config.toml | **DEAD — zero consumers** (see Dead config) |
 | `freeshard_controller.base_url` | REQUIRED | `https://controller.freeshard.net` | `service/freeshard_controller.py:14`, `service/portal_controller.py:15` (yes — the *portal_controller module* reads the *freeshard_controller setting*), `web/protected/feedback.py:23`, `web/internal/call_backend.py:26` |
 
 ### [log] and [terminal]
@@ -161,21 +159,25 @@ kwarg (`tests/conftest.py:149`).
 
 `[terminal]` appears in NO TOML file — defaults only. Override via env if ever needed.
 
-## Dead config — parsed but consumed by NOTHING
+## Dead config — removed 2026-07-15
 
-Do not "fix" behavior by editing these; do not copy them into new code as if live.
+The three items below used to parse fine and do nothing. Issue #128 removed all of them; they
+are recorded here so the names are recognisable in old branches, old backups, and reviews.
 
-| Item | Where it lurks | Evidence it's dead (re-run to confirm) |
+| Item | What it was | Why it was dead |
 |---|---|---|
-| `CONFIG` env var | `justfile:48,51` (`CONFIG=config.yml,local_config.yml`), CI `.github/workflows/test.yml:41` (`CONFIG: tests/config.yml`), `tests/conftest.py:3`, README "Development" section | No code reads it: `grep -rn "environ" shard_core/ \| grep CONFIG` → empty. Vestige of the old gconf loader, replaced by pydantic-settings in commit e2c06a7. The `.yml` filenames in justfile/CI are doubly wrong (config files are `.toml`); conftest.py:3 points at the real `tests/config.toml` — equally dead, just not a phantom filename. Config loading works anyway because `local_config.toml` auto-loads when present. |
-| `services.backup.included_globs` | `settings.py:23`, populated in `config.toml:17` | `grep -rn included_globs shard_core/` hits only the settings field definition. Never wired into the rclone command. Intent (planned selective backup vs leftover) unverified as of 2026-07-03. |
-| `[portal_controller] base_url` | `settings.py:84-85,124`, `config.toml:60-61` | `grep -rn "settings().portal_controller" shard_core/ tests/` → empty. Legacy of the portal→freeshard-controller migration. `service/portal_controller.py` actually uses `settings().freeshard_controller.base_url`. |
+| `CONFIG` env var | Set in both justfile run-dev recipes, CI `test.yml`, `tests/conftest.py`, and the README | Vestige of the gconf loader that commit e2c06a7 replaced with pydantic-settings; no code ever read it. The justfile/CI values named `.yml` files that had not existed since the TOML migration. Config loading always worked anyway, because `config.toml` is unconditional and `local_config.toml` auto-overlays when present. |
+| `services.backup.included_globs` | A `BackupSettings` field, populated in `config.toml` | Never wired into the rclone command; `service/backup.py` syncs the `directories` list only. |
+| `[portal_controller] base_url` | A `PortalControllerSettings` model + optional `Settings` field, set in `config.toml` | Legacy of the portal→freeshard-controller migration. `service/portal_controller.py` — the module still exists and is still live — reads `settings().freeshard_controller.base_url`. |
+
+The general lesson outlives the specific items: a config option is only real if something reads
+it. Before trusting an option, grep for its consumer.
 
 ## Feature-flag inventory
 
 | Flag | Default | Prod | What it gates | Bypass / caveat |
 |---|---|---|---|---|
-| `traefik.disable_ssl` | `false` | unset (false) | Static-config template `traefik_no_ssl.yml` vs `traefik.yml` (`app_factory.py:142-145`); http vs https scheme in shard URL and Traefik dynamic config (`app_factory.py:163`, `service/traefik_dynamic_config.py:42,166,216,225,233-234`) | Dev/testing only. Self-hosted exposure: `DISABLE_SSL` in `.env.template:4`. See boot-crash trap below. |
+| `traefik.disable_ssl` | `false` | unset (false) | Static-config template `traefik_no_ssl.yml` vs `traefik.yml` (`app_factory.py:142-145`); http vs https scheme in shard URL and Traefik dynamic config (`app_factory.py:163`, `service/traefik_dynamic_config.py:42,166,216,225,233-234`) | Dev/testing only. Self-hosted exposure: `DISABLE_SSL` in `.env.template:4`. |
 | `telemetry.enabled` | `false` | `false` | Both request counting and sending (`service/telemetry.py:19,27`) | `true` in tests. Sends request counts to the freeshard controller. |
 | `apps.pruning.enabled` | `false` | `false` | The *scheduled* docker image prune short-circuits when disabled (`service/app_tools.py:175-176`) | Manual `POST /protected/settings/prune-images` (`web/protected/settings.py:14-19`) calls `docker_prune_images(apply_filter=False)` — it runs regardless of the flag AND ignores `max_age`. |
 | Peer-to-peer | **NO FLAG EXISTS** | always active | Nothing — peers router included unconditionally (`web/protected/__init__.py:26`), `update_all_peer_pubkeys` PeriodicTask runs every 60 s (`app_factory.py:116`) | README's "peer-to-peer is disabled" means "no app uses it / not surfaced in UI", not config-gated. Don't search for a flag; there isn't one. |
@@ -189,13 +191,13 @@ Do not "fix" behavior by editing these; do not copy them into new code as if liv
 | `DNS_ZONE` | `FREESHARD_DNS__ZONE=${DNS_ZONE:?}` | fail-fast if unset |
 | `EMAIL` | `FREESHARD_TRAEFIK__ACME_EMAIL=${EMAIL:?}` | fail-fast |
 | `FREESHARD_DIR` | `FREESHARD_PATH_ROOT_HOST=${FREESHARD_DIR:?}` (also raw in volume mounts) | fail-fast |
-| `DISABLE_SSL` | `FREESHARD_TRAEFIK__DISABLE_SSL=${DISABLE_SSL}` | **NO guard, no default** |
+| `DISABLE_SSL` | `FREESHARD_TRAEFIK__DISABLE_SSL=${DISABLE_SSL:-false}` | defaults to `false` when unset |
 
-### Trap: empty DISABLE_SSL crashes boot
+### Trap: an unguarded boolean crashes boot
 
-Because `${DISABLE_SSL}` has no `:?` guard and no default, a self-hoster who omits the line
-from `.env` gets an **empty string** passed as `FREESHARD_TRAEFIK__DISABLE_SSL`, and
-`Settings()` raises at startup:
+Until 2026-07-15 (issue #128), `DISABLE_SSL` was interpolated bare as `${DISABLE_SSL}`. A
+self-hoster who omitted the line from `.env` passed an **empty string** to
+`FREESHARD_TRAEFIK__DISABLE_SSL`, and `Settings()` raised at startup:
 
 ```
 pydantic_core._pydantic_core.ValidationError: 1 validation error for Settings
@@ -203,9 +205,10 @@ traefik.disable_ssl
   Input should be a valid boolean, unable to interpret input [type=bool_parsing, input_value='', ...]
 ```
 
-(Reproduced 2026-07-03 with `FREESHARD_TRAEFIK__DISABLE_SSL= python -c "...Settings()"`.)
-If you touch this mapping, either add a default (`${DISABLE_SSL:-false}`) or a `:?` guard —
-and use `${VAR:?}` guards for any NEW compose env mapping you add.
+It now carries a `:-false` default, so an unset var behaves like an absent one. The trap
+generalises to every NEW compose env mapping you add: an empty string is not the same as
+unset, so give the var a `${VAR:-default}` or a `${VAR:?}` guard. Bare `${VAR}` on a
+non-string field is a boot crash waiting for the first person who skips the line.
 
 ## Committed registry credentials
 
@@ -253,9 +256,9 @@ exercised.
    unguarded `${VAR}` crashes `Settings()` on empty string (see trap above).
 5. **Verify the env path** with the one-liner (see "Verify-an-override one-liner").
 6. **Wire a consumer** via `settings().<section>.<field>` and grep to confirm it's actually
-   read — this repo already has two parsed-but-dead options; don't add a third.
-7. **Before trusting an EXISTING option**, grep for its consumer first: `included_globs` and
-   `portal_controller.base_url` parse fine and do nothing.
+   read — this repo carried two parsed-but-dead options for years; don't add a third.
+7. **Before trusting an EXISTING option**, grep for its consumer first. Parsing is not proof of
+   use: an option with no reader validates, documents itself, and changes nothing.
 
 ## When NOT to use this skill
 
@@ -273,12 +276,12 @@ exercised.
 
 ## Provenance and maintenance
 
-Written 2026-07-03. Primary sources: `shard_core/settings.py`, `config.toml`,
-`local_config.toml`, `tests/config.toml`, `.env.template`, `docker-compose.yml`, `justfile`,
-`tests/conftest.py`, `.github/workflows/test.yml`; commits e2c06a7 (gconf → pydantic-settings),
-5de2998 (env delimiter incident), 773f736 (local_config.toml dockerignore). All catalog
-entries, dead-config claims, and both trap reproductions were verified by running the listed
-commands on 2026-07-03.
+Written 2026-07-03; config surface updated 2026-07-15 for issue #128, which removed the three
+dead-config items, fixed the justfile single-underscore recipe, and defaulted the `DISABLE_SSL`
+compose mapping. Primary sources: `shard_core/settings.py`, `config.toml`, `local_config.toml`,
+`tests/config.toml`, `.env.template`, `docker-compose.yml`, `justfile`, `tests/conftest.py`,
+`.github/workflows/test.yml`; commits e2c06a7 (gconf → pydantic-settings), 5de2998 (env
+delimiter incident), 773f736 (local_config.toml dockerignore).
 
 Drift-prone facts — re-verify before relying on them:
 
@@ -288,12 +291,9 @@ Drift-prone facts — re-verify before relying on them:
 | Prod values | `cat config.toml` |
 | Dev / test overlay values | `cat local_config.toml tests/config.toml` |
 | Precedence: init > env > local_config.toml > config.toml | `sed -n '129,152p' shard_core/settings.py` |
-| `CONFIG` env var still dead | `grep -rn "environ" shard_core/ \| grep CONFIG` (expect empty) |
-| `CONFIG` still set in justfile/CI | `grep -n CONFIG justfile .github/workflows/test.yml` |
-| `included_globs` still dead | `grep -rn included_globs shard_core/` (only settings.py) |
-| `[portal_controller]` still dead | `grep -rn "settings().portal_controller" shard_core/ tests/` (expect empty) |
-| justfile controller recipe still single-underscore-broken | `grep -n FREESHARD_FREESHARD_CONTROLLER justfile` (broken if not `__BASE_URL`) |
-| `DISABLE_SSL` compose mapping still unguarded | `grep -n DISABLE_SSL docker-compose.yml` (broken if no `:?` or `:-` ) |
+| `CONFIG` / `included_globs` / `[portal_controller]` all still gone | `grep -rn "CONFIG=\|included_globs\|portal_controller" justfile .github/workflows/test.yml tests/conftest.py config.toml shard_core/settings.py` (expect empty; a hit means dead config came back) |
+| justfile controller recipe still uses the double underscore | `grep -n FREESHARD_FREESHARD_CONTROLLER justfile` (broken if not `__BASE_URL`) |
+| `DISABLE_SSL` compose mapping still defaulted | `grep -n DISABLE_SSL docker-compose.yml` (broken if no `:?` or `:-`) |
 | ACR credentials still committed / still docker-login'd in tests | `sed -n '30,33p' config.toml; sed -n '129,131p' tests/conftest.py` |
 | Feature-flag consumers unchanged | `grep -rn "disable_ssl\|telemetry.enabled\|pruning.enabled" shard_core/` |
 | Peer-to-peer still unflagged | `grep -rn "peer" shard_core/settings.py` (expect empty) |
