@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 
 from shard_core.settings import settings
-from shard_core.util.subprocess import subprocess, compose_command
+from shard_core.util.subprocess import subprocess, app_compose_command
 
 log = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ async def reclaim_compose_stack(app_name: str):
     """Write each container's current RSS to its cgroup memory.reclaim,
     proactively paging the frozen processes' anonymous pages out to swap."""
     app_path = Path(settings().path_root) / "core" / "installed_apps" / app_name
-    stdout = await subprocess(*compose_command(), "ps", "-q", cwd=app_path)
+    stdout = await subprocess(*app_compose_command(app_path), "ps", "-q")
     container_ids = [line.strip() for line in stdout.splitlines() if line.strip()]
     for container_id in container_ids:
         # The memory.reclaim write blocks while the kernel pages out — run it

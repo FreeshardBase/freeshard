@@ -17,16 +17,18 @@ from shard_core.data_model.app_meta import (
 from shard_core.settings import settings
 from shard_core.util import signals
 from shard_core.util.misc import throttle
-from shard_core.util.subprocess import subprocess, SubprocessError, compose_command
+from shard_core.util.subprocess import subprocess, SubprocessError, app_compose_command
 
 log = logging.getLogger(__name__)
 
 
+def _app_compose(name: str) -> tuple[str, ...]:
+    return app_compose_command(get_installed_apps_path() / name)
+
+
 async def docker_create_app_containers(name: str):
     log.debug(f"creating containers for app {name}")
-    await subprocess(
-        *compose_command(), "up", "--no-start", cwd=get_installed_apps_path() / name
-    )
+    await subprocess(*_app_compose(name), "up", "--no-start")
 
 
 @throttle(5)
@@ -43,30 +45,20 @@ async def docker_start_app(name: str):
     if app_status in [Status.STOPPED, Status.RUNNING, Status.DOWN]:
         log.debug(f"starting app {name=}")
         try:
-            await subprocess(
-                *compose_command(), "up", "-d", cwd=get_installed_apps_path() / name
-            )
+            await subprocess(*_app_compose(name), "up", "-d")
         except SubprocessError as e:
             if "network" in str(e) and "not found" in str(e):
                 log.warning(
                     f"stale network reference for app {name=}, recreating containers"
                 )
-                await subprocess(
-                    *compose_command(), "down", cwd=get_installed_apps_path() / name
-                )
-                await subprocess(
-                    *compose_command(), "up", "-d", cwd=get_installed_apps_path() / name
-                )
+                await subprocess(*_app_compose(name), "down")
+                await subprocess(*_app_compose(name), "up", "-d")
             elif "Conflict" in str(e) and "already in use" in str(e):
                 log.warning(
                     f"stale containers for app {name=}, removing and recreating"
                 )
-                await subprocess(
-                    *compose_command(), "down", cwd=get_installed_apps_path() / name
-                )
-                await subprocess(
-                    *compose_command(), "up", "-d", cwd=get_installed_apps_path() / name
-                )
+                await subprocess(*_app_compose(name), "down")
+                await subprocess(*_app_compose(name), "up", "-d")
             else:
                 raise
         async with db_conn() as conn:
@@ -84,9 +76,7 @@ async def docker_pause_app(name: str):
     if app_status == Status.RUNNING:
         log.debug(f"pausing app {name=}")
         pause_started = time.monotonic()
-        await subprocess(
-            *compose_command(), "pause", cwd=get_installed_apps_path() / name
-        )
+        await subprocess(*_app_compose(name), "pause")
         await memory_pressure.reclaim_compose_stack(name)
         pause_metrics.record_pause_latency((time.monotonic() - pause_started) * 1000)
         pause_metrics.record_app_transition(name, Status.RUNNING, Status.PAUSED)
@@ -104,9 +94,7 @@ async def docker_unpause_app(name: str):
     if app_status == Status.PAUSED:
         log.debug(f"unpausing app {name=}")
         unpause_started = time.monotonic()
-        await subprocess(
-            *compose_command(), "unpause", cwd=get_installed_apps_path() / name
-        )
+        await subprocess(*_app_compose(name), "unpause")
         pause_metrics.record_unpause_latency(
             (time.monotonic() - unpause_started) * 1000
         )
@@ -125,12 +113,8 @@ async def docker_stop_app(name: str, set_status: bool = True):
     if app_status in [Status.RUNNING, Status.PAUSED, Status.UNINSTALLING]:
         if app_status == Status.PAUSED:
             # a frozen container cannot be stopped — unfreeze first
-            await subprocess(
-                *compose_command(), "unpause", cwd=get_installed_apps_path() / name
-            )
-        await subprocess(
-            *compose_command(), "stop", cwd=get_installed_apps_path() / name
-        )
+            await subprocess(*_app_compose(name), "unpause")
+        await subprocess(*_app_compose(name), "stop")
         if set_status:
             pause_metrics.record_app_transition(
                 name, Status(app_status), Status.STOPPED
@@ -150,12 +134,8 @@ async def docker_shutdown_app(name: str, set_status: bool = True, force: bool = 
         if app_status == Status.PAUSED:
             # only reachable with force=True (process shutdown) — unfreeze so
             # compose down can stop and remove the containers
-            await subprocess(
-                *compose_command(), "unpause", cwd=get_installed_apps_path() / name
-            )
-        await subprocess(
-            *compose_command(), "down", cwd=get_installed_apps_path() / name
-        )
+            await subprocess(*_app_compose(name), "unpause")
+        await subprocess(*_app_compose(name), "down")
         if set_status:
             async with db_conn() as conn:
                 await db_installed_apps.update_status(conn, name, Status.DOWN)
