@@ -7,6 +7,9 @@ from docker.errors import NotFound
 from fastapi import status
 from httpx import AsyncClient
 
+from shard_core.data_model.app_meta import InstallationReason, InstalledApp, Status
+from shard_core.database import installed_apps as db_installed_apps
+from shard_core.database.connection import db_conn
 from shard_core.service.app_tools import get_installed_apps_path
 from tests.util import (
     wait_until_app_installed,
@@ -114,6 +117,26 @@ async def test_uninstall_running_app(api_client: AsyncClient):
 
     with pytest.raises(NotFound):
         docker_client.containers.get(app_name)
+
+
+async def test_uninstall_app_without_compose_file(api_client: AsyncClient):
+    app_name = "mock_app"
+    async with db_conn() as conn:
+        await db_installed_apps.insert(
+            conn,
+            InstalledApp(
+                name=app_name,
+                installation_reason=InstallationReason.CUSTOM,
+                status=Status.ERROR,
+            ).model_dump(),
+        )
+    (get_installed_apps_path() / app_name).mkdir(parents=True, exist_ok=True)
+
+    response = await api_client.delete(f"protected/apps/{app_name}")
+    assert response.status_code == status.HTTP_204_NO_CONTENT
+
+    await wait_until_app_uninstalled(api_client, app_name)
+    assert not (get_installed_apps_path() / app_name).exists()
 
 
 async def _upload_custom_app(api_client: AsyncClient, filename: str, content: bytes):

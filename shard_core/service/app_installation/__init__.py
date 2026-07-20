@@ -108,6 +108,25 @@ async def reinstall_app(name: str):
     log.info(f"created {reinstallation_task}")
 
 
+async def reconcile_interrupted_uninstalls():
+    """Re-enqueue uninstalls that a previous process did not finish.
+
+    The task queue only lives in memory, so a stop between the status flip and the
+    row delete strands the row in UNINSTALLING with nothing left to resume it.
+    Enqueue only — the worker is started later in the lifespan.
+    """
+    async with db_conn() as conn:
+        all_apps = await db_installed_apps.get_all(conn)
+
+    for app in all_apps:
+        if app["status"] not in (Status.UNINSTALLATION_QUEUED, Status.UNINSTALLING):
+            continue
+        worker.installation_worker.enqueue(
+            worker.InstallationTask(app_name=app["name"], task_type="uninstall")
+        )
+        log.info(f"resuming interrupted uninstallation of {app['name']}")
+
+
 async def refresh_init_apps():
     try:
         await database.get_value(STORE_KEY_INITIAL_APPS_INSTALLED)
