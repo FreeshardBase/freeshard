@@ -36,6 +36,7 @@ shard_core/
     freeshard_controller.py  API calls to controller
     telemetry.py        Usage metrics reporting
     disk.py             Disk space monitoring
+    disk_full_notification.py  Owner email when disk crosses threshold (via controller relay, deduped)
     migration.py        Database schema migrations
     websocket.py        WebSocket connection lifecycle
   database/           → PostgreSQL access layer (per-entity modules, conn-first-arg pattern)
@@ -85,7 +86,7 @@ Postgres data is not part of the rclone backup set (which only syncs `core/`/`us
 Started at app lifespan startup, stopped at shutdown:
 - `InstallationWorker` — async task queue for app install/uninstall
 - `PeriodicTask(control_apps, 30s)` — app idle lifecycle. With `apps.lifecycle.pause_enabled` (default off): RUNNING pauses after `idle_for_pause` (cgroup freeze + page-out to swap), PAUSED stops after `idle_for_stop`, and high memory PSI demotes the LRU app one tier per cycle. Flag off: legacy stop-only
-- `PeriodicTask(update_disk_space, 30s)` — disk monitoring
+- `PeriodicTask(update_disk_space, 30s)` — disk monitoring; also triggers `disk_full_notification.check_disk_full` (owner email when usage ≥ `event_notifications.disk_full.threshold_percent`, default 90%, deduped via kv_store, opt-out via `event_notifications.disk_full.enabled`)
 - `CronTask(start_backup, "0 3 * * *")` — daily backup with random delay
 - `CronTask(docker_prune_images, daily)` — image cleanup
 - Various telemetry and peer key refresh tasks
