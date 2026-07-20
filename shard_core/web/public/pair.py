@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, status, Response
 from shard_core.database.connection import db_conn
 from shard_core.database import terminals as db_terminals
 from shard_core.database import identities as db_identities
+from shard_core.database import users as db_users
 from shard_core.data_model.identity import Identity
 from shard_core.data_model.terminal import Terminal, InputTerminal
 from shard_core.service import pairing
@@ -38,8 +39,10 @@ async def add_terminal(code: str, terminal: InputTerminal, response: Response):
             detail="This pairing code is not valid.",
         ) from e
 
-    new_terminal = Terminal.create(terminal.name)
     async with db_conn() as conn:
+        # the owner user always exists here — created at startup, before pairing
+        owner = await db_users.get_owner(conn)
+        new_terminal = Terminal.create(terminal.name, user_id=owner.id)
         await db_terminals.insert(conn, new_terminal.model_dump())
         is_first_terminal = await db_terminals.count(conn) == 1
 

@@ -28,8 +28,8 @@ async def get_by_name(conn: AsyncConnection, name: str) -> dict | None:
 
 
 async def insert(conn: AsyncConnection, terminal: dict) -> dict:
-    sql: LiteralString = """INSERT INTO terminals (id, name, icon, last_connection)
-        VALUES (%(id)s, %(name)s, %(icon)s, %(last_connection)s)
+    sql: LiteralString = """INSERT INTO terminals (id, name, icon, last_connection, user_id)
+        VALUES (%(id)s, %(name)s, %(icon)s, %(last_connection)s, %(user_id)s)
         RETURNING *"""
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(sql, terminal)
