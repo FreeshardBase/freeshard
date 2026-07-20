@@ -69,6 +69,14 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
             service="web-terminal",
             tls=make_http_cert_resolver(portal),
         ),
+        "sundial": t.HttpRouter(
+            rule="PathPrefix(`/sundial`)",
+            priority=2,
+            entryPoints=[http_entrypoint],
+            service="sundial",
+            middlewares=["redirect-sundial-slash", "strip-sundial"],
+            tls=make_http_cert_resolver(portal),
+        ),
         "traefik": t.HttpRouter(
             rule=f"HostRegexp(`traefik.{portal.domain}`)",
             entryPoints=[http_entrypoint],
@@ -82,6 +90,20 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
         "strip": t.HttpMiddleware(
             root=t.HttpMiddlewareItem21(
                 stripPrefix=t.StripPrefixMiddleware(prefixes=["/core/"])
+            )
+        ),
+        "strip-sundial": t.HttpMiddleware(
+            root=t.HttpMiddlewareItem21(
+                stripPrefix=t.StripPrefixMiddleware(prefixes=["/sundial"])
+            )
+        ),
+        "redirect-sundial-slash": t.HttpMiddleware(
+            root=t.HttpMiddlewareItem16(
+                redirectRegex=t.RedirectRegexMiddleware(
+                    regex="^(https?://[^/]+)/sundial$",
+                    replacement="${1}/sundial/",
+                    permanent=True,
+                )
             )
         ),
         "auth-private": t.HttpMiddleware(
@@ -144,6 +166,13 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
             root=t.HttpServiceItem(
                 loadBalancer=t.HttpLoadBalancerService(
                     servers=[t.Server(url="http://web-terminal:80/")]
+                )
+            )
+        ),
+        "sundial": t.HttpService(
+            root=t.HttpServiceItem(
+                loadBalancer=t.HttpLoadBalancerService(
+                    servers=[t.Server(url="http://sundial:80/")]
                 )
             )
         ),

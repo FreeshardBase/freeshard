@@ -75,3 +75,10 @@ services:
     restart: always
     networks:
       - portal
+
+  sundial:
+    image: ghcr.io/freeshardbase/sundial:0.1.0
+    container_name: sundial
+    restart: always
+    networks:
+      - portal
