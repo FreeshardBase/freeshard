@@ -50,7 +50,7 @@ services:
         condition: service_healthy
 
   shard_core:
-    image: ghcr.io/freeshardbase/freeshard:0.41.0
+    image: ghcr.io/freeshardbase/freeshard:0.40.0
     container_name: shard_core
     restart: always
     stop_grace_period: 30s
@@ -72,13 +72,6 @@ services:
   web-terminal:
     image: ghcr.io/freeshardbase/web-terminal:0.37.4
     container_name: web-terminal
-    restart: always
-    networks:
-      - portal
-
-  sundial:
-    image: ghcr.io/freeshardbase/sundial:0.1.0
-    container_name: sundial
     restart: always
     networks:
       - portal
