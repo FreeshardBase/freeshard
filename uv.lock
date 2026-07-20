@@ -1813,7 +1813,7 @@ wheels = [
 
 [[package]]
 name = "shard-core"
-version = "0.39.5"
+version = "0.41.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
