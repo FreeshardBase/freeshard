@@ -13,6 +13,10 @@ from shard_core.database import identities as db_identities
 from shard_core.data_model.app_meta import Status, InstalledApp
 from shard_core.data_model.identity import Identity, SafeIdentity
 from shard_core.service.app_installation.exceptions import AppInIllegalStatus
+from shard_core.service.app_installation.secrets import (
+    load_secret_resolver,
+    persist_new_secrets,
+)
 from shard_core.service.app_tools import get_installed_apps_path, get_app_metadata
 from shard_core.settings import settings
 from shard_core.service.traefik_dynamic_config import AppInfo, compile_config
@@ -102,12 +106,13 @@ async def render_docker_compose_template(app: InstalledApp):
 
     app_dir = get_installed_apps_path() / app.name
     template = jinja2.Template((app_dir / "docker-compose.yml.template").read_text())
-    (app_dir / "docker-compose.yml").write_text(
-        template.render(
-            fs=fs,
-            portal=portal,
-        )
-    )
+
+    secret_resolver = await load_secret_resolver(app.name)
+    rendered = template.render(fs=fs, portal=portal, secret=secret_resolver)
+    # Persist before writing the file so a persistence failure aborts the render
+    # instead of leaving a compose file with secrets that were never stored.
+    await persist_new_secrets(app.name, secret_resolver)
+    (app_dir / "docker-compose.yml").write_text(rendered)
 
 
 async def write_traefik_dyn_config():
