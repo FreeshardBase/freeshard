@@ -1,4 +1,4 @@
-import secrets as pysecrets  # aliased: this module is itself named secrets
+import secrets
 import string
 
 from shard_core.database import app_secrets as db_app_secrets
@@ -9,7 +9,7 @@ _SECRET_LENGTH = 32
 
 
 def generate_secret() -> str:
-    return "".join(pysecrets.choice(_SECRET_ALPHABET) for _ in range(_SECRET_LENGTH))
+    return "".join(secrets.choice(_SECRET_ALPHABET) for _ in range(_SECRET_LENGTH))
 
 
 class SecretResolver:
