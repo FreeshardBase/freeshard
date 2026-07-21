@@ -4,7 +4,6 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from shard_core.service import disk_full_notification
 from shard_core.settings import settings
 from shard_core.util import signals
 
@@ -29,4 +28,3 @@ async def update_disk_space():
         disk_space_low=usage.free / 1024**3 < 1,
     )
     signals.on_disk_usage_update.send(current_disk_usage)
-    await disk_full_notification.check_disk_full(current_disk_usage)
