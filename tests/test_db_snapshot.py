@@ -13,7 +13,7 @@ from tests.conftest import settings_override
 
 _APP_TABLES = (
     "identities, terminals, installed_apps, peers, backups, tours, "
-    "app_usage_tracks, kv_store"
+    "app_usage_tracks, kv_store, app_secrets"
 )
 
 
@@ -42,6 +42,8 @@ async def _seed_shard_state():
             "INSERT INTO backups (directories, start_time, end_time) VALUES (%s, %s, %s)",
             (Jsonb([]), now, now),
         )
+        await conn.execute("""INSERT INTO app_secrets (app_name, name, value)
+               VALUES ('filebrowser', 'db_password', 'super-secret-value')""")
 
 
 @pytest.mark.asyncio
@@ -75,6 +77,13 @@ async def test_snapshot_roundtrip_restores_core_state(db, tmp_path):
                 )
             ).fetchone()
             assert passphrase[0] == "correct horse battery staple"
+
+            secret = await (
+                await conn.execute(
+                    "SELECT value FROM app_secrets WHERE app_name = 'filebrowser'"
+                )
+            ).fetchone()
+            assert secret[0] == "super-secret-value"
 
             # SERIAL sequence advanced past the restored row → new insert must not collide.
             new_id = await (
