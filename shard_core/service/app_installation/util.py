@@ -14,7 +14,7 @@ from shard_core.data_model.app_meta import Status, InstalledApp
 from shard_core.data_model.identity import Identity, SafeIdentity
 from shard_core.service import oidc_provider
 from shard_core.service.app_installation.exceptions import AppInIllegalStatus
-from shard_core.service.app_installation.secrets import (
+from shard_core.service.app_installation.app_secrets import (
     load_secret_resolver,
     persist_new_secrets,
 )
