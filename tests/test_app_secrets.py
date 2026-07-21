@@ -1,3 +1,4 @@
+import shutil
 import string
 
 import pytest
@@ -8,6 +9,7 @@ from shard_core.database import app_secrets as db_app_secrets
 from shard_core.database import installed_apps as db_installed_apps
 from shard_core.database.connection import db_conn
 from shard_core.service import identity
+from shard_core.service.app_installation.app_secrets import generate_secret
 from shard_core.service.app_installation.util import render_docker_compose_template
 from shard_core.service.app_installation.worker import _uninstall_app
 from shard_core.service.app_tools import get_installed_apps_path
@@ -76,6 +78,22 @@ async def test_secret_reused_across_renders():
     assert first == second
 
 
+async def test_secret_reused_after_reinstall():
+    # Intent (issue #138): reinstall reuses the kept secret. A reinstall wipes
+    # the app dir (worker._reinstall_app) but leaves the DB row and app_secrets.
+    app = await _install_app_with_template("reinstall_app", _TEMPLATE)
+    await render_docker_compose_template(app)
+    first = _rendered_env("reinstall_app")["PASSWORD"]
+
+    app_dir = get_installed_apps_path() / "reinstall_app"
+    shutil.rmtree(app_dir)
+    app_dir.mkdir(parents=True)
+    (app_dir / "docker-compose.yml.template").write_text(_TEMPLATE)
+
+    await render_docker_compose_template(app)
+    assert _rendered_env("reinstall_app")["PASSWORD"] == first
+
+
 async def test_distinct_names_get_distinct_secrets():
     template = """
 services:
@@ -93,6 +111,10 @@ services:
 
     assert env["A"] == env["A_AGAIN"]
     assert env["A"] != env["B"]
+
+    async with db_conn() as conn:
+        stored = await db_app_secrets.get_all_for_app(conn, "multi_app")
+    assert stored == {"one": env["A"], "two": env["B"]}
 
 
 async def test_secrets_kept_on_uninstall(mocker):
@@ -184,3 +206,13 @@ async def test_insert_is_idempotent():
         await db_app_secrets.insert(conn, "idem_app", "k", "second")
         stored = await db_app_secrets.get_all_for_app(conn, "idem_app")
     assert stored == {"k": "first"}
+
+
+async def test_generate_secret_length_charset_and_uniqueness():
+    values = [generate_secret() for _ in range(100)]
+    for v in values:
+        assert len(v) == 32
+        assert set(v) <= _SECRET_CHARS
+    # distinct values across 100 draws → the generator is actually random,
+    # not returning a constant.
+    assert len(set(values)) == 100
