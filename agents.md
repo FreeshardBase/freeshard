@@ -71,7 +71,7 @@ async with db_conn() as conn:
     await db_installed_apps.update_status(conn, "myapp", Status.RUNNING)
 ```
 
-Tables: `identities`, `terminals`, `installed_apps`, `peers`, `backups`, `tours`, `app_usage_tracks`, `kv_store`.
+Tables: `identities`, `terminals`, `installed_apps`, `peers`, `backups`, `tours`, `app_usage_tracks`, `kv_store`, `app_secrets`.
 
 Postgres data is not part of the rclone backup set (which only syncs `core/`/`user_data/`). To keep it, `database/db_snapshot.py` dumps all application tables to `core/db_snapshot.json` before each backup, and `init_database()` restores it on a fresh shard (before the default identity is generated, so the restored identity survives). Pre-0.38 backups are restored from TinyDB by `tinydb_migration.py` instead.
 
@@ -134,8 +134,8 @@ snapshot backup. Secrets are kept on uninstall (so a reinstall of the same app r
 them, matching the app's retained `user_data`), never rotated, and never encrypted at
 rest. App-scoping is NOT a boundary against a hostile app author: the compose template is
 rendered with a non-sandboxed jinja environment (as `portal`/`fs` already are), so a
-malicious template can escape and read any app's secrets — tracked separately for a
-`SandboxedEnvironment` fix.
+malicious template can escape and read any app's secrets. Closing that gap would need a
+`SandboxedEnvironment`; it is out of scope here.
 
 ### Async Fire-and-Forget
 Long operations use `asyncio.create_task()` with done callbacks. No thread pools.
