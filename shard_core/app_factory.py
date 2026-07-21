@@ -24,6 +24,7 @@ from .service import (
     portal_controller,
     backup,
     disk,
+    disk_full_notification,
     telemetry,
 )
 from .service.app_installation.util import (
@@ -133,6 +134,7 @@ def _make_background_tasks() -> List[BackgroundTask]:
             max_random_delay=s.services.backup.timing.max_random_delay,
         ),
         PeriodicTask(disk.update_disk_space, 30),
+        PeriodicTask(disk_full_notification.run_check, 30),
         websocket.ws_worker,
         PeriodicTask(telemetry.send_telemetry, s.telemetry.send_interval_seconds),
     ]

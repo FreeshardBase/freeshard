@@ -57,6 +57,10 @@ enabled = false
 enabled = false
 send_interval_seconds = 300
 
+[event_notifications.disk_full]
+enabled = true
+threshold_percent = 90
+
 [management]
 api_url = "https://ptlfunctionapp.azurewebsites.net/api/management"
 
