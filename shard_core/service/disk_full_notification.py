@@ -1,20 +1,15 @@
 import json
 import logging
-from typing import TYPE_CHECKING
 
 from shard_core.database import database
+from shard_core.service import disk
 from shard_core.service.freeshard_controller import call_freeshard_controller
 from shard_core.settings import settings
 
-if TYPE_CHECKING:
-    from shard_core.service.disk import DiskUsage
-
 log = logging.getLogger(__name__)
 
-KV_KEY_DISK_FULL_NOTIFIED = "disk_full_notification_sent"
+KV_KEY_DISK_FULL_NOTIFICATION_SENT = "disk_full_notification_sent"
 
-# The active language is fixed to English for now; the German template is kept
-# ready so a language switch is a one-line change once it is needed.
 ACTIVE_LANGUAGE = "en"
 
 _TEMPLATES = {
@@ -46,7 +41,12 @@ _TEMPLATES = {
 }
 
 
-async def check_disk_full(usage: "DiskUsage") -> None:
+async def run_check() -> None:
+    """Background-task entry point: check the latest disk snapshot."""
+    await check_disk_full(disk.current_disk_usage)
+
+
+async def check_disk_full(usage: disk.DiskUsage) -> None:
     """Send a one-off email when disk usage crosses the configured threshold.
 
     Deduplicated via a persistent flag in the kv_store: the email is sent once
@@ -69,14 +69,14 @@ async def check_disk_full(usage: "DiskUsage") -> None:
         except Exception as e:
             log.error(f"failed to send disk-full notification email: {e}")
             return
-        await database.set_value(KV_KEY_DISK_FULL_NOTIFIED, True)
+        await database.set_value(KV_KEY_DISK_FULL_NOTIFICATION_SENT, True)
     elif not over_threshold and already_notified:
-        await database.set_value(KV_KEY_DISK_FULL_NOTIFIED, False)
+        await database.set_value(KV_KEY_DISK_FULL_NOTIFICATION_SENT, False)
 
 
 async def _was_notified() -> bool:
     try:
-        return bool(await database.get_value(KV_KEY_DISK_FULL_NOTIFIED))
+        return bool(await database.get_value(KV_KEY_DISK_FULL_NOTIFICATION_SENT))
     except KeyError:
         return False
 
@@ -92,5 +92,8 @@ async def _send_disk_full_email(used_percent: float) -> None:
         method="POST",
         body=json.dumps(payload).encode(),
     )
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
+    finally:
+        response.close()
     log.info(f"sent disk-full notification email (disk {used_percent:.0f}% full)")
