@@ -112,12 +112,17 @@ re-enqueues an uninstall for every row still in `UNINSTALLATION_QUEUED` or
 `UNINSTALLING`. `_uninstall_app` asserts no status and tolerates missing files, so
 resuming it is idempotent — the row is the tombstone. The step only enqueues; the
 worker starts later in the lifespan, and awaiting task completion before then
-deadlocks. Install and reinstall are made crash-safe the same way by
-`reconcile_interrupted_installs()`: it re-enqueues the row when its source still
-exists (zip on disk → "install from zip", store/config install → re-download,
-reinstall → re-download), and marks the row `ERROR` when the source is gone
-(a custom upload whose zip is lost). It resets the status to the matching
-`*_QUEUED` value first so the worker's status assertion passes.
+deadlocks. Install is made crash-safe the same way by
+`reconcile_interrupted_installs()` (run right before `write_traefik_dyn_config` so
+a row it resets to a non-routable status is excluded from the boot's Traefik
+config): it re-enqueues an interrupted install when its source still exists (zip
+on disk → "install from zip", otherwise a store/config/unknown install →
+re-download), resetting the status to `INSTALLATION_QUEUED` first so the worker's
+status assertion passes, and marks the row `ERROR` when the source is gone (a
+custom upload whose zip is lost). Reinstall is settled to `ERROR` rather than
+resumed: `_reinstall_app` deletes the app's files before re-downloading, so
+re-running it unattended could destroy a working install if the store is briefly
+unreachable at boot — the user retries it manually.
 
 Apps in `NOT_ROUTABLE_STATUS` (`app_installation/util.py`) get no Traefik router:
 `INSTALLATION_QUEUED`, `ERROR`, `UNINSTALLATION_QUEUED`, `UNINSTALLING`. Their files
