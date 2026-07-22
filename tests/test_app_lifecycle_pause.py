@@ -5,7 +5,7 @@ decision logic of _control_app_time and _demote_lru, not Docker behavior
 (that lives in the integration tests).
 """
 
-import time
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -47,16 +47,9 @@ def docker_mocks():
         yield {"start": start, "stop": stop, "pause": pause, "unpause": unpause}
 
 
-@pytest.fixture(autouse=True)
-def clean_last_access():
-    app_lifecycle.last_access_dict.clear()
-    yield
-    app_lifecycle.last_access_dict.clear()
-
-
 def _app(name: str, status: Status, idle: float) -> InstalledApp:
-    app_lifecycle.last_access_dict[name] = time.time() - idle
-    return InstalledApp(name=name, status=status)
+    last_access = datetime.now(timezone.utc) - timedelta(seconds=idle)
+    return InstalledApp(name=name, status=status, last_access=last_access)
 
 
 PAUSE_ON = {"apps": {"lifecycle": {"pause_enabled": True}}}
