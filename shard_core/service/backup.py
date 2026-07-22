@@ -110,7 +110,9 @@ async def start_backup():
             signals.on_backup_update.send()
 
     task.add_done_callback(
-        lambda task: _register_background_task(asyncio.create_task(on_task_done(task)))
+        lambda completed: _register_background_task(
+            asyncio.create_task(on_task_done(completed))
+        )
     )
 
 
