@@ -1,5 +1,6 @@
 import datetime
 import json
+import time
 from enum import Enum
 from pathlib import Path as FilePath
 from typing import Optional, List, Dict, Union
@@ -164,20 +165,48 @@ class InstalledAppWithMeta(InstalledApp):
     meta: AppMeta | None
 
 
+# The DB column installed_apps.last_access is the single source of truth for
+# app last-access. This short-lived cache keeps the per-request debounce read
+# off the DB on the forwardAuth hot path (loading app assets), which is fired
+# on every request to an app — see issue #133 and the auth-cache rationale
+# (issue #89). Entries are refreshed on every write, so the cached value always
+# equals the last persisted last_access.
+_last_access_cache: Dict[str, tuple[Optional[datetime.datetime], float]] = {}
+
+
+async def get_last_access(app_name: str) -> Optional[datetime.datetime]:
+    ttl = settings().apps.last_access.read_cache_ttl
+    cached = _last_access_cache.get(app_name)
+    if cached is not None and time.monotonic() - cached[1] < ttl:
+        return cached[0]
+
+    from shard_core.database.connection import db_conn
+    from shard_core.database import installed_apps as db_installed_apps
+
+    async with db_conn() as conn:
+        row = await db_installed_apps.get_by_name(conn, app_name)
+    value = row["last_access"] if row else None
+    if value is not None and value.tzinfo is None:
+        value = value.replace(tzinfo=datetime.timezone.utc)
+    _last_access_cache[app_name] = (value, time.monotonic())
+    return value
+
+
 @signals.on_request_to_app.connect
 async def update_last_access(app: InstalledApp):
     now = datetime.datetime.now(datetime.timezone.utc)
     max_update_frequency = datetime.timedelta(
         seconds=settings().apps.last_access.max_update_frequency
     )
-    if app.last_access and now - app.last_access < max_update_frequency:
+    last_access = await get_last_access(app.name)
+    if last_access and now - last_access < max_update_frequency:
         return
     from shard_core.database.connection import db_conn
     from shard_core.database import installed_apps as db_installed_apps
 
     async with db_conn() as conn:
         await db_installed_apps.update_last_access(conn, app.name, now)
-    app.last_access = now
+    _last_access_cache[app.name] = (now, time.monotonic())
 
 
 if __name__ == "__main__":
