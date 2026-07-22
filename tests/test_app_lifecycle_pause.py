@@ -270,3 +270,16 @@ async def test_demote_lru_demotes_exactly_one_app_per_cycle(docker_mocks):
         await app_lifecycle._demote_lru(apps)
     assert docker_mocks["pause"].await_count == 1
     docker_mocks["pause"].assert_awaited_once_with("a")
+
+
+async def test_demote_lru_treats_never_accessed_app_as_oldest(docker_mocks):
+    apps = [
+        _app("recent", Status.RUNNING, idle=100),
+        InstalledApp(name="never", status=Status.RUNNING, last_access=None),
+    ]
+    with patch.object(
+        app_lifecycle, "get_app_metadata", return_value=_meta(Lifecycle())
+    ):
+        await app_lifecycle._demote_lru(apps)
+    docker_mocks["pause"].assert_awaited_once_with("never")
+    docker_mocks["stop"].assert_not_awaited()

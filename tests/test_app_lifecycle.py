@@ -127,7 +127,7 @@ def _idle_meta() -> AppMeta:
     )
 
 
-async def test_idle_stop_uses_db_last_access_when_stale():
+async def test_idle_stop_uses_last_access_when_stale():
     app = InstalledApp(
         name="a",
         status=Status.RUNNING,

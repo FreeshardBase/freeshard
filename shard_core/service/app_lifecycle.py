@@ -26,6 +26,9 @@ background_tasks = set()
 RECENT_ACCESS_GRACE = 5
 
 
+# control_apps loads every app fresh from the DB each cycle, so idle decisions
+# read InstalledApp.last_access directly — not through app_meta's request-path
+# read cache, whose TTL must never delay a stop.
 def _last_access_epoch(app: InstalledApp) -> float:
     """Last-access as a POSIX timestamp; 0.0 (oldest) when never accessed."""
     if app.last_access is None:
