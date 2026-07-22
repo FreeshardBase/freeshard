@@ -54,7 +54,7 @@ async def update_peer_meta(peer: Peer):
 
     try:
         response.raise_for_status()
-    except requests.exceptions.HTTPError as e:
+    except requests.HTTPError as e:
         log.debug(f"Could not update peer meta for {peer.short_id}: {e}")
         async with db_conn() as conn:
             await db_peers.update_by_id(conn, peer.id, {"is_reachable": False})
