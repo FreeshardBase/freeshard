@@ -9,6 +9,7 @@ from shard_core.data_model.app_meta import (
     AppMeta,
 )
 from shard_core.data_model.identity import SafeIdentity
+from shard_core.service.traefik_secret import HEADER_NAME as TRAEFIK_SECRET_HEADER
 from shard_core.settings import settings
 
 
@@ -18,9 +19,11 @@ class AppInfo:
     installed_app: InstalledApp
 
 
-def compile_config(apps: List[AppInfo], portal: SafeIdentity) -> t.Model:
+def compile_config(
+    apps: List[AppInfo], portal: SafeIdentity, traefik_secret: str
+) -> t.Model:
     model = t.Model()
-    _add_http_section(model, portal)
+    _add_http_section(model, portal, traefik_secret)
     _add_tcp_section(model, portal)
     for app_info in apps:
         for ep in app_info.app_meta.entrypoints:
@@ -38,7 +41,7 @@ def compile_config(apps: List[AppInfo], portal: SafeIdentity) -> t.Model:
     return model
 
 
-def _add_http_section(model: t.Model, portal: SafeIdentity):
+def _add_http_section(model: t.Model, portal: SafeIdentity, traefik_secret: str):
     http_entrypoint = "http" if _disable_ssl() else "https"
     _routers = {
         "shard_core_public": t.HttpRouter(
@@ -52,14 +55,14 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
             rule="PathPrefix(`/core/protected`)",
             entryPoints=[http_entrypoint],
             service="shard_core",
-            middlewares=["strip", "auth-private"],
+            middlewares=["strip", "auth-private", "verify-traefik"],
             tls=make_http_cert_resolver(portal),
         ),
         "shard_core_management": t.HttpRouter(
             rule="PathPrefix(`/core/management`)",
             entryPoints=[http_entrypoint],
             service="shard_core",
-            middlewares=["strip", "auth-management"],
+            middlewares=["strip", "auth-management", "verify-traefik"],
             tls=make_http_cert_resolver(portal),
         ),
         "web-terminal": t.HttpRouter(
@@ -111,6 +114,13 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
                         "X-Ptl-Client-Id": "",
                         "X-Ptl-Client-Name": "",
                     }
+                )
+            )
+        ),
+        "verify-traefik": t.HttpMiddleware(
+            root=t.HttpMiddlewareItem10(
+                headers=t.HeadersMiddleware(
+                    customRequestHeaders={TRAEFIK_SECRET_HEADER: traefik_secret}
                 )
             )
         ),
