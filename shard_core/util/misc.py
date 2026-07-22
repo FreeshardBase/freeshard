@@ -2,26 +2,32 @@ import inspect
 import time
 
 
-def throttle(min_duration: float):
+def throttle(min_duration: float, key=None):
     def decorator_throttle(func):
-        last_call = None
+        last_call: dict = {}
+
+        def is_allowed(*args, **kwargs):
+            k = key(*args, **kwargs) if key is not None else None
+            now = time.time()
+            prev = last_call.get(k)
+            if prev is None or prev + min_duration < now:
+                last_call[k] = now
+                return True
+            return False
 
         if inspect.iscoroutinefunction(func):
 
             async def wrapper_throttle(*args, **kwargs):
-                nonlocal last_call
-                if last_call is None or last_call + min_duration < time.time():
-                    last_call = time.time()
+                if is_allowed(*args, **kwargs):
                     return await func(*args, **kwargs)
 
         else:
 
             def wrapper_throttle(*args, **kwargs):
-                nonlocal last_call
-                if last_call is None or last_call + min_duration < time.time():
-                    last_call = time.time()
+                if is_allowed(*args, **kwargs):
                     return func(*args, **kwargs)
 
+        wrapper_throttle.reset = last_call.clear
         return wrapper_throttle
 
     return decorator_throttle
