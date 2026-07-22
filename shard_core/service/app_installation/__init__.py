@@ -154,6 +154,7 @@ async def _resume_interrupted_install(app: InstalledApp):
     elif app.installation_reason in (
         InstallationReason.STORE,
         InstallationReason.CONFIG,
+        InstallationReason.UNKNOWN,
     ):
         task_type = "install from store"
     else:
@@ -167,6 +168,8 @@ async def _resume_interrupted_install(app: InstalledApp):
         )
         return
 
+    # the worker asserts INSTALLATION_QUEUED, so a row stranded in INSTALLING must
+    # be reset before it is re-enqueued.
     await util.update_app_status(app.name, Status.INSTALLATION_QUEUED)
     worker.installation_worker.enqueue(
         worker.InstallationTask(app_name=app.name, task_type=task_type)
@@ -175,13 +178,18 @@ async def _resume_interrupted_install(app: InstalledApp):
 
 
 async def _resume_interrupted_reinstall(app: InstalledApp):
-    # a reinstall re-downloads from the store; the worker marks the row ERROR if
-    # the app is no longer there, so re-enqueueing is always safe.
-    await util.update_app_status(app.name, Status.REINSTALLATION_QUEUED)
-    worker.installation_worker.enqueue(
-        worker.InstallationTask(app_name=app.name, task_type="reinstall")
+    # a reinstall removes the app's files before re-downloading, so re-running it
+    # unattended could destroy a working install if the store is momentarily
+    # unreachable at boot. Settle it to ERROR instead — a non-destructive terminal
+    # state the user can retry from once the store is reachable.
+    await util.update_app_status(
+        app.name,
+        Status.ERROR,
+        message="reinstallation interrupted by a restart; retry it manually",
     )
-    log.info(f"resuming interrupted reinstallation of {app.name}")
+    log.warning(
+        f"interrupted reinstallation of {app.name} cannot be safely resumed, marking ERROR"
+    )
 
 
 async def refresh_init_apps():
