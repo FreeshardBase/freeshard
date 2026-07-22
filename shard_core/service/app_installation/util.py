@@ -16,6 +16,7 @@ from shard_core.service.app_installation.exceptions import AppInIllegalStatus
 from shard_core.service.app_tools import get_installed_apps_path, get_app_metadata
 from shard_core.settings import settings
 from shard_core.service.traefik_dynamic_config import AppInfo, compile_config
+from shard_core.service.traefik_secret import ensure_traefik_secret
 from shard_core.util import signals
 
 log = logging.getLogger(__name__)
@@ -131,10 +132,14 @@ async def write_traefik_dyn_config():
     default_identity = Identity(**default_row)
     portal = SafeIdentity.from_identity(default_identity)
 
+    traefik_secret = await ensure_traefik_secret()
+
     traefik_dyn_filename = (
         Path(settings().path_root) / "core" / "traefik_dyn" / "traefik_dyn.yml"
     )
-    await _write_to_yaml(compile_config(app_infos, portal), traefik_dyn_filename)
+    await _write_to_yaml(
+        compile_config(app_infos, portal, traefik_secret), traefik_dyn_filename
+    )
 
 
 async def _write_to_yaml(spec: pydantic.BaseModel, output_path: Path):
