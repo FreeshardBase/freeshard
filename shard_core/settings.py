@@ -54,6 +54,7 @@ class AppLifecycleSettings(BaseModel):
 
 class AppLastAccessSettings(BaseModel):
     max_update_frequency: int = 60
+    read_cache_ttl: int = 5  # seconds the debounce read stays cached off the DB
 
 
 class AppUsageReportingSettings(BaseModel):

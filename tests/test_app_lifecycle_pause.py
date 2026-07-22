@@ -5,7 +5,7 @@ decision logic of _control_app_time and _demote_lru, not Docker behavior
 (that lives in the integration tests).
 """
 
-import time
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -47,16 +47,9 @@ def docker_mocks():
         yield {"start": start, "stop": stop, "pause": pause, "unpause": unpause}
 
 
-@pytest.fixture(autouse=True)
-def clean_last_access():
-    app_lifecycle.last_access_dict.clear()
-    yield
-    app_lifecycle.last_access_dict.clear()
-
-
 def _app(name: str, status: Status, idle: float) -> InstalledApp:
-    app_lifecycle.last_access_dict[name] = time.time() - idle
-    return InstalledApp(name=name, status=status)
+    last_access = datetime.now(timezone.utc) - timedelta(seconds=idle)
+    return InstalledApp(name=name, status=status, last_access=last_access)
 
 
 PAUSE_ON = {"apps": {"lifecycle": {"pause_enabled": True}}}
@@ -277,3 +270,16 @@ async def test_demote_lru_demotes_exactly_one_app_per_cycle(docker_mocks):
         await app_lifecycle._demote_lru(apps)
     assert docker_mocks["pause"].await_count == 1
     docker_mocks["pause"].assert_awaited_once_with("a")
+
+
+async def test_demote_lru_treats_never_accessed_app_as_oldest(docker_mocks):
+    apps = [
+        _app("recent", Status.RUNNING, idle=100),
+        InstalledApp(name="never", status=Status.RUNNING, last_access=None),
+    ]
+    with patch.object(
+        app_lifecycle, "get_app_metadata", return_value=_meta(Lifecycle())
+    ):
+        await app_lifecycle._demote_lru(apps)
+    docker_mocks["pause"].assert_awaited_once_with("never")
+    docker_mocks["stop"].assert_not_awaited()
