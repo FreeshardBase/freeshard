@@ -64,7 +64,7 @@ just get-types        # Sync data models from freeshard-controller repo
 ## Key Patterns
 
 ### Database Access
-PostgreSQL via psycopg3 async. All DB functions take `conn: AsyncConnection` as first arg. Callers acquire connections via `async with db_conn() as conn:`. Schema managed by yoyo-migrations in `migrations/`.
+PostgreSQL via psycopg3 async. All DB functions take `conn: AsyncConnection` as first arg. Callers acquire connections via `async with db_conn() as conn:`. Schema managed by yoyo-migrations in `migrations/`, named `shard-core-NNNN-<slug>.sql` with a `-- depends: <previous>` header chaining each migration to the one before it.
 ```python
 async with db_conn() as conn:
     app = await db_installed_apps.get_by_name(conn, "myapp")
