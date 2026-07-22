@@ -28,12 +28,17 @@ async def insert(conn: AsyncConnection, app: dict) -> dict:
         return await cur.fetchone()
 
 
-async def update_status(conn: AsyncConnection, name: str, status: str) -> dict | None:
+async def update_status(
+    conn: AsyncConnection, name: str, status: str, status_message: str | None = None
+) -> dict | None:
     sql: LiteralString = (
-        "UPDATE installed_apps SET status = %(status)s WHERE name = %(name)s RETURNING *"
+        "UPDATE installed_apps SET status = %(status)s, status_message = %(status_message)s WHERE name = %(name)s RETURNING *"
     )
     async with conn.cursor(row_factory=dict_row) as cur:
-        await cur.execute(sql, {"name": name, "status": status})
+        await cur.execute(
+            sql,
+            {"name": name, "status": status, "status_message": status_message},
+        )
         return await cur.fetchone()
 
 

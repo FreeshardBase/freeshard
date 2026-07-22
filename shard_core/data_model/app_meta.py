@@ -157,6 +157,7 @@ class InstalledApp(BaseModel):
     name: str
     installation_reason: InstallationReason = InstallationReason.UNKNOWN
     status: str = Status.UNKNOWN
+    status_message: Optional[str] = None
     last_access: Optional[datetime.datetime] = None
 
 
