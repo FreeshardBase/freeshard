@@ -95,11 +95,9 @@ def subprocess_mock():
 
 @pytest.fixture(autouse=True)
 def reset_start_throttle():
-    """docker_start_app's @throttle(5) is global across apps and tests — a start
-    triggered by an earlier test would silently drop our call."""
-    wrapper = app_tools.docker_start_app
-    cell = wrapper.__closure__[wrapper.__code__.co_freevars.index("last_call")]
-    cell.cell_contents = None
+    """docker_start_app's @throttle(5) is per-app but persists across tests — a
+    start of the same app in an earlier test would silently drop our call."""
+    app_tools.docker_start_app.reset()
 
 
 async def _insert_app(name: str, status: Status):
@@ -148,3 +146,39 @@ async def test_app_operation_with_compose_file_pins_the_app_project(
     assert "-f" in command and command[command.index("-f") + 1] == str(
         app_dir / "docker-compose.yml"
     )
+
+
+def _started_apps(subprocess_mock) -> list[str]:
+    return [
+        c.args[c.args.index("-p") + 1]
+        for c in subprocess_mock.call_args_list
+        if c.args[-2:] == ("up", "-d")
+    ]
+
+
+async def test_docker_start_app_starts_each_app_despite_throttle(
+    db, tmp_path, subprocess_mock
+):
+    _app_dir(tmp_path, "appa")
+    _app_dir(tmp_path, "appb")
+    await _insert_app("appa", Status.STOPPED)
+    await _insert_app("appb", Status.STOPPED)
+
+    with settings_override({"path_root": str(tmp_path)}):
+        await app_tools.docker_start_app("appa")
+        await app_tools.docker_start_app("appb")
+
+    assert _started_apps(subprocess_mock) == ["appa", "appb"]
+
+
+async def test_docker_start_app_throttles_repeated_start_of_same_app(
+    db, tmp_path, subprocess_mock
+):
+    _app_dir(tmp_path, "appa")
+    await _insert_app("appa", Status.STOPPED)
+
+    with settings_override({"path_root": str(tmp_path)}):
+        await app_tools.docker_start_app("appa")
+        await app_tools.docker_start_app("appa")
+
+    assert _started_apps(subprocess_mock) == ["appa"]

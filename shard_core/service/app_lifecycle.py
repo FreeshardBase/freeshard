@@ -37,7 +37,7 @@ async def ensure_app_is_running(app: InstalledApp):
         last_access_dict[app.name] = time.time()
         # PAUSED wakes via unpause (ms to ~2s), everything else via the legacy
         # start path. Calling docker_unpause_app directly also dodges the
-        # global 5s throttle on docker_start_app, which would silently drop
+        # per-app 5s throttle on docker_start_app, which would silently drop
         # the wake. This dispatch stays active even with pause_enabled=false,
         # so already-paused apps still wake after a backout.
         if app.status == Status.PAUSED:
