@@ -83,7 +83,7 @@ Postgres data is not part of the rclone backup set (which only syncs `core/`/`us
 
 Because every app container shares the `portal` docker network with shard_core, any
 app could reach `/protected` or `/management` directly and bypass the Traefik
-forwardAuth gate. To close that, both routers additionally require a shared secret
+forwardAuth gate. To raise the bar, both routers additionally require a shared secret
 header (`X-Ptl-Traefik-Secret`) injected by the `verify-traefik` Traefik middleware and
 verified by `service/traefik_secret.py`; a request that did not traverse Traefik lacks
 it and is rejected with 403. The secret is generated once and stored in `kv_store`
@@ -91,6 +91,15 @@ it and is rejected with 403. The secret is generated once and stored in `kv_stor
 deliberately NOT gated: the forwardAuth endpoints are called by Traefik directly (they
 never pass through the middleware chain), and `call_backend`/`call_peer` are called by
 apps directly by design.
+
+This is the short-term half of issue #125 and is intentionally partial. Because
+Postgres (`kv_store`, default creds) and the Traefik dashboard (`api.insecure: true`)
+sit on the same `portal` network, an app that actively targets shard_core can still
+read the secret and forge the header — so the gate stops accidental/naive direct calls
+and any app not specifically hunting the secret, but not a determined one. Closing that
+requires the network-isolation work tracked as the long-term half (isolate Postgres from
+`portal`, disable the unauthenticated Traefik API); until then, do not treat `/protected`
+and `/management` as fully sealed against a hostile app.
 
 ### Background Tasks
 Started at app lifespan startup, stopped at shutdown:
