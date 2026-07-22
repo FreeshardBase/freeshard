@@ -49,19 +49,23 @@ async def test_message_is_cleared_when_leaving_error(db):
 
 async def test_message_ignored_for_non_error_status(db):
     await _insert_app("app_c")
+    await update_app_status("app_c", Status.ERROR, message="boom")
 
     await update_app_status("app_c", Status.STOPPED, message="not an error")
 
     assert (await _get_app("app_c")).status_message is None
 
 
-async def test_error_message_survives_reload_via_api(api_client: AsyncClient):
+async def test_error_message_survives_reload_via_api(app_client: AsyncClient):
     await _insert_app("app_d")
     await update_app_status("app_d", Status.ERROR, message="install failed: boom")
 
-    response = await api_client.get("protected/apps/app_d")
+    single = await app_client.get("protected/apps/app_d")
+    assert single.status_code == status.HTTP_200_OK
+    assert single.json()["status"] == Status.ERROR
+    assert single.json()["status_message"] == "install failed: boom"
 
-    assert response.status_code == status.HTTP_200_OK
-    body = response.json()
-    assert body["status"] == Status.ERROR
-    assert body["status_message"] == "install failed: boom"
+    listing = await app_client.get("protected/apps")
+    assert listing.status_code == status.HTTP_200_OK
+    app_d = next(a for a in listing.json() if a["name"] == "app_d")
+    assert app_d["status_message"] == "install failed: boom"
