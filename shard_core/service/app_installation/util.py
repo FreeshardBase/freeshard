@@ -53,8 +53,11 @@ def assert_app_status(installed_app: InstalledApp, *allowed_status: Status):
 
 
 async def update_app_status(app_name: str, status: Status, message: str | None = None):
+    status_message = message if status == Status.ERROR else None
     async with db_conn() as conn:
-        result = await db_installed_apps.update_status(conn, app_name, status)
+        result = await db_installed_apps.update_status(
+            conn, app_name, status, status_message
+        )
     if not result:
         raise KeyError(app_name)
     log.debug(
