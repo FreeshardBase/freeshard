@@ -34,7 +34,7 @@ from shard_core import app_factory
 from shard_core.data_model.identity import OutputIdentity, Identity
 from shard_core.data_model.profile import Profile
 from shard_core.database import database
-from shard_core.service import websocket, app_installation, telemetry
+from shard_core.service import websocket, app_installation, telemetry, traefik_secret
 from shard_core.service.app_tools import get_installed_apps_path
 from shard_core.settings import Settings, set_settings, reset_settings
 from shard_core.web.internal.call_peer import _get_app_for_ip_address
@@ -201,6 +201,9 @@ async def api_client(requests_mock, mocker) -> AsyncGenerator[AsyncClient]:
         ):
             whoareyou = (await client.get("/public/meta/whoareyou")).json()
             client.base_url = f'https://{whoareyou["domain"]}'
+            client.headers[traefik_secret.HEADER_NAME] = (
+                await traefik_secret.ensure_traefik_secret()
+            )
             await wait_until_all_apps_installed(client)
             yield client
 
@@ -229,6 +232,9 @@ async def app_client(mocker) -> AsyncGenerator[AsyncClient]:
         ) as client:
             whoareyou = (await client.get("/public/meta/whoareyou")).json()
             client.base_url = f'https://{whoareyou["domain"]}'
+            client.headers[traefik_secret.HEADER_NAME] = (
+                await traefik_secret.ensure_traefik_secret()
+            )
             yield client
     finally:
         await database.shutdown_database()
