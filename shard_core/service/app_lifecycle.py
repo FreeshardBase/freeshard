@@ -1,7 +1,7 @@
 import asyncio
+import datetime
 import logging
-import time
-from typing import Dict, List
+from typing import List
 
 from shard_core.database.connection import db_conn
 from shard_core.database import installed_apps as db_installed_apps
@@ -20,11 +20,28 @@ from shard_core.util import signals
 
 log = logging.getLogger(__name__)
 
-last_access_dict: Dict[str, float] = dict()
 background_tasks = set()
 
 # Pressure demotion never touches an app accessed within this window (seconds).
 RECENT_ACCESS_GRACE = 5
+
+
+def _last_access_epoch(app: InstalledApp) -> float:
+    """Last-access as a POSIX timestamp; 0.0 (oldest) when never accessed."""
+    if app.last_access is None:
+        return 0.0
+    last = app.last_access
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=datetime.timezone.utc)
+    return last.timestamp()
+
+
+def _idle_seconds(app: InstalledApp) -> float:
+    """Seconds since the app was last accessed; inf when never accessed."""
+    if app.last_access is None:
+        return float("inf")
+    now = datetime.datetime.now(datetime.timezone.utc).timestamp()
+    return now - _last_access_epoch(app)
 
 
 @signals.on_request_to_app.connect
@@ -33,8 +50,8 @@ async def ensure_app_is_running(app: InstalledApp):
         return
     app_meta = get_app_metadata(app.name)
     if await size_is_compatible(app_meta.minimum_portal_size):
-        global last_access_dict
-        last_access_dict[app.name] = time.time()
+        # last_access is recorded by update_last_access (app_meta.py), the other
+        # receiver of on_request_to_app; the DB column is the source of truth.
         # PAUSED wakes via unpause (ms to ~2s), everything else via the legacy
         # start path. Calling docker_unpause_app directly also dodges the
         # global 5s throttle on docker_start_app, which would silently drop
@@ -87,7 +104,7 @@ async def _control_app_time(app: InstalledApp, pause_enabled: bool):
             await docker_start_app(app.name)
         return
 
-    idle = time.time() - last_access_dict.get(app.name, 0.0)
+    idle = _idle_seconds(app)
     t2 = (
         app_meta.lifecycle.idle_for_stop
         or settings().apps.lifecycle.default_idle_for_stop
@@ -127,7 +144,7 @@ async def _demote_lru(apps: List[InstalledApp]):
         app_meta = get_app_metadata(app.name)
         if app_meta.lifecycle.always_on:
             continue
-        if time.time() - last_access_dict.get(app.name, 0.0) <= RECENT_ACCESS_GRACE:
+        if _idle_seconds(app) <= RECENT_ACCESS_GRACE:
             continue
         if app.status == Status.RUNNING:
             running.append(app)
@@ -135,7 +152,7 @@ async def _demote_lru(apps: List[InstalledApp]):
             paused.append(app)
 
     def lru(candidates: List[InstalledApp]) -> InstalledApp:
-        return min(candidates, key=lambda app: last_access_dict.get(app.name, 0.0))
+        return min(candidates, key=_last_access_epoch)
 
     if running:
         victim = lru(running)
