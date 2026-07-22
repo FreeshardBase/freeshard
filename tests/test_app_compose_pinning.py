@@ -179,6 +179,10 @@ async def test_docker_start_app_throttles_repeated_start_of_same_app(
 
     with settings_override({"path_root": str(tmp_path)}):
         await app_tools.docker_start_app("appa")
+        # force back to a startable status so only the throttle, not status
+        # gating, can drop the second start
+        async with db_conn() as conn:
+            await db_installed_apps.update_status(conn, "appa", Status.STOPPED)
         await app_tools.docker_start_app("appa")
 
     assert _started_apps(subprocess_mock) == ["appa"]

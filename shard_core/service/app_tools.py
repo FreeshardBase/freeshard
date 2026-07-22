@@ -31,7 +31,7 @@ async def docker_create_app_containers(name: str):
     await subprocess(*_app_compose(name), "up", "--no-start")
 
 
-@throttle(5, key=lambda name, *a, **kw: name)
+@throttle(5, key=lambda name: name)
 async def docker_start_app(name: str):
     async with db_conn() as conn:
         app = await db_installed_apps.get_by_name(conn, name)

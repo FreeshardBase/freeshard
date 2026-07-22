@@ -3,6 +3,13 @@ import time
 
 
 def throttle(min_duration: float, key=None):
+    """Drop calls that arrive within min_duration of the previous accepted call.
+
+    key maps the call args to a bucket key so each bucket throttles
+    independently; key=None (default) uses one global window for the function.
+    The wrapper exposes reset() to clear all windows (test hook).
+    """
+
     def decorator_throttle(func):
         last_call: dict = {}
 
