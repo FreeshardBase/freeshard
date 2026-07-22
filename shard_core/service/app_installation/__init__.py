@@ -127,6 +127,63 @@ async def reconcile_interrupted_uninstalls():
         log.info(f"resuming interrupted uninstallation of {app['name']}")
 
 
+async def reconcile_interrupted_installs():
+    """Resume or fail installs and reinstalls a previous process left in flight.
+
+    Like uninstalls, the task queue lives only in memory: a stop while a row is
+    in an installing status strands it with nothing left to resume it. Re-enqueue
+    the work when its source still exists, otherwise mark the row ERROR so it
+    stops looking half-installed and no longer blocks a fresh install. Enqueue
+    only — the worker starts later in the lifespan.
+    """
+    async with db_conn() as conn:
+        all_apps = await db_installed_apps.get_all(conn)
+
+    for record in all_apps:
+        app = InstalledApp.model_validate(record)
+        if app.status in (Status.INSTALLATION_QUEUED, Status.INSTALLING):
+            await _resume_interrupted_install(app)
+        elif app.status in (Status.REINSTALLATION_QUEUED, Status.REINSTALLING):
+            await _resume_interrupted_reinstall(app)
+
+
+async def _resume_interrupted_install(app: InstalledApp):
+    zip_file = get_installed_apps_path() / app.name / f"{app.name}.zip"
+    if zip_file.exists():
+        task_type = "install from zip"
+    elif app.installation_reason in (
+        InstallationReason.STORE,
+        InstallationReason.CONFIG,
+    ):
+        task_type = "install from store"
+    else:
+        await util.update_app_status(
+            app.name,
+            Status.ERROR,
+            message="installation interrupted by a restart and its source is gone",
+        )
+        log.warning(
+            f"cannot resume interrupted installation of {app.name}, marking ERROR"
+        )
+        return
+
+    await util.update_app_status(app.name, Status.INSTALLATION_QUEUED)
+    worker.installation_worker.enqueue(
+        worker.InstallationTask(app_name=app.name, task_type=task_type)
+    )
+    log.info(f"resuming interrupted installation of {app.name}")
+
+
+async def _resume_interrupted_reinstall(app: InstalledApp):
+    # a reinstall re-downloads from the store; the worker marks the row ERROR if
+    # the app is no longer there, so re-enqueueing is always safe.
+    await util.update_app_status(app.name, Status.REINSTALLATION_QUEUED)
+    worker.installation_worker.enqueue(
+        worker.InstallationTask(app_name=app.name, task_type="reinstall")
+    )
+    log.info(f"resuming interrupted reinstallation of {app.name}")
+
+
 async def refresh_init_apps():
     try:
         await database.get_value(STORE_KEY_INITIAL_APPS_INSTALLED)
