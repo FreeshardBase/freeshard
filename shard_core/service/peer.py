@@ -35,9 +35,7 @@ async def update_all_peer_pubkeys():
     )
     for peer, result in zip(peers_with_pubkey, results):
         if isinstance(result, Exception):
-            log.warning(
-                f"Failed to update peer meta for {peer.short_id}: {result}"
-            )
+            log.warning(f"Failed to update peer meta for {peer.short_id}: {result}")
 
 
 async def update_peer_meta(peer: Peer):
