@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import time
+from collections import defaultdict
 from pathlib import Path
 from typing import Literal
 
@@ -38,6 +39,15 @@ ContainerState = Literal["running", "paused", "exited", "missing"]
 # (INSTALLING, *_QUEUED, UNINSTALLING, REINSTALLING, ERROR) must never be
 # started, or the control tick recreates containers mid-uninstall/reinstall.
 _REVIVABLE_STATUS = (Status.STOPPED, Status.RUNNING, Status.DOWN, Status.PAUSED)
+
+# Per-app op lock serializing revive against teardown: start_app and the
+# uninstall worker both take it, so a wake-on-access or control-tick revive can
+# never recreate a container the uninstall worker just removed (issue #185).
+_app_op_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+
+
+def app_op_lock(name: str) -> asyncio.Lock:
+    return _app_op_locks[name]
 
 
 async def get_app_container_state(name: str) -> ContainerState:
@@ -106,48 +116,52 @@ async def start_app(name: str) -> None:
     on the real container state, not the stored status, so an app that exited
     out-of-band while the database still says PAUSED still starts (via up) rather
     than erroring on unpause. Idempotent: an already-running stack is a no-op.
+
+    Holds the per-app op lock so a revive can never race the uninstall worker's
+    teardown and recreate a container it just removed (issue #185).
     """
-    async with db_conn() as conn:
-        app = await db_installed_apps.get_by_name(conn, name)
-    db_status = app["status"] if app else None
-    if db_status not in _REVIVABLE_STATUS:
-        log.debug(f"app {name=} has {db_status=}, skipping start")
-        return
+    async with app_op_lock(name):
+        async with db_conn() as conn:
+            app = await db_installed_apps.get_by_name(conn, name)
+        db_status = app["status"] if app else None
+        if db_status not in _REVIVABLE_STATUS:
+            log.debug(f"app {name=} has {db_status=}, skipping start")
+            return
 
-    state = await get_app_container_state(name)
+        state = await get_app_container_state(name)
 
-    if state == "running":
-        if db_status != Status.RUNNING:
-            log.warning(
-                f"app {name=} container is running but db says {db_status=}; reconciling"
-            )
+        if state == "running":
+            if db_status != Status.RUNNING:
+                log.warning(
+                    f"app {name=} container is running but db says {db_status=}; reconciling"
+                )
+                await _mark_running(name)
+            return
+
+        if state == "paused":
+            if db_status != Status.PAUSED:
+                log.warning(
+                    f"app {name=} container is paused but db says {db_status=}; unpausing"
+                )
+            log.debug(f"unpausing app {name=}")
+            try:
+                await _do_unpause(name)
+            except SubprocessError:
+                # a partially-paused stack (some containers already exited) can't
+                # be revived by unpause — fall back to a plain start
+                log.warning(f"unpause failed for {name=}, starting instead")
+                await _compose_up(name)
             await _mark_running(name)
-        return
+            return
 
-    if state == "paused":
-        if db_status != Status.PAUSED:
+        # exited / created / missing
+        if db_status in (Status.RUNNING, Status.PAUSED):
             log.warning(
-                f"app {name=} container is paused but db says {db_status=}; unpausing"
+                f"app {name=} container is {state} but db says {db_status=}; starting it"
             )
-        log.debug(f"unpausing app {name=}")
-        try:
-            await _do_unpause(name)
-        except SubprocessError:
-            # a partially-paused stack (some containers already exited) can't be
-            # revived by unpause — fall back to a plain start
-            log.warning(f"unpause failed for {name=}, starting instead")
-            await _compose_up(name)
+        log.debug(f"starting app {name=}")
+        await _compose_up(name)
         await _mark_running(name)
-        return
-
-    # exited / created / missing
-    if db_status in (Status.RUNNING, Status.PAUSED):
-        log.warning(
-            f"app {name=} container is {state} but db says {db_status=}; starting it"
-        )
-    log.debug(f"starting app {name=}")
-    await _compose_up(name)
-    await _mark_running(name)
 
 
 async def docker_pause_app(name: str):

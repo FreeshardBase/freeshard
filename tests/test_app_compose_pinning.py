@@ -5,6 +5,7 @@ missing app compose file walks up to /core/docker-compose.yml and operates on
 project "core" — stopping shard_core itself (issue #160).
 """
 
+import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -345,3 +346,33 @@ async def test_start_app_recovers_stale_containers(
     assert commands[1][-1] == "down"
     assert commands[2][-2:] == ("up", "-d")
     assert await _status("stale_app") == Status.RUNNING
+
+
+async def test_start_app_is_serialized_by_the_per_app_op_lock(
+    db, tmp_path, subprocess_mock
+):
+    """start_app and an uninstall teardown must not interleave: both hold the
+    per-app op lock, so a revive can't recreate a container after the uninstall
+    worker removed it (issue #185 follow-up). While the lock is held, start_app
+    blocks and issues no compose command."""
+    _app_dir(tmp_path, "locked_app")
+    await _insert_app("locked_app", Status.RUNNING)
+
+    lock = app_tools.app_op_lock("locked_app")
+    assert app_tools.app_op_lock("locked_app") is lock  # one lock per app name
+
+    with (
+        settings_override({"path_root": str(tmp_path)}),
+        patch.object(
+            app_tools, "get_app_container_state", new=AsyncMock(return_value="missing")
+        ),
+    ):
+        await lock.acquire()
+        try:
+            task = asyncio.create_task(app_tools.start_app("locked_app"))
+            await asyncio.sleep(0.05)
+            assert not task.done()  # blocked on the lock, no compose up yet
+            subprocess_mock.assert_not_called()
+        finally:
+            lock.release()
+        await asyncio.wait_for(task, timeout=1)
