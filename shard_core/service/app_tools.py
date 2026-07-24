@@ -3,6 +3,7 @@ import json
 import logging
 import time
 from pathlib import Path
+from typing import Literal
 
 import shard_core.data_model.profile
 from shard_core.database.connection import db_conn
@@ -31,23 +32,32 @@ async def docker_create_app_containers(name: str):
     await subprocess(*_app_compose(name), "up", "--no-start")
 
 
-async def get_app_container_state(name: str) -> str:
+ContainerState = Literal["running", "paused", "exited", "missing"]
+
+# Statuses a lifecycle revive may act on. Transitional/terminal ones
+# (INSTALLING, *_QUEUED, UNINSTALLING, REINSTALLING, ERROR) must never be
+# started, or the control tick recreates containers mid-uninstall/reinstall.
+_REVIVABLE_STATUS = (Status.STOPPED, Status.RUNNING, Status.DOWN, Status.PAUSED)
+
+
+async def get_app_container_state(name: str) -> ContainerState:
     """Real docker state of an app's containers: running | paused | exited | missing.
 
     Reads the daemon rather than the stored app status, so a caller can revive an
     app whose containers changed state out-of-band (crash, OOM, core-upgrade
     converge stop) while the database still says PAUSED or RUNNING.
     """
+    compose = _app_compose(name)
     try:
-        ids_out = await subprocess(*_app_compose(name), "ps", "-a", "-q")
+        ids_out = await subprocess(*compose, "ps", "-a", "-q")
+        ids = [line.strip() for line in ids_out.splitlines() if line.strip()]
+        if not ids:
+            return "missing"
+        states_out = await subprocess(
+            "docker", "inspect", "--format", "{{.State.Status}}", *ids
+        )
     except SubprocessError:
         return "missing"
-    ids = [line.strip() for line in ids_out.splitlines() if line.strip()]
-    if not ids:
-        return "missing"
-    states_out = await subprocess(
-        "docker", "inspect", "--format", "{{.State.Status}}", *ids
-    )
     states = [line.strip() for line in states_out.splitlines() if line.strip()]
     if any(s == "paused" for s in states):
         return "paused"
@@ -74,6 +84,13 @@ async def _compose_up(name: str):
             raise
 
 
+async def _do_unpause(name: str):
+    unpause_started = time.monotonic()
+    await subprocess(*_app_compose(name), "unpause")
+    pause_metrics.record_unpause_latency((time.monotonic() - unpause_started) * 1000)
+    pause_metrics.record_app_transition(name, Status.PAUSED, Status.RUNNING)
+
+
 async def _mark_running(name: str):
     async with db_conn() as conn:
         await db_installed_apps.update_status(conn, name, Status.RUNNING)
@@ -82,20 +99,22 @@ async def _mark_running(name: str):
 
 @throttle(5)
 async def start_app(name: str) -> None:
-    """Bring an app up regardless of its current container state (idempotent).
+    """Bring a revivable app up, deciding from the real container state.
 
-    The single revive primitive for both wake-on-access and the always-on
-    control tick. It decides from the real container state, not the stored
-    status: a paused stack unfreezes, anything exited/created/missing is brought
-    up with compose, and an already-running stack is a no-op. This is what keeps
-    an app that exited while the database still says PAUSED from 502-looping
-    (issue #185) — the old unpause-only wake path errored on a non-paused
-    container and the revive task crashed.
+    The single revive primitive for wake-on-access and the always-on control
+    tick. It acts only on a revivable app (see _REVIVABLE_STATUS) and dispatches
+    on the real container state, not the stored status, so an app that exited
+    out-of-band while the database still says PAUSED still starts (via up) rather
+    than erroring on unpause. Idempotent: an already-running stack is a no-op.
     """
-    state = await get_app_container_state(name)
     async with db_conn() as conn:
         app = await db_installed_apps.get_by_name(conn, name)
     db_status = app["status"] if app else None
+    if db_status not in _REVIVABLE_STATUS:
+        log.debug(f"app {name=} has {db_status=}, skipping start")
+        return
+
+    state = await get_app_container_state(name)
 
     if state == "running":
         if db_status != Status.RUNNING:
@@ -111,12 +130,13 @@ async def start_app(name: str) -> None:
                 f"app {name=} container is paused but db says {db_status=}; unpausing"
             )
         log.debug(f"unpausing app {name=}")
-        unpause_started = time.monotonic()
-        await subprocess(*_app_compose(name), "unpause")
-        pause_metrics.record_unpause_latency(
-            (time.monotonic() - unpause_started) * 1000
-        )
-        pause_metrics.record_app_transition(name, Status.PAUSED, Status.RUNNING)
+        try:
+            await _do_unpause(name)
+        except SubprocessError:
+            # a partially-paused stack (some containers already exited) can't be
+            # revived by unpause — fall back to a plain start
+            log.warning(f"unpause failed for {name=}, starting instead")
+            await _compose_up(name)
         await _mark_running(name)
         return
 
@@ -155,15 +175,8 @@ async def docker_unpause_app(name: str):
         app_status = app["status"] if app else None
     if app_status == Status.PAUSED:
         log.debug(f"unpausing app {name=}")
-        unpause_started = time.monotonic()
-        await subprocess(*_app_compose(name), "unpause")
-        pause_metrics.record_unpause_latency(
-            (time.monotonic() - unpause_started) * 1000
-        )
-        pause_metrics.record_app_transition(name, Status.PAUSED, Status.RUNNING)
-        async with db_conn() as conn:
-            await db_installed_apps.update_status(conn, name, Status.RUNNING)
-        await signals.on_apps_update.send_async()
+        await _do_unpause(name)
+        await _mark_running(name)
     else:
         log.debug(f"app {name=} has {app_status=}, skipping unpause")
 

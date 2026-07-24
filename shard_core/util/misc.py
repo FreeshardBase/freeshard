@@ -7,11 +7,13 @@ def throttle(min_duration: float):
 
     A call whose positional args match one made within the last min_duration
     seconds is dropped (returns None); different args throttle independently, so
-    throttling one app's operation never drops another app's call.
+    throttling one app's operation never drops another app's call. Keyed on
+    positional args only — callers that vary a throttled arg by keyword collapse
+    to one key. One entry is retained per distinct args tuple.
     """
 
     def decorator_throttle(func):
-        last_call: dict = {}
+        last_call: dict[tuple, float] = {}
 
         if inspect.iscoroutinefunction(func):
 
