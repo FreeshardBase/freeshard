@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import StrEnum, auto
 from typing import List
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from .permission_model import PermissionHolder
 from .subscription_model import SubscriptionStatus
@@ -102,6 +102,8 @@ class ShardBase(BaseModel):
     price_cents: int | None = None
     pending_vm_size: VmSize | None = None
     pending_price_cents: int | None = None
+    config_overrides_desired: dict[str, str] = {}
+    config_overrides_applied: dict[str, str] = {}
 
     @property
     def short_id(self) -> str:
@@ -224,6 +226,29 @@ class PairingCodeResponse(BaseModel):
     code: str
     created: datetime
     valid_until: datetime
+
+
+class ConfigOverrideKey(StrEnum):
+    """Allowlist of override keys an operator may set. Typing the request key as
+    this enum is the single source of truth: it rejects unknown keys with 422 and
+    surfaces the allowed set in the OpenAPI schema, so the frontend dropdown is
+    generated from it. Adding an override key = one entry here. Each value is a
+    valid env-var name by construction, so no separate format validation is
+    needed."""
+
+    PAUSE_ENABLED = "PAUSE_ENABLED"
+
+
+class ConfigOverrideRequest(BaseModel):
+    key: ConfigOverrideKey
+    value: str
+
+    @field_validator("value")
+    @classmethod
+    def _value_has_no_newline(cls, v: str) -> str:
+        if "\n" in v or "\r" in v:
+            raise ValueError("value must not contain newlines")
+        return v
 
 
 class CoreUpdateRequest(BaseModel):
