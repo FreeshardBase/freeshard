@@ -25,7 +25,7 @@ shard_core/
   service/            → Business logic
     app_installation/   App install/uninstall/reinstall + background worker queue
     app_lifecycle.py    Two-tier idle control: RUNNING -> PAUSED -> STOPPED, PSI-driven LRU demotion, wake-on-request
-    app_tools.py        Docker CLI wrapper functions (start/stop/pause/unpause/down)
+    app_tools.py        Docker CLI wrappers (pause/unpause/stop/down); start_app is the idempotent revive primitive that decides unpause vs up from real container state
     memory_pressure.py  PSI parsing (/host/pressure/memory), cgroup v2 memory.reclaim page-out
     pause_metrics.py    In-memory pause-tier telemetry accumulators (transitions, latencies, PSI snapshots)
     pairing.py          Terminal pairing (JWT creation, code generation)
