@@ -5,6 +5,7 @@ decision logic of _control_app_time and _demote_lru, not Docker behavior
 (that lives in the integration tests).
 """
 
+import asyncio
 import time
 from unittest.mock import AsyncMock, patch
 
@@ -36,15 +37,14 @@ def _meta(lifecycle: Lifecycle) -> AppMeta:
 @pytest.fixture
 def docker_mocks():
     with (
-        patch.object(app_lifecycle, "docker_start_app", new=AsyncMock()) as start,
+        patch.object(app_lifecycle, "start_app", new=AsyncMock()) as start,
         patch.object(app_lifecycle, "docker_stop_app", new=AsyncMock()) as stop,
         patch.object(app_lifecycle, "docker_pause_app", new=AsyncMock()) as pause,
-        patch.object(app_lifecycle, "docker_unpause_app", new=AsyncMock()) as unpause,
         patch.object(
             app_lifecycle, "size_is_compatible", new=AsyncMock(return_value=True)
         ),
     ):
-        yield {"start": start, "stop": stop, "pause": pause, "unpause": unpause}
+        yield {"start": start, "stop": stop, "pause": pause}
 
 
 @pytest.fixture(autouse=True)
@@ -61,6 +61,30 @@ def _app(name: str, status: Status, idle: float) -> InstalledApp:
 
 PAUSE_ON = {"apps": {"lifecycle": {"pause_enabled": True}}}
 # tests/config.toml: default_idle_for_pause=5, default_idle_for_stop=12
+
+
+@pytest.mark.parametrize(
+    "status", [Status.PAUSED, Status.STOPPED, Status.DOWN, Status.RUNNING]
+)
+async def test_wake_routes_every_status_through_start_app(docker_mocks, status):
+    # Previously a PAUSED app woke via docker_unpause_app, which 502-looped when
+    # the container had actually exited (#185). Every status now goes through the
+    # one real-state revive primitive.
+    app = _app("a", status, idle=0)
+    with (
+        settings_override(PAUSE_ON),
+        patch.object(
+            app_lifecycle, "get_app_metadata", return_value=_meta(Lifecycle())
+        ),
+        patch.object(
+            app_lifecycle.disk,
+            "current_disk_usage",
+            app_lifecycle.disk.DiskUsage(total_gb=10, free_gb=9, disk_space_low=False),
+        ),
+    ):
+        await app_lifecycle.ensure_app_is_running(app)
+        await asyncio.sleep(0)
+    docker_mocks["start"].assert_awaited_once_with("a")
 
 
 async def test_running_app_pauses_after_t1(docker_mocks):

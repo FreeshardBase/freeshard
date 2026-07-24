@@ -17,6 +17,7 @@ from shard_core.service import app_tools
 from shard_core.util.subprocess import (
     ComposeFileNotFound,
     ComposeProjectNotAllowed,
+    SubprocessError,
     app_compose_command,
     normalize_project_name,
 )
@@ -95,11 +96,11 @@ def subprocess_mock():
 
 @pytest.fixture(autouse=True)
 def reset_start_throttle():
-    """docker_start_app's @throttle(5) is global across apps and tests — a start
-    triggered by an earlier test would silently drop our call."""
-    wrapper = app_tools.docker_start_app
+    """start_app's @throttle(5) is per-app but persists across tests — a start
+    of the same app in an earlier test would silently drop our call."""
+    wrapper = app_tools.start_app
     cell = wrapper.__closure__[wrapper.__code__.co_freevars.index("last_call")]
-    cell.cell_contents = None
+    cell.cell_contents.clear()
 
 
 async def _insert_app(name: str, status: Status):
@@ -113,7 +114,7 @@ async def _insert_app(name: str, status: Status):
     "operation, status",
     [
         (app_tools.docker_create_app_containers, Status.STOPPED),
-        (app_tools.docker_start_app, Status.STOPPED),
+        (app_tools.start_app, Status.STOPPED),
         (app_tools.docker_pause_app, Status.RUNNING),
         (app_tools.docker_unpause_app, Status.PAUSED),
         (app_tools.docker_stop_app, Status.RUNNING),
@@ -148,3 +149,124 @@ async def test_app_operation_with_compose_file_pins_the_app_project(
     assert "-f" in command and command[command.index("-f") + 1] == str(
         app_dir / "docker-compose.yml"
     )
+
+
+async def _status(name: str) -> str | None:
+    async with db_conn() as conn:
+        app = await db_installed_apps.get_by_name(conn, name)
+    return app["status"] if app else None
+
+
+def _issued_commands(subprocess_mock) -> list[tuple]:
+    return [call.args for call in subprocess_mock.await_args_list]
+
+
+@pytest.mark.parametrize(
+    "ps_ids, inspect_states, expected",
+    [
+        ("cid1\ncid2\n", "running\nrunning\n", "running"),
+        ("cid1\ncid2\n", "running\npaused\n", "paused"),
+        ("cid1\ncid2\n", "running\nexited\n", "exited"),
+        ("cid1\n", "created\n", "exited"),
+        ("", None, "missing"),
+    ],
+)
+async def test_get_app_container_state_categorizes_real_state(
+    tmp_path, subprocess_mock, ps_ids, inspect_states, expected
+):
+    _app_dir(tmp_path, "app1")
+    if inspect_states is None:
+        subprocess_mock.side_effect = [ps_ids]
+    else:
+        subprocess_mock.side_effect = [ps_ids, inspect_states]
+
+    with settings_override({"path_root": str(tmp_path)}):
+        state = await app_tools.get_app_container_state("app1")
+
+    assert state == expected
+
+
+async def test_get_app_container_state_missing_when_ps_fails(tmp_path, subprocess_mock):
+    _app_dir(tmp_path, "app1")
+    subprocess_mock.side_effect = SubprocessError("no such project")
+
+    with settings_override({"path_root": str(tmp_path)}):
+        state = await app_tools.get_app_container_state("app1")
+
+    assert state == "missing"
+
+
+async def test_start_app_revives_exited_app_even_when_db_says_paused(
+    db, tmp_path, subprocess_mock
+):
+    """The #185 bug: db says PAUSED but the container exited (crash / OOM /
+    core-upgrade converge). The old wake ran `unpause` and crashed; revive must
+    `up -d` instead."""
+    _app_dir(tmp_path, "exited_app")
+    await _insert_app("exited_app", Status.PAUSED)
+
+    with (
+        settings_override({"path_root": str(tmp_path)}),
+        patch.object(
+            app_tools, "get_app_container_state", new=AsyncMock(return_value="exited")
+        ),
+    ):
+        await app_tools.start_app("exited_app")
+
+    commands = _issued_commands(subprocess_mock)
+    assert any(c[-2:] == ("up", "-d") for c in commands)
+    assert not any("unpause" in c for c in commands)
+    assert await _status("exited_app") == Status.RUNNING
+
+
+async def test_start_app_unpauses_a_genuinely_paused_app(db, tmp_path, subprocess_mock):
+    _app_dir(tmp_path, "paused_app")
+    await _insert_app("paused_app", Status.PAUSED)
+
+    with (
+        settings_override({"path_root": str(tmp_path)}),
+        patch.object(
+            app_tools, "get_app_container_state", new=AsyncMock(return_value="paused")
+        ),
+    ):
+        await app_tools.start_app("paused_app")
+
+    commands = _issued_commands(subprocess_mock)
+    assert any(c[-1] == "unpause" for c in commands)
+    assert not any(c[-2:] == ("up", "-d") for c in commands)
+    assert await _status("paused_app") == Status.RUNNING
+
+
+async def test_start_app_running_container_is_a_noop_but_reconciles_status(
+    db, tmp_path, subprocess_mock
+):
+    _app_dir(tmp_path, "running_app")
+    await _insert_app("running_app", Status.PAUSED)
+
+    with (
+        settings_override({"path_root": str(tmp_path)}),
+        patch.object(
+            app_tools, "get_app_container_state", new=AsyncMock(return_value="running")
+        ),
+    ):
+        await app_tools.start_app("running_app")
+
+    subprocess_mock.assert_not_called()
+    assert await _status("running_app") == Status.RUNNING
+
+
+async def test_start_app_starts_a_missing_stack(db, tmp_path, subprocess_mock):
+    _app_dir(tmp_path, "gone_app")
+    await _insert_app("gone_app", Status.DOWN)
+
+    with (
+        settings_override({"path_root": str(tmp_path)}),
+        patch.object(
+            app_tools, "get_app_container_state", new=AsyncMock(return_value="missing")
+        ),
+    ):
+        await app_tools.start_app("gone_app")
+
+    commands = _issued_commands(subprocess_mock)
+    assert any(c[-2:] == ("up", "-d") for c in commands)
+    assert await _status("gone_app") == Status.RUNNING
