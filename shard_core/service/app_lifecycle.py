@@ -8,10 +8,9 @@ from shard_core.database import installed_apps as db_installed_apps
 from shard_core.data_model.app_meta import InstalledApp, Status
 from shard_core.service import disk, memory_pressure, pause_metrics
 from shard_core.service.app_tools import (
-    docker_start_app,
+    start_app,
     docker_stop_app,
     docker_pause_app,
-    docker_unpause_app,
     get_app_metadata,
     size_is_compatible,
 )
@@ -35,16 +34,12 @@ async def ensure_app_is_running(app: InstalledApp):
     if await size_is_compatible(app_meta.minimum_portal_size):
         global last_access_dict
         last_access_dict[app.name] = time.time()
-        # PAUSED wakes via unpause (ms to ~2s), everything else via the legacy
-        # start path. Calling docker_unpause_app directly also dodges the
-        # global 5s throttle on docker_start_app, which would silently drop
-        # the wake. This dispatch stays active even with pause_enabled=false,
-        # so already-paused apps still wake after a backout.
-        if app.status == Status.PAUSED:
-            coro = docker_unpause_app(app.name)
-        else:
-            coro = docker_start_app(app.name)
-        task = asyncio.create_task(coro, name=f"ensure {app.name} is running")
+        # One idempotent revive primitive decides unpause vs up from the real
+        # container state, so a paused stack unfreezes and an out-of-band exit
+        # (crash, OOM, core-upgrade converge) still starts instead of 502-looping.
+        task = asyncio.create_task(
+            start_app(app.name), name=f"ensure {app.name} is running"
+        )
         background_tasks.add(task)
         task.add_done_callback(background_tasks.discard)
 
@@ -84,7 +79,7 @@ async def _control_app_time(app: InstalledApp, pause_enabled: bool):
         if app.status != Status.RUNNING and await size_is_compatible(
             app_meta.minimum_portal_size
         ):
-            await docker_start_app(app.name)
+            await start_app(app.name)
         return
 
     idle = time.time() - last_access_dict.get(app.name, 0.0)

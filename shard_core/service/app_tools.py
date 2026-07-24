@@ -31,41 +31,103 @@ async def docker_create_app_containers(name: str):
     await subprocess(*_app_compose(name), "up", "--no-start")
 
 
+async def get_app_container_state(name: str) -> str:
+    """Real docker state of an app's containers: running | paused | exited | missing.
+
+    Reads the daemon rather than the stored app status, so a caller can revive an
+    app whose containers changed state out-of-band (crash, OOM, core-upgrade
+    converge stop) while the database still says PAUSED or RUNNING.
+    """
+    try:
+        ids_out = await subprocess(*_app_compose(name), "ps", "-a", "-q")
+    except SubprocessError:
+        return "missing"
+    ids = [line.strip() for line in ids_out.splitlines() if line.strip()]
+    if not ids:
+        return "missing"
+    states_out = await subprocess(
+        "docker", "inspect", "--format", "{{.State.Status}}", *ids
+    )
+    states = [line.strip() for line in states_out.splitlines() if line.strip()]
+    if any(s == "paused" for s in states):
+        return "paused"
+    if states and all(s == "running" for s in states):
+        return "running"
+    return "exited"
+
+
+async def _compose_up(name: str):
+    try:
+        await subprocess(*_app_compose(name), "up", "-d")
+    except SubprocessError as e:
+        if "network" in str(e) and "not found" in str(e):
+            log.warning(
+                f"stale network reference for app {name=}, recreating containers"
+            )
+            await subprocess(*_app_compose(name), "down")
+            await subprocess(*_app_compose(name), "up", "-d")
+        elif "Conflict" in str(e) and "already in use" in str(e):
+            log.warning(f"stale containers for app {name=}, removing and recreating")
+            await subprocess(*_app_compose(name), "down")
+            await subprocess(*_app_compose(name), "up", "-d")
+        else:
+            raise
+
+
+async def _mark_running(name: str):
+    async with db_conn() as conn:
+        await db_installed_apps.update_status(conn, name, Status.RUNNING)
+    await signals.on_apps_update.send_async()
+
+
 @throttle(5)
-async def docker_start_app(name: str):
+async def start_app(name: str) -> None:
+    """Bring an app up regardless of its current container state (idempotent).
+
+    The single revive primitive for both wake-on-access and the always-on
+    control tick. It decides from the real container state, not the stored
+    status: a paused stack unfreezes, anything exited/created/missing is brought
+    up with compose, and an already-running stack is a no-op. This is what keeps
+    an app that exited while the database still says PAUSED from 502-looping
+    (issue #185) — the old unpause-only wake path errored on a non-paused
+    container and the revive task crashed.
+    """
+    state = await get_app_container_state(name)
     async with db_conn() as conn:
         app = await db_installed_apps.get_by_name(conn, name)
-        app_status = app["status"] if app else None
+    db_status = app["status"] if app else None
 
-    if app_status == Status.PAUSED:
-        # a paused app wakes by unfreezing, not by compose up
-        await docker_unpause_app(name)
+    if state == "running":
+        if db_status != Status.RUNNING:
+            log.warning(
+                f"app {name=} container is running but db says {db_status=}; reconciling"
+            )
+            await _mark_running(name)
         return
 
-    if app_status in [Status.STOPPED, Status.RUNNING, Status.DOWN]:
-        log.debug(f"starting app {name=}")
-        try:
-            await subprocess(*_app_compose(name), "up", "-d")
-        except SubprocessError as e:
-            if "network" in str(e) and "not found" in str(e):
-                log.warning(
-                    f"stale network reference for app {name=}, recreating containers"
-                )
-                await subprocess(*_app_compose(name), "down")
-                await subprocess(*_app_compose(name), "up", "-d")
-            elif "Conflict" in str(e) and "already in use" in str(e):
-                log.warning(
-                    f"stale containers for app {name=}, removing and recreating"
-                )
-                await subprocess(*_app_compose(name), "down")
-                await subprocess(*_app_compose(name), "up", "-d")
-            else:
-                raise
-        async with db_conn() as conn:
-            await db_installed_apps.update_status(conn, name, Status.RUNNING)
-        await signals.on_apps_update.send_async()
-    else:
-        log.debug(f"app {name=} has status {app_status}, skipping start")
+    if state == "paused":
+        if db_status != Status.PAUSED:
+            log.warning(
+                f"app {name=} container is paused but db says {db_status=}; unpausing"
+            )
+        log.debug(f"unpausing app {name=}")
+        unpause_started = time.monotonic()
+        await subprocess(*_app_compose(name), "unpause")
+        pause_metrics.record_unpause_latency(
+            (time.monotonic() - unpause_started) * 1000
+        )
+        pause_metrics.record_app_transition(name, Status.PAUSED, Status.RUNNING)
+        await _mark_running(name)
+        return
+
+    # exited / created / missing
+    if db_status in (Status.RUNNING, Status.PAUSED):
+        log.warning(
+            f"app {name=} container is {state} but db says {db_status=}; starting it"
+        )
+    log.debug(f"starting app {name=}")
+    await _compose_up(name)
+    await _mark_running(name)
 
 
 async def docker_pause_app(name: str):
