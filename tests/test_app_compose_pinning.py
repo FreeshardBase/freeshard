@@ -166,6 +166,7 @@ def _issued_commands(subprocess_mock) -> list[tuple]:
     [
         ("cid1\ncid2\n", "running\nrunning\n", "running"),
         ("cid1\ncid2\n", "running\npaused\n", "paused"),
+        ("cid1\ncid2\n", "paused\nexited\n", "paused"),
         ("cid1\ncid2\n", "running\nexited\n", "exited"),
         ("cid1\n", "created\n", "exited"),
         ("", None, "missing"),
@@ -270,3 +271,77 @@ async def test_start_app_starts_a_missing_stack(db, tmp_path, subprocess_mock):
     commands = _issued_commands(subprocess_mock)
     assert any(c[-2:] == ("up", "-d") for c in commands)
     assert await _status("gone_app") == Status.RUNNING
+
+
+@pytest.mark.parametrize(
+    "status", [Status.ERROR, Status.UNINSTALLING, Status.INSTALLING]
+)
+async def test_start_app_skips_non_revivable_status(
+    db, tmp_path, subprocess_mock, status
+):
+    """A revive must never start an app that is being uninstalled/reinstalled or
+    is in ERROR — otherwise the always-on control tick recreates its containers
+    mid-teardown."""
+    _app_dir(tmp_path, "term_app")
+    await _insert_app("term_app", status)
+
+    with settings_override({"path_root": str(tmp_path)}):
+        await app_tools.start_app("term_app")
+
+    subprocess_mock.assert_not_called()
+    assert await _status("term_app") == status
+
+
+async def test_start_app_falls_back_to_up_when_unpause_fails(
+    db, tmp_path, subprocess_mock
+):
+    """A partially-paused stack (some containers already exited) can't be revived
+    by unpause — start_app must fall back to `up -d` instead of crashing."""
+    _app_dir(tmp_path, "mixed_app")
+    await _insert_app("mixed_app", Status.PAUSED)
+    subprocess_mock.side_effect = [
+        SubprocessError("Container mixed_app is not paused"),  # unpause
+        "",  # up -d fallback
+    ]
+
+    with (
+        settings_override({"path_root": str(tmp_path)}),
+        patch.object(
+            app_tools, "get_app_container_state", new=AsyncMock(return_value="paused")
+        ),
+    ):
+        await app_tools.start_app("mixed_app")
+
+    commands = _issued_commands(subprocess_mock)
+    assert commands[0][-1] == "unpause"
+    assert commands[-1][-2:] == ("up", "-d")
+    assert await _status("mixed_app") == Status.RUNNING
+
+
+@pytest.mark.parametrize(
+    "error_text", ["network portal not found", "Conflict already in use"]
+)
+async def test_start_app_recovers_stale_containers(
+    db, tmp_path, subprocess_mock, error_text
+):
+    _app_dir(tmp_path, "stale_app")
+    await _insert_app("stale_app", Status.DOWN)
+    subprocess_mock.side_effect = [
+        SubprocessError(error_text),  # first up -d
+        "",  # down
+        "",  # up -d retry
+    ]
+
+    with (
+        settings_override({"path_root": str(tmp_path)}),
+        patch.object(
+            app_tools, "get_app_container_state", new=AsyncMock(return_value="exited")
+        ),
+    ):
+        await app_tools.start_app("stale_app")
+
+    commands = _issued_commands(subprocess_mock)
+    assert commands[0][-2:] == ("up", "-d")
+    assert commands[1][-1] == "down"
+    assert commands[2][-2:] == ("up", "-d")
+    assert await _status("stale_app") == Status.RUNNING
