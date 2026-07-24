@@ -12,6 +12,7 @@ from shard_core.database.connection import db_conn
 from shard_core.database import installed_apps as db_installed_apps
 from shard_core.data_model.app_meta import Status
 from shard_core.service.app_tools import (
+    app_op_lock,
     get_installed_apps_path,
     docker_create_app_containers,
     docker_stop_app,
@@ -123,31 +124,36 @@ async def _install_app_from_existing_zip(app_name: str):
 
 
 async def _uninstall_app(app_name: str):
-    try:
-        installed_app = await get_app_from_db(app_name)
-        if installed_app.status == Status.PAUSED:
-            # unfreeze while the status still says PAUSED — once it flips to
-            # UNINSTALLING nothing knows the containers are frozen, and a
-            # frozen stack can be neither stopped nor removed
-            await docker_unpause_app(app_name)
-        await update_app_status(app_name, Status.UNINSTALLING)
-    except KeyError:
-        log.warning(f"during uninstallation of {app_name}: app not found in database")
+    # Held across the whole teardown so a concurrent wake/control-tick revive
+    # (start_app) can't recreate a container between our stop and row removal.
+    async with app_op_lock(app_name):
+        try:
+            installed_app = await get_app_from_db(app_name)
+            if installed_app.status == Status.PAUSED:
+                # unfreeze while the status still says PAUSED — once it flips to
+                # UNINSTALLING nothing knows the containers are frozen, and a
+                # frozen stack can be neither stopped nor removed
+                await docker_unpause_app(app_name)
+            await update_app_status(app_name, Status.UNINSTALLING)
+        except KeyError:
+            log.warning(
+                f"during uninstallation of {app_name}: app not found in database"
+            )
 
-    try:
-        await docker_stop_app(app_name)
-        await docker_shutdown_app(app_name)
-    except Exception as e:
-        log.error(f"Error while shutting down app {app_name}: {e!r}")
+        try:
+            await docker_stop_app(app_name)
+            await docker_shutdown_app(app_name)
+        except Exception as e:
+            log.error(f"Error while shutting down app {app_name}: {e!r}")
 
-    log.debug(f"deleting app data for {app_name}")
-    shutil.rmtree(Path(get_installed_apps_path() / app_name), ignore_errors=True)
-    log.debug(f"removing app {app_name} from database")
-    async with db_conn() as conn:
-        await db_installed_apps.remove(conn, app_name)
-    await write_traefik_dyn_config()
-    await signals.on_apps_update.send_async()
-    log.info(f"uninstalled {app_name}")
+        log.debug(f"deleting app data for {app_name}")
+        shutil.rmtree(Path(get_installed_apps_path() / app_name), ignore_errors=True)
+        log.debug(f"removing app {app_name} from database")
+        async with db_conn() as conn:
+            await db_installed_apps.remove(conn, app_name)
+        await write_traefik_dyn_config()
+        await signals.on_apps_update.send_async()
+        log.info(f"uninstalled {app_name}")
 
 
 async def _reinstall_app(app_name: str):

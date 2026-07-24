@@ -3,23 +3,32 @@ import time
 
 
 def throttle(min_duration: float):
+    """Throttle calls per distinct positional-args key.
+
+    A call whose positional args match one made within the last min_duration
+    seconds is dropped (returns None); different args throttle independently, so
+    throttling one app's operation never drops another app's call. Keyed on
+    positional args only — callers that vary a throttled arg by keyword collapse
+    to one key. One entry is retained per distinct args tuple.
+    """
+
     def decorator_throttle(func):
-        last_call = None
+        last_call: dict[tuple, float] = {}
 
         if inspect.iscoroutinefunction(func):
 
             async def wrapper_throttle(*args, **kwargs):
-                nonlocal last_call
-                if last_call is None or last_call + min_duration < time.time():
-                    last_call = time.time()
+                prev = last_call.get(args)
+                if prev is None or prev + min_duration < time.time():
+                    last_call[args] = time.time()
                     return await func(*args, **kwargs)
 
         else:
 
             def wrapper_throttle(*args, **kwargs):
-                nonlocal last_call
-                if last_call is None or last_call + min_duration < time.time():
-                    last_call = time.time()
+                prev = last_call.get(args)
+                if prev is None or prev + min_duration < time.time():
+                    last_call[args] = time.time()
                     return func(*args, **kwargs)
 
         return wrapper_throttle

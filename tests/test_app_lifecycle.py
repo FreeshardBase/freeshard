@@ -2,7 +2,24 @@ import docker
 from fastapi import status
 
 from shard_core.data_model.app_meta import InstalledApp, Status
+from shard_core.service.app_tools import get_app_container_state
 from tests.util import retry_async, wait_until_app_installed
+
+
+async def test_get_app_container_state_reads_real_created_container(
+    requests_mock, api_client
+):
+    """Pins get_app_container_state against real docker output: a freshly
+    installed app has created-but-not-started containers, which the revive path
+    must classify as needing a start (not 'running')."""
+    app_name = "quick_stop"
+
+    response = await api_client.post(f"protected/apps/{app_name}")
+    assert response.status_code == status.HTTP_201_CREATED
+    await wait_until_app_installed(api_client, app_name)
+
+    assert docker.from_env().containers.get(app_name).status == "created"
+    assert await get_app_container_state(app_name) == "exited"
 
 
 async def test_app_starts_and_stops(requests_mock, api_client):
