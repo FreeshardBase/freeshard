@@ -12,7 +12,7 @@ from shard_core.database.db_snapshot import (
 from tests.conftest import settings_override
 
 _APP_TABLES = (
-    "identities, terminals, installed_apps, peers, backups, tours, "
+    "identities, users, terminals, installed_apps, peers, backups, tours, "
     "app_usage_tracks, kv_store"
 )
 
@@ -27,8 +27,16 @@ async def _seed_shard_state():
     async with db_conn() as conn:
         await conn.execute("""INSERT INTO identities (id, name, private_key, is_default)
                VALUES ('shard-id-abc', 'default', 'PRIVATE-KEY-PEM', TRUE)""")
+        owner_id = await (
+            await conn.execute(
+                """INSERT INTO users (username, display_name, email, role)
+               VALUES ('owner', 'Shard Owner', 'owner@shard.test', 'owner')
+               RETURNING id"""
+            )
+        ).fetchone()
         await conn.execute(
-            "INSERT INTO terminals (id, name, icon) VALUES ('term-1', 'laptop', 'x')"
+            "INSERT INTO terminals (id, name, icon, user_id) VALUES ('term-1', 'laptop', 'x', %s)",
+            (owner_id[0],),
         )
         await conn.execute(
             """INSERT INTO installed_apps (name, installation_reason, status)

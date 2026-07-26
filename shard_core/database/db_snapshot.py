@@ -96,7 +96,8 @@ async def restore_db_snapshot():
         snapshot = json.loads(path.read_text())
         log.info(f"found DB snapshot at {path}, restoring")
         restored = 0
-        for table, rows in snapshot.items():
+        for table in await _referenced_first(conn, list(snapshot)):
+            rows = snapshot[table]
             if not rows:
                 continue
             col_types = await _column_types(conn, table)
@@ -118,6 +119,38 @@ async def _list_data_tables(conn: AsyncConnection) -> list[str]:
             (f"%{_YOYO_TABLE_MARKER}%",),
         )
         return [r[0] for r in await cur.fetchall()]
+
+
+async def _referenced_first(conn: AsyncConnection, tables: list[str]) -> list[str]:
+    """Order tables so a foreign key's target is inserted before its source.
+
+    Snapshot files carry tables in whatever order they were dumped, so the
+    ordering is derived from the live schema at restore time rather than trusted
+    from the file. Tables in a reference cycle keep their original position.
+    """
+    async with conn.cursor() as cur:
+        await cur.execute(
+            """SELECT src.relname, tgt.relname
+               FROM pg_constraint c
+               JOIN pg_class src ON src.oid = c.conrelid
+               JOIN pg_class tgt ON tgt.oid = c.confrelid
+               WHERE c.contype = 'f'""",
+        )
+        edges = [(s, t) for s, t in await cur.fetchall() if s in tables and t in tables]
+
+    ordered: list[str] = []
+    remaining = list(tables)
+    while remaining:
+        free = [
+            t
+            for t in remaining
+            if not any(s == t and tgt in remaining and tgt != t for s, tgt in edges)
+        ]
+        if not free:
+            free = remaining
+        ordered.extend(free)
+        remaining = [t for t in remaining if t not in free]
+    return ordered
 
 
 async def _db_already_populated(conn: AsyncConnection) -> bool:
