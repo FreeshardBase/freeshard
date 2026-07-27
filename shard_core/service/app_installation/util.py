@@ -107,7 +107,15 @@ async def render_docker_compose_template(app: InstalledApp):
     oidc = None
     app_meta = get_app_metadata(app.name)
     if app_meta.oidc:
-        oidc = await oidc_provider.ensure_app_client(app.name, app_meta.oidc, portal)
+        if settings().oidc.enabled:
+            oidc = await oidc_provider.ensure_app_client(
+                app.name, app_meta.oidc, portal
+            )
+        else:
+            log.warning(
+                f"app {app.name} declares OIDC but the provider is disabled on this "
+                f"shard — its template renders without credentials"
+            )
 
     app_dir = get_installed_apps_path() / app.name
     template = jinja2.Template((app_dir / "docker-compose.yml.template").read_text())

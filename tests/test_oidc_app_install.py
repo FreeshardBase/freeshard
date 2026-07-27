@@ -4,6 +4,7 @@ Uses the oidc_app from the mock app store, whose app_meta.json declares an
 oidc section and whose compose template consumes {{ oidc.* }} variables.
 """
 
+import pytest
 from httpx import AsyncClient
 
 from shard_core.database.connection import db_conn
@@ -52,6 +53,16 @@ async def test_reinstall_keeps_client_credentials(api_client: AsyncClient):
     after = await _get_client_row()
     assert after["client_id"] == before["client_id"]
     assert after["client_secret"] == before["client_secret"]
+
+
+@pytest.mark.config_override({"oidc": {"enabled": False}})
+async def test_install_registers_no_client_when_disabled(api_client: AsyncClient):
+    await _install(api_client)
+
+    assert await _get_client_row() is None
+    compose = (get_installed_apps_path() / APP_NAME / "docker-compose.yml").read_text()
+    for var in ("OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET", "OIDC_ISSUER"):
+        assert f"- {var}=\n" in compose, f"{var} should render empty when disabled"
 
 
 async def test_uninstall_removes_client(api_client: AsyncClient):
