@@ -18,7 +18,7 @@ from urllib.parse import quote
 
 from authlib.oauth2.rfc6749 import AuthorizationServer, OAuth2Request
 from authlib.oauth2.rfc6749.requests import BasicOAuth2Payload
-from fastapi import APIRouter, Cookie, Request
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from requests.structures import CaseInsensitiveDict
 
@@ -39,7 +39,18 @@ from shard_core.settings import settings
 
 log = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/oidc", tags=["/public/oidc"])
+
+def _require_enabled():
+    """404 rather than 403 — a shard without the rollout must not advertise an IdP."""
+    if not settings().oidc.enabled:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+
+
+router = APIRouter(
+    prefix="/oidc",
+    tags=["/public/oidc"],
+    dependencies=[Depends(_require_enabled)],
+)
 
 
 # --- request/response adapter ---------------------------------------------------

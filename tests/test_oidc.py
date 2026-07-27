@@ -11,6 +11,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs, unquote, urlparse
 
+import pytest
 from httpx import AsyncClient
 from joserfc import jwt as joserfc_jwt
 from joserfc.jwk import KeySet
@@ -508,3 +509,13 @@ async def test_token_endpoint_rate_limited(app_client: AsyncClient):
         )
         statuses.append(r.status_code)
     assert 429 in statuses, "token endpoint must rate-limit bursts"
+
+
+@pytest.mark.config_override({"oidc": {"enabled": False}})
+async def test_provider_absent_when_disabled(app_client: AsyncClient):
+    await pair_new_terminal(app_client)
+    for path in (DISCOVERY, JWKS, AUTHORIZE, USERINFO):
+        r = await app_client.get(path)
+        assert r.status_code == 404, f"{path} answered {r.status_code}"
+    r = await app_client.post(TOKEN, data={"grant_type": "authorization_code"})
+    assert r.status_code == 404, r.text

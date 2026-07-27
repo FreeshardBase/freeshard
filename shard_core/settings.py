@@ -82,6 +82,10 @@ class TelemetrySettings(BaseModel):
     send_interval_seconds: int = 300
 
 
+class OidcSettings(BaseModel):
+    enabled: bool = False  # rollout kill-switch for the embedded OIDC provider
+
+
 class ManagementSettings(BaseModel):
     api_url: str
 
@@ -121,6 +125,7 @@ class Settings(BaseSettings):
     traefik: TraefikSettings
     apps: AppsSettings
     telemetry: TelemetrySettings = TelemetrySettings()
+    oidc: OidcSettings = OidcSettings()
     management: ManagementSettings
     freeshard_controller: FreeshardControllerSettings
     log: LogSettings = LogSettings()
