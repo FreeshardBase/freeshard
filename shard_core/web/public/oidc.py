@@ -62,13 +62,25 @@ class StarletteOAuth2Request(OAuth2Request):
         return self._form
 
 
+def _public_url(request: Request) -> str:
+    """The URL this request has from outside, rebuilt from the shard's own domain.
+
+    Traefik terminates TLS and strips the `/core/` prefix, so the URL Starlette
+    sees is neither https nor prefixed. Rebuilding it from the default identity
+    keeps the provider off the X-Forwarded-* headers entirely — an app container
+    on the portal network can reach shard_core directly and set them at will.
+    """
+    url = f"{request.app.state.oidc_public_base}{request.url.path}"
+    return f"{url}?{request.url.query}" if request.url.query else url
+
+
 async def _build_oauth2_request(request: Request) -> StarletteOAuth2Request:
     form = {}
     if request.method == "POST":
         form = {k: v for k, v in (await request.form()).items()}
     return StarletteOAuth2Request(
         method=request.method,
-        url=str(request.url),
+        url=_public_url(request),
         # Authlib looks headers up by canonical name ("Authorization");
         # Starlette normalizes to lowercase — bridge with a CI dict.
         headers=CaseInsensitiveDict(request.headers),
@@ -108,7 +120,8 @@ async def _get_server(request: Request) -> StarletteAuthorizationServer:
                 i = await identity.get_default_identity()
                 protocol = "http" if settings().traefik.disable_ssl else "https"
                 # Traefik routes <domain>/core/* to shard_core with /core/ stripped
-                issuer = f"{protocol}://{i.domain}/core/public/oidc"
+                app.state.oidc_public_base = f"{protocol}://{i.domain}/core"
+                issuer = f"{app.state.oidc_public_base}/public/oidc"
                 jwk = await ensure_jwk()
                 configure(issuer, jwk, asyncio.get_running_loop())
                 _token_request_times.clear()
@@ -170,7 +183,7 @@ async def authorize(request: Request, authorization: str = Cookie(None)):
     user = await _session_user(authorization)
     if user is None:
         # No shard session: send the browser to the terminal's pairing/login UI.
-        rd = quote(str(request.url), safe="")
+        rd = quote(_public_url(request), safe="")
         return RedirectResponse(f"/?oidc_rd={rd}", status_code=302)
     oreq = await _build_oauth2_request(request)
     return await asyncio.to_thread(server.create_authorization_response, oreq, user)

@@ -9,7 +9,7 @@ import base64
 import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from httpx import AsyncClient
 from joserfc import jwt as joserfc_jwt
@@ -398,9 +398,16 @@ async def test_code_reuse_rejected(app_client: AsyncClient):
 
 async def test_anonymous_authorize_redirects_to_terminal_ui(app_client: AsyncClient):
     oidc_client = await make_client()
-    _, r = await authorize(app_client, oidc_client, secrets.token_urlsafe(32))
+    params, r = await authorize(app_client, oidc_client, secrets.token_urlsafe(32))
     assert r.status_code == 302
     assert r.headers["location"].startswith("/?oidc_rd=")
+
+    # The return leg must be the URL the browser can reach: Traefik strips
+    # /core/, so an unprefixed path routes to the web-terminal, not here.
+    rd = unquote(r.headers["location"].removeprefix("/?oidc_rd="))
+    identity = await get_default_identity()
+    assert rd.startswith(f"https://{identity.domain}/core/{AUTHORIZE}?")
+    assert f"client_id={params['client_id']}" in rd
 
 
 async def test_scope_narrowing(app_client: AsyncClient):
