@@ -93,6 +93,9 @@ class OidcMeta(BaseModel):
     redirect_uris: List[str]
     public_client: bool = False
     scope: str = "openid profile email"
+    # OIDC Back-Channel Logout 1.0 endpoint. Optional: an app that omits it
+    # cannot be signed out from our side, only from its own UI.
+    backchannel_logout_uri: str | None = None
 
 
 class Lifecycle(BaseModel):
