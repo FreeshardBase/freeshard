@@ -154,7 +154,11 @@ async def _session_user(authorization: str | None) -> ShardUser | None:
     if terminal.user_id is None:
         return None
     async with db_conn() as conn:
-        return ShardUser.from_user(await db_users.get_by_id(conn, terminal.user_id))
+        user = ShardUser.from_user(await db_users.get_by_id(conn, terminal.user_id))
+    if user is not None:
+        # the grant is bound to this device, so un-pairing it can revoke the grant
+        user.terminal_id = terminal.id
+    return user
 
 
 # --- token endpoint rate limit ------------------------------------------------------

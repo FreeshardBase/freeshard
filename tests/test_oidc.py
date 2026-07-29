@@ -16,8 +16,11 @@ from httpx import AsyncClient
 from joserfc import jwt as joserfc_jwt
 from joserfc.jwk import KeySet
 
+from psycopg.rows import dict_row
+
 from shard_core.database.connection import db_conn
 from shard_core.database import oidc as db_oidc
+from shard_core.database import terminals as db_terminals
 from shard_core.database import users as db_users
 from shard_core.service import oidc_provider
 from shard_core.service.identity import get_default_identity
@@ -375,6 +378,8 @@ async def test_token_expired_code(app_client: AsyncClient):
                 "redirect_uri": REDIRECT_URI,
                 "scope": "openid",
                 "user_sub": owner.id,
+                "terminal_id": None,
+                "sid": secrets.token_urlsafe(16),
                 "nonce": None,
                 "code_challenge": s256(verifier),
                 "code_challenge_method": "S256",
@@ -519,3 +524,136 @@ async def test_provider_absent_when_disabled(app_client: AsyncClient):
         assert r.status_code == 404, f"{path} answered {r.status_code}"
     r = await app_client.post(TOKEN, data={"grant_type": "authorization_code"})
     assert r.status_code == 404, r.text
+
+
+# --- terminal binding + revocation on un-pair -----------------------------------
+
+
+async def rows(sql: str, *args) -> list[dict]:
+    async with db_conn() as conn:
+        async with conn.cursor(row_factory=dict_row) as cur:
+            await cur.execute(sql, args)
+            return await cur.fetchall()
+
+
+async def terminal_id(name: str) -> str:
+    async with db_conn() as conn:
+        return (await db_terminals.get_by_name(conn, name))["id"]
+
+
+async def unpair(client: AsyncClient, id_: str):
+    r = await client.delete(f"protected/terminals/id/{id_}")
+    assert r.status_code == 204, r.text
+
+
+async def test_code_and_token_are_bound_to_the_authorizing_terminal(
+    app_client: AsyncClient,
+):
+    await pair_new_terminal(app_client, name="laptop")
+    tid = await terminal_id("laptop")
+    oidc_client = await make_client()
+
+    await run_code_flow(app_client, oidc_client)
+
+    code_rows = await rows("SELECT * FROM oidc_codes")
+    assert len(code_rows) == 1
+    assert code_rows[0]["terminal_id"] == tid
+    assert code_rows[0]["sid"], "every authorization must get a session id"
+
+    token_rows = await rows("SELECT * FROM oidc_tokens")
+    assert len(token_rows) == 1
+    assert token_rows[0]["terminal_id"] == tid
+    assert token_rows[0]["sid"] == code_rows[0]["sid"]
+
+
+async def test_sid_is_opaque_and_not_the_terminal_id(app_client: AsyncClient):
+    await pair_new_terminal(app_client, name="laptop")
+    tid = await terminal_id("laptop")
+    await run_code_flow(app_client, await make_client())
+
+    sid = (await rows("SELECT * FROM oidc_codes"))[0]["sid"]
+    assert sid != tid, "sid must not leak the shard-internal terminal id to apps"
+
+
+async def test_id_token_carries_sid(app_client: AsyncClient):
+    await pair_new_terminal(app_client)
+    tok, _ = await run_code_flow(app_client, await make_client())
+
+    keyset = await jwks_keyset(app_client)
+    claims = joserfc_jwt.decode(tok["id_token"], keyset).claims
+    assert claims["sid"] == (await rows("SELECT * FROM oidc_codes"))[0]["sid"]
+
+
+async def test_refresh_preserves_the_terminal_binding(app_client: AsyncClient):
+    await pair_new_terminal(app_client, name="laptop")
+    tid = await terminal_id("laptop")
+    oidc_client = await make_client()
+    tok, _ = await run_code_flow(app_client, oidc_client)
+    sid = (await rows("SELECT * FROM oidc_codes"))[0]["sid"]
+
+    r = await app_client.post(
+        TOKEN,
+        data={"grant_type": "refresh_token", "refresh_token": tok["refresh_token"]},
+        auth=(oidc_client["client_id"], oidc_client["client_secret"]),
+    )
+    assert r.status_code == 200, r.text
+
+    fresh = await rows(
+        "SELECT * FROM oidc_tokens WHERE access_token_hash = %s",
+        oidc_provider.hash_secret(r.json()["access_token"]),
+    )
+    assert fresh[0]["terminal_id"] == tid, "rotation must not drop the device binding"
+    assert fresh[0]["sid"] == sid
+
+
+async def test_unpair_revokes_only_that_terminals_tokens(app_client: AsyncClient):
+    oidc_client = await make_client()
+
+    await pair_new_terminal(app_client, name="laptop")
+    laptop_tok, _ = await run_code_flow(app_client, oidc_client)
+    laptop = await terminal_id("laptop")
+
+    await pair_new_terminal(app_client, name="desktop")
+    desktop_tok, _ = await run_code_flow(app_client, oidc_client)
+    desktop = await terminal_id("desktop")
+
+    await unpair(app_client, laptop)
+
+    revoked = await rows("SELECT * FROM oidc_tokens WHERE sid IS NOT NULL")
+    by_token = {r["access_token_hash"]: r["revoked"] for r in revoked}
+    assert by_token[oidc_provider.hash_secret(laptop_tok["access_token"])] is True
+    assert by_token[oidc_provider.hash_secret(desktop_tok["access_token"])] is False
+
+    r = await app_client.get(
+        USERINFO, headers={"Authorization": f"Bearer {laptop_tok['access_token']}"}
+    )
+    assert r.status_code == 401, "un-paired device's access token must stop working"
+
+    r = await app_client.get(
+        USERINFO, headers={"Authorization": f"Bearer {desktop_tok['access_token']}"}
+    )
+    assert r.status_code == 200, "other devices must stay signed in"
+    assert desktop != laptop
+
+
+async def test_unpair_burns_codes_not_yet_redeemed(app_client: AsyncClient):
+    oidc_client = await make_client()
+    await pair_new_terminal(app_client, name="laptop")
+    verifier = secrets.token_urlsafe(32)
+    code = await get_code(app_client, oidc_client, verifier)
+    laptop = await terminal_id("laptop")
+
+    await pair_new_terminal(app_client, name="desktop")
+    await unpair(app_client, laptop)
+
+    r = await exchange_code(app_client, oidc_client, code, verifier)
+    assert r.status_code == 400, "a code issued to an un-paired device must not redeem"
+
+
+async def test_unpair_leaves_a_terminal_without_grants_alone(app_client: AsyncClient):
+    await pair_new_terminal(app_client, name="laptop")
+    laptop = await terminal_id("laptop")
+    await pair_new_terminal(app_client, name="desktop")
+
+    await unpair(app_client, laptop)
+    assert await rows("SELECT * FROM oidc_tokens") == []

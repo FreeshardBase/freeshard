@@ -9,13 +9,16 @@ from psycopg.types.json import Jsonb
 
 async def upsert_client(conn: AsyncConnection, client: dict) -> dict:
     sql: LiteralString = """INSERT INTO oidc_clients
-        (client_id, client_secret, app_name, redirect_uris, scope, token_endpoint_auth_method)
+        (client_id, client_secret, app_name, redirect_uris, backchannel_logout_uri,
+         scope, token_endpoint_auth_method)
         VALUES (%(client_id)s, %(client_secret)s, %(app_name)s, %(redirect_uris)s,
+                %(backchannel_logout_uri)s,
                 %(scope)s, %(token_endpoint_auth_method)s)
         ON CONFLICT (app_name) DO UPDATE SET
             client_id = EXCLUDED.client_id,
             client_secret = EXCLUDED.client_secret,
             redirect_uris = EXCLUDED.redirect_uris,
+            backchannel_logout_uri = EXCLUDED.backchannel_logout_uri,
             scope = EXCLUDED.scope,
             token_endpoint_auth_method = EXCLUDED.token_endpoint_auth_method
         RETURNING *"""
@@ -38,9 +41,10 @@ async def get_client(conn: AsyncConnection, client_id: str) -> dict | None:
 
 async def insert_code(conn: AsyncConnection, code: dict):
     sql: LiteralString = """INSERT INTO oidc_codes
-        (code_hash, client_id, redirect_uri, scope, user_sub, nonce,
+        (code_hash, client_id, redirect_uri, scope, user_sub, terminal_id, sid, nonce,
          code_challenge, code_challenge_method, auth_time, expires_at)
         VALUES (%(code_hash)s, %(client_id)s, %(redirect_uri)s, %(scope)s, %(user_sub)s,
+                %(terminal_id)s, %(sid)s,
                 %(nonce)s, %(code_challenge)s, %(code_challenge_method)s,
                 %(auth_time)s, %(expires_at)s)"""
     await conn.execute(sql, code)
@@ -82,8 +86,10 @@ async def exists_nonce(conn: AsyncConnection, nonce: str, client_id: str) -> boo
 
 async def insert_token(conn: AsyncConnection, token: dict):
     sql: LiteralString = """INSERT INTO oidc_tokens
-        (access_token_hash, refresh_token_hash, client_id, user_sub, scope, issued_at, expires_in)
+        (access_token_hash, refresh_token_hash, client_id, user_sub, terminal_id, sid,
+         scope, issued_at, expires_in)
         VALUES (%(access_token_hash)s, %(refresh_token_hash)s, %(client_id)s, %(user_sub)s,
+                %(terminal_id)s, %(sid)s,
                 %(scope)s, %(issued_at)s, %(expires_in)s)"""
     await conn.execute(sql, token)
 
@@ -122,3 +128,19 @@ async def revoke_all_for_grant(conn: AsyncConnection, client_id: str, user_sub: 
         "UPDATE oidc_tokens SET revoked = TRUE WHERE client_id = %s AND user_sub = %s"
     )
     await conn.execute(sql, (client_id, user_sub))
+
+
+async def revoke_for_terminal(conn: AsyncConnection, terminal_id: str):
+    """Kill everything issued to one device, on un-pair.
+
+    Must run before the terminals row is deleted — the FK is ON DELETE SET NULL,
+    so afterwards nothing matches terminal_id any more.
+    """
+    revoke_tokens: LiteralString = (
+        "UPDATE oidc_tokens SET revoked = TRUE WHERE terminal_id = %s"
+    )
+    burn_codes: LiteralString = (
+        "UPDATE oidc_codes SET redeemed = TRUE WHERE terminal_id = %s AND NOT redeemed"
+    )
+    await conn.execute(revoke_tokens, (terminal_id,))
+    await conn.execute(burn_codes, (terminal_id,))

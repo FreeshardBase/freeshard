@@ -78,6 +78,9 @@ class ShardUser:
     username: str
     display_name: str
     email: str | None = None
+    # set only on the /authorize path, where the terminal cookie is in hand;
+    # None when the user is reconstructed from a stored grant
+    terminal_id: str | None = None
 
     @classmethod
     def from_user(cls, user: User | None):
@@ -172,6 +175,8 @@ class AuthorizationCode(AuthorizationCodeMixin):
     redirect_uri: str | None
     scope: str | None
     user_sub: int
+    terminal_id: str | None
+    sid: str
     nonce: str | None
     code_challenge: str | None
     code_challenge_method: str | None
@@ -254,6 +259,11 @@ class ShardAuthCodeGrant(grants.AuthorizationCodeGrant):
                     # escalate beyond its registered scope
                     "scope": request.scope,
                     "user_sub": request.user.id,
+                    "terminal_id": request.user.terminal_id,
+                    # opaque per-authorization session id: what back-channel
+                    # logout targets. Deliberately not the terminal id — apps
+                    # have no business learning shard-internal identifiers.
+                    "sid": secrets.token_urlsafe(16),
                     "nonce": data.get("nonce"),
                     "code_challenge": data.get("code_challenge"),
                     "code_challenge_method": data.get("code_challenge_method"),
@@ -328,6 +338,14 @@ class _TokenRecord:
     def __init__(self, row: dict):
         self.row = row
 
+    @property
+    def terminal_id(self):
+        return self.row["terminal_id"]
+
+    @property
+    def sid(self):
+        return self.row["sid"]
+
     def check_client(self, client):
         return self.row["client_id"] == client.client_id
 
@@ -346,7 +364,9 @@ class ShardOpenIDCode(OpenIDCode):
         # Base impl always emits "nonce", as null when the client sent none.
         # Strict clients (oauth4webapi/Immich) reject nonce:null vs absent.
         claims = super().get_authorization_code_claims(authorization_code)
-        return {k: v for k, v in claims.items() if v is not None}
+        claims = {k: v for k, v in claims.items() if v is not None}
+        claims["sid"] = authorization_code.sid
+        return claims
 
     def resolve_client_private_key(self, client):
         return _state["jwk"]
@@ -388,6 +408,12 @@ def _generate_bearer_token(
 
 
 def _save_token(token: dict, request):
+    # request.user is rebuilt from the stored grant and has no terminal, so the
+    # binding comes from the credential: the code on first issue, the previous
+    # token on rotation.
+    credential = getattr(request, "authorization_code", None) or getattr(
+        request, "refresh_token", None
+    )
     _run(
         _with_conn(
             db_oidc.insert_token,
@@ -400,6 +426,8 @@ def _save_token(token: dict, request):
                 ),
                 "client_id": request.client.client_id,
                 "user_sub": request.user.id,
+                "terminal_id": credential.terminal_id,
+                "sid": credential.sid,
                 "scope": token.get("scope"),
                 "issued_at": int(time.time()),
                 "expires_in": token["expires_in"],
@@ -440,6 +468,7 @@ async def register_client(
     redirect_uris: list[str],
     public_client: bool = False,
     scope: str = "openid profile email",
+    backchannel_logout_uri: str | None = None,
 ) -> dict:
     """Create (or replace) the OIDC client for an installed app.
 
@@ -453,6 +482,7 @@ async def register_client(
         "client_secret": client_secret,
         "app_name": app_name,
         "redirect_uris": redirect_uris,
+        "backchannel_logout_uri": backchannel_logout_uri,
         "scope": scope,
         "token_endpoint_auth_method": (
             "none" if public_client else "client_secret_basic"
