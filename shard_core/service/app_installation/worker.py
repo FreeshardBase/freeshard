@@ -162,8 +162,10 @@ async def _reinstall_app(app_name: str):
     await update_app_status(installed_app.name, Status.REINSTALLING)
 
     try:
-        await docker_stop_app(app_name, set_status=False)
-        await docker_shutdown_app(app_name, set_status=False)
+        # force, because the status is REINSTALLING by now and no teardown gate
+        # accepts it — without this the old containers survive the rmtree and
+        # `compose up --no-start` collides with them (issue #199)
+        await docker_shutdown_app(app_name, set_status=False, force=True)
     except Exception as e:
         log.error(f"Error while shutting down app {app_name}: {e!r}")
 
