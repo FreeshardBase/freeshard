@@ -335,10 +335,10 @@ async def test_reinstall_is_serialized_by_the_per_app_op_lock(
     """The reinstall now really removes containers, so it must hold the same lock
     the uninstall does — otherwise a wake-on-access revive can recreate the stack
     between the teardown and the rmtree (issue #185)."""
-    _app_dir(tmp_path, "locked_app")
-    await _insert_app("locked_app", Status.REINSTALLATION_QUEUED)
+    _app_dir(tmp_path, "reinstall_locked_app")
+    await _insert_app("reinstall_locked_app", Status.REINSTALLATION_QUEUED)
 
-    lock = app_tools.app_op_lock("locked_app")
+    lock = app_tools.app_op_lock("reinstall_locked_app")
     with (
         settings_override({"path_root": str(tmp_path)}),
         _container_states("paused", "missing"),
@@ -346,16 +346,16 @@ async def test_reinstall_is_serialized_by_the_per_app_op_lock(
     ):
         await lock.acquire()
         try:
-            task = asyncio.create_task(worker._reinstall_app("locked_app"))
+            task = asyncio.create_task(worker._reinstall_app("reinstall_locked_app"))
             await asyncio.sleep(0.05)
             assert not task.done()
             subprocess_mock.assert_not_called()
-            assert await _status("locked_app") == Status.REINSTALLATION_QUEUED
+            assert await _status("reinstall_locked_app") == Status.REINSTALLATION_QUEUED
         finally:
             lock.release()
         await asyncio.wait_for(task, timeout=1)
 
-    assert await _status("locked_app") == Status.STOPPED
+    assert await _status("reinstall_locked_app") == Status.STOPPED
 
 
 async def test_teardown_left_containers_tolerates_a_missing_compose_file(
