@@ -201,7 +201,11 @@ async def _unfreeze_for_teardown(name: str):
     Decided from the real container state rather than the stored status: a frozen
     container can be neither stopped nor removed, and the status the teardown sees
     is often not PAUSED — during a reinstall it reads REINSTALLING, and on a shard
-    already tripped up by that it reads ERROR (issue #199).
+    already tripped up by that it reads ERROR (issue #199). Costs one daemon
+    round-trip per teardown.
+
+    Deliberately not _do_unpause: this stack is on its way down, not to RUNNING,
+    so it must not enter the pause-tier transition metrics.
     """
     if await get_app_container_state(name) != "paused":
         return

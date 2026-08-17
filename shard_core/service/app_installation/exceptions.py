@@ -16,3 +16,7 @@ class AppInIllegalStatus(Exception):
 
 class InvalidAppZip(Exception):
     pass
+
+
+class AppTeardownFailed(Exception):
+    pass

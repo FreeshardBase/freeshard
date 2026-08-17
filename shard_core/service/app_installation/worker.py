@@ -13,16 +13,17 @@ from shard_core.database import installed_apps as db_installed_apps
 from shard_core.data_model.app_meta import Status
 from shard_core.service.app_tools import (
     app_op_lock,
+    get_app_container_state,
     get_installed_apps_path,
     docker_create_app_containers,
     docker_stop_app,
     docker_shutdown_app,
-    docker_unpause_app,
 )
 from shard_core.settings import settings
 from shard_core.util import signals
+from shard_core.util.subprocess import ComposeFileNotFound
 from .app_zip import extract_app_zip
-from .exceptions import AppDoesNotExist
+from .exceptions import AppDoesNotExist, AppTeardownFailed
 from .util import (
     update_app_status,
     render_docker_compose_template,
@@ -128,12 +129,6 @@ async def _uninstall_app(app_name: str):
     # (start_app) can't recreate a container between our stop and row removal.
     async with app_op_lock(app_name):
         try:
-            installed_app = await get_app_from_db(app_name)
-            if installed_app.status == Status.PAUSED:
-                # unfreeze while the status still says PAUSED — once it flips to
-                # UNINSTALLING nothing knows the containers are frozen, and a
-                # frozen stack can be neither stopped nor removed
-                await docker_unpause_app(app_name)
             await update_app_status(app_name, Status.UNINSTALLING)
         except KeyError:
             log.warning(
@@ -156,29 +151,44 @@ async def _uninstall_app(app_name: str):
         log.info(f"uninstalled {app_name}")
 
 
+async def _teardown_left_containers(app_name: str) -> bool:
+    try:
+        return await get_app_container_state(app_name) != "missing"
+    except ComposeFileNotFound:
+        return False
+
+
 async def _reinstall_app(app_name: str):
-    installed_app = await get_app_from_db(app_name)
-    assert_app_status(installed_app, Status.REINSTALLATION_QUEUED)
-    await update_app_status(installed_app.name, Status.REINSTALLING)
+    # Held across teardown and rmtree for the same reason as _uninstall_app: a
+    # concurrent wake/control-tick revive must not recreate what we removed.
+    async with app_op_lock(app_name):
+        installed_app = await get_app_from_db(app_name)
+        assert_app_status(installed_app, Status.REINSTALLATION_QUEUED)
+        await update_app_status(installed_app.name, Status.REINSTALLING)
 
-    try:
-        # force, because the status is REINSTALLING by now and no teardown gate
-        # accepts it — without this the old containers survive the rmtree and
-        # `compose up --no-start` collides with them (issue #199)
-        await docker_shutdown_app(app_name, set_status=False, force=True)
-    except Exception as e:
-        log.error(f"Error while shutting down app {app_name}: {e!r}")
+        try:
+            # force, because the status is REINSTALLING by now and no teardown
+            # gate accepts it (issue #199)
+            await docker_shutdown_app(app_name, set_status=False, force=True)
+        except ComposeFileNotFound:
+            log.warning(f"app {app_name} has no compose file, nothing to tear down")
+        except Exception as e:
+            log.error(f"Error while shutting down app {app_name}: {e!r}")
 
-    log.debug(f"deleting app data for {app_name}")
-    shutil.rmtree(Path(get_installed_apps_path() / app_name), ignore_errors=True)
+        try:
+            if await _teardown_left_containers(app_name):
+                raise AppTeardownFailed(app_name)
 
-    try:
-        zip_file = await _download_app_zip(installed_app.name)
-        await _install_app_from_zip(installed_app, zip_file)
-        await update_app_status(installed_app.name, Status.STOPPED)
-    except Exception as e:
-        await update_app_status(installed_app.name, Status.ERROR, message=repr(e))
-        signals.on_app_install_error.send((e, app_name))
+            log.debug(f"deleting app data for {app_name}")
+            shutil.rmtree(
+                Path(get_installed_apps_path() / app_name), ignore_errors=True
+            )
+            zip_file = await _download_app_zip(installed_app.name)
+            await _install_app_from_zip(installed_app, zip_file)
+            await update_app_status(installed_app.name, Status.STOPPED)
+        except Exception as e:
+            await update_app_status(installed_app.name, Status.ERROR, message=repr(e))
+            signals.on_app_install_error.send((e, app_name))
 
 
 async def _install_app_from_zip(installed_app, zip_file):
