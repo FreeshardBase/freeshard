@@ -195,14 +195,29 @@ async def docker_unpause_app(name: str):
         log.debug(f"app {name=} has {app_status=}, skipping unpause")
 
 
+async def _unfreeze_for_teardown(name: str):
+    """Unpause the stack if the daemon says it is frozen.
+
+    Decided from the real container state rather than the stored status: a frozen
+    container can be neither stopped nor removed, and the status the teardown sees
+    is often not PAUSED — during a reinstall it reads REINSTALLING, and on a shard
+    already tripped up by that it reads ERROR (issue #199).
+    """
+    if await get_app_container_state(name) != "paused":
+        return
+    try:
+        await subprocess(*_app_compose(name), "unpause")
+    except SubprocessError as e:
+        # a partially-paused stack rejects unpause; the teardown still has to run
+        log.warning(f"unpause before teardown failed for {name=}: {e!r}")
+
+
 async def docker_stop_app(name: str, set_status: bool = True):
     async with db_conn() as conn:
         app = await db_installed_apps.get_by_name(conn, name)
         app_status = app["status"] if app else None
     if app_status in [Status.RUNNING, Status.PAUSED, Status.UNINSTALLING]:
-        if app_status == Status.PAUSED:
-            # a frozen container cannot be stopped — unfreeze first
-            await subprocess(*_app_compose(name), "unpause")
+        await _unfreeze_for_teardown(name)
         await subprocess(*_app_compose(name), "stop")
         if set_status:
             pause_metrics.record_app_transition(
@@ -220,10 +235,7 @@ async def docker_shutdown_app(name: str, set_status: bool = True, force: bool = 
         app = await db_installed_apps.get_by_name(conn, name)
         app_status = app["status"] if app else None
     if force or app_status in [Status.STOPPED, Status.UNINSTALLING]:
-        if app_status == Status.PAUSED:
-            # only reachable with force=True (process shutdown) — unfreeze so
-            # compose down can stop and remove the containers
-            await subprocess(*_app_compose(name), "unpause")
+        await _unfreeze_for_teardown(name)
         await subprocess(*_app_compose(name), "down")
         if set_status:
             async with db_conn() as conn:
