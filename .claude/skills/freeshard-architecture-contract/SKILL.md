@@ -139,9 +139,17 @@ The four status **allow-lists** live in shard_core/service/app_tools.py:
 | Function | Acts only when status in | Line |
 |---|---|---|
 | `docker_start_app` | STOPPED, RUNNING, DOWN | app_tools.py:36 |
-| `docker_stop_app` | RUNNING, UNINSTALLING | app_tools.py:76 |
-| `docker_shutdown_app` | STOPPED, UNINSTALLING (or `force=True`) | app_tools.py:92 |
-| worker asserts | INSTALLATION_QUEUED / REINSTALLATION_QUEUED | worker.py:98,111,148 |
+| `docker_stop_app` | RUNNING, PAUSED, UNINSTALLING | app_tools.py:219 |
+| `docker_shutdown_app` | STOPPED, UNINSTALLING (or `force=True`) | app_tools.py:237 |
+| worker asserts | INSTALLATION_QUEUED / REINSTALLATION_QUEUED | worker.py:100,113,161 |
+
+The **unpause** both teardown helpers do first is NOT gated on the stored status — it
+asks the daemon via `get_app_container_state()` (`_unfreeze_for_teardown`,
+app_tools.py:198-212). A frozen container can be neither stopped nor removed, and the
+status a teardown sees is routinely not PAUSED: REINSTALLING during a reinstall, ERROR
+on a shard the reinstall already broke, or a stale RUNNING after an out-of-band pause
+(issue #199). `_reinstall_app` reaches the teardown by passing `force=True`, not by
+widening the allow-lists — those also gate the idle control tick.
 
 Plus two **exclusion filters**:
 

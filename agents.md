@@ -25,7 +25,7 @@ shard_core/
   service/            → Business logic
     app_installation/   App install/uninstall/reinstall + background worker queue
     app_lifecycle.py    Two-tier idle control: RUNNING -> PAUSED -> STOPPED, PSI-driven LRU demotion, wake-on-request
-    app_tools.py        Docker CLI wrappers (pause/unpause/stop/down); start_app is the idempotent revive primitive that decides unpause vs up from real container state
+    app_tools.py        Docker CLI wrappers (pause/unpause/stop/down); start_app is the idempotent revive primitive that decides unpause vs up from real container state, and the teardown helpers decide their unpause the same way
     memory_pressure.py  PSI parsing (/host/pressure/memory), cgroup v2 memory.reclaim page-out
     pause_metrics.py    In-memory pause-tier telemetry accumulators (transitions, latencies, PSI snapshots)
     pairing.py          Terminal pairing (JWT creation, code generation)
@@ -105,6 +105,12 @@ Blinker-based async signals defined in `util/signals.py`. DB-writing handlers ar
 3. Traefik dynamic config generated for the app's subdomain routing
 4. `docker-compose up -d` via subprocess
 5. Status updated in PostgreSQL
+
+Reinstall tears the old stack down with `docker_shutdown_app(force=True)`: by then the
+status is `REINSTALLING`, which no teardown gate accepts, so without the force flag the
+old containers survive the rmtree of the app dir and `compose up --no-start` collides
+with them (issue #199). Do not widen the gates to admit `REINSTALLING` instead — the
+same allow-lists gate the idle control tick, which must not touch an app mid-reinstall.
 
 The task queue is in-memory only, so a restart loses whatever it held. Uninstall is
 made crash-safe by `reconcile_interrupted_uninstalls()`, a lifespan step that
