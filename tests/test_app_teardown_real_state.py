@@ -1,6 +1,7 @@
 """Teardown decides its unpause from the real container state, not the stored
 status (issue #199)."""
 
+import asyncio
 from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
@@ -46,30 +47,42 @@ def subprocess_mock():
 
 
 def _operations(subprocess_mock) -> list[tuple[str, ...]]:
-    """The compose operations issued, in order, without the pinning prefix —
-    ("unpause",), ("down",), ("up", "--no-start")."""
+    """(app project, compose operation…) per issued command, in order. The
+    project is the `-p` value: a command aimed at the wrong app — or at the core
+    stack, issue #160 — must not read the same as a correct one."""
     return [
-        call.args[call.args.index("--project-directory") + 2 :]
-        for call in subprocess_mock.await_args_list
+        (c[c.index("-p") + 1], *c[c.index("--project-directory") + 2 :])
+        for c in (call.args for call in subprocess_mock.await_args_list)
     ]
 
 
 @contextmanager
-def _container_states(*states: str):
-    """What the daemon reports, in order. The reinstall path asks twice: once to
-    decide the unpause, once to confirm the old containers are really gone. Both
-    the app_tools and the worker reference are patched with the same mock so the
-    sequence is shared."""
-    mock = (
-        AsyncMock(return_value=states[0])
-        if len(states) == 1
-        else AsyncMock(side_effect=list(states))
-    )
+def _patched_container_state(mock: AsyncMock):
+    """Both the app_tools and the worker reference point at one mock, so a
+    sequence of answers is shared across the teardown and the check that follows
+    it."""
     with (
         patch.object(app_tools, "get_app_container_state", new=mock),
         patch.object(worker, "get_app_container_state", new=mock),
     ):
         yield
+
+
+def _container_states(*states: str):
+    """What the daemon reports, in order. The reinstall path asks twice: once to
+    decide the unpause, once to confirm the old containers are really gone."""
+    mock = (
+        AsyncMock(return_value=states[0])
+        if len(states) == 1
+        else AsyncMock(side_effect=list(states))
+    )
+    return _patched_container_state(mock)
+
+
+def _container_state_per_app(states: dict[str, str]):
+    """Each app answers for itself — one shared answer would hide a teardown
+    that probed a different app than the one it went on to tear down."""
+    return _patched_container_state(AsyncMock(side_effect=lambda name: states[name]))
 
 
 @pytest.mark.parametrize(
@@ -84,7 +97,10 @@ async def test_shutdown_unpauses_a_frozen_stack_whatever_the_status_says(
     with settings_override({"path_root": str(tmp_path)}), _container_states("paused"):
         await app_tools.docker_shutdown_app("frozen_app", force=True)
 
-    assert _operations(subprocess_mock) == [("unpause",), ("down",)]
+    assert _operations(subprocess_mock) == [
+        ("frozen_app", "unpause"),
+        ("frozen_app", "down"),
+    ]
 
 
 @pytest.mark.parametrize("container_state", ["running", "exited", "missing"])
@@ -102,7 +118,7 @@ async def test_shutdown_does_not_unpause_an_unfrozen_stack(
     ):
         await app_tools.docker_shutdown_app("stopped_app")
 
-    assert _operations(subprocess_mock) == [("down",)]
+    assert _operations(subprocess_mock) == [("stopped_app", "down")]
 
 
 @pytest.mark.parametrize("status", [Status.RUNNING, Status.UNINSTALLING])
@@ -115,7 +131,10 @@ async def test_stop_unpauses_a_frozen_stack_whose_status_is_not_paused(
     with settings_override({"path_root": str(tmp_path)}), _container_states("paused"):
         await app_tools.docker_stop_app("frozen_app", set_status=False)
 
-    assert _operations(subprocess_mock) == [("unpause",), ("stop",)]
+    assert _operations(subprocess_mock) == [
+        ("frozen_app", "unpause"),
+        ("frozen_app", "stop"),
+    ]
 
 
 async def test_stop_skips_an_app_whose_status_is_outside_its_allow_list(
@@ -133,6 +152,25 @@ async def test_stop_skips_an_app_whose_status_is_outside_its_allow_list(
     subprocess_mock.assert_not_called()
 
 
+@pytest.mark.parametrize(
+    "status", [Status.RUNNING, Status.PAUSED, Status.REINSTALLING, Status.ERROR]
+)
+async def test_shutdown_without_force_still_respects_its_allow_list(
+    db, tmp_path, subprocess_mock, status
+):
+    """The allow-lists are what keep the idle control tick off an app that is
+    mid-reinstall, so the fix forces the shutdown instead of widening them. A
+    frozen stack outside the list must not even be unpaused: thawing it without
+    a stop or down would page it back in for nothing."""
+    _app_dir(tmp_path, "frozen_app")
+    await _insert_app("frozen_app", status)
+
+    with settings_override({"path_root": str(tmp_path)}), _container_states("paused"):
+        await app_tools.docker_shutdown_app("frozen_app")
+
+    subprocess_mock.assert_not_called()
+
+
 async def test_stop_does_not_unpause_when_the_stack_is_not_frozen(
     db, tmp_path, subprocess_mock
 ):
@@ -144,7 +182,7 @@ async def test_stop_does_not_unpause_when_the_stack_is_not_frozen(
     with settings_override({"path_root": str(tmp_path)}), _container_states("exited"):
         await app_tools.docker_stop_app("exited_app")
 
-    assert _operations(subprocess_mock) == [("stop",)]
+    assert _operations(subprocess_mock) == [("exited_app", "stop")]
     assert await _status("exited_app") == Status.STOPPED
 
 
@@ -163,24 +201,38 @@ async def test_teardown_continues_with_down_when_unpause_fails(
     with settings_override({"path_root": str(tmp_path)}), _container_states("paused"):
         await app_tools.docker_shutdown_app("mixed_app", force=True)
 
-    assert _operations(subprocess_mock) == [("unpause",), ("down",)]
+    assert _operations(subprocess_mock) == [
+        ("mixed_app", "unpause"),
+        ("mixed_app", "down"),
+    ]
 
 
 async def test_shutdown_all_apps_removes_a_frozen_stack_with_a_stale_status(
     db, tmp_path, subprocess_mock
 ):
     """Core restart: docker_shutdown_all_apps(force=True) must remove a stack
-    whose containers are paused but whose row says something else (issue #200)."""
+    whose containers are paused but whose row says something else (issue #200).
+    Two apps in different states, so a teardown that treats them alike shows."""
     _app_dir(tmp_path, "frozen_app")
     _app_dir(tmp_path, "other_app")
     await _insert_app("frozen_app", Status.ERROR)
     await _insert_app("other_app", Status.STOPPED)
 
-    with settings_override({"path_root": str(tmp_path)}), _container_states("paused"):
+    with (
+        settings_override({"path_root": str(tmp_path)}),
+        _container_state_per_app({"frozen_app": "paused", "other_app": "exited"}),
+    ):
         await app_tools.docker_shutdown_all_apps(force=True)
 
-    assert _operations(subprocess_mock).count(("unpause",)) == 2
-    assert _operations(subprocess_mock).count(("down",)) == 2
+    operations = _operations(subprocess_mock)
+    assert sorted(operations) == [
+        ("frozen_app", "down"),
+        ("frozen_app", "unpause"),
+        ("other_app", "down"),
+    ]
+    assert operations.index(("frozen_app", "unpause")) < operations.index(
+        ("frozen_app", "down")
+    )
     assert await _status("frozen_app") == Status.DOWN
     assert await _status("other_app") == Status.DOWN
 
@@ -225,9 +277,9 @@ async def test_reinstall_removes_frozen_containers_before_creating_new_ones(
         await worker._reinstall_app("frozen_app")
 
     assert _operations(subprocess_mock) == [
-        ("unpause",),
-        ("down",),
-        ("up", "--no-start"),
+        ("frozen_app", "unpause"),
+        ("frozen_app", "down"),
+        ("frozen_app", "up", "--no-start"),
     ]
     assert await _status("frozen_app") == Status.STOPPED
 
@@ -246,7 +298,10 @@ async def test_reinstall_of_an_unfrozen_app_tears_down_before_creating(
     ):
         await worker._reinstall_app("plain_app")
 
-    assert _operations(subprocess_mock) == [("down",), ("up", "--no-start")]
+    assert _operations(subprocess_mock) == [
+        ("plain_app", "down"),
+        ("plain_app", "up", "--no-start"),
+    ]
     assert await _status("plain_app") == Status.STOPPED
 
 
@@ -266,9 +321,56 @@ async def test_reinstall_keeps_the_old_app_when_containers_survive_the_teardown(
     ):
         await worker._reinstall_app("stuck_app")
 
-    assert _operations(subprocess_mock) == [("unpause",), ("down",)]
+    assert _operations(subprocess_mock) == [
+        ("stuck_app", "unpause"),
+        ("stuck_app", "down"),
+    ]
     assert (app_dir / "docker-compose.yml").exists()
     assert await _status("stuck_app") == Status.ERROR
+
+
+async def test_reinstall_is_serialized_by_the_per_app_op_lock(
+    db, tmp_path, subprocess_mock
+):
+    """The reinstall now really removes containers, so it must hold the same lock
+    the uninstall does — otherwise a wake-on-access revive can recreate the stack
+    between the teardown and the rmtree (issue #185)."""
+    _app_dir(tmp_path, "locked_app")
+    await _insert_app("locked_app", Status.REINSTALLATION_QUEUED)
+
+    lock = app_tools.app_op_lock("locked_app")
+    with (
+        settings_override({"path_root": str(tmp_path)}),
+        _container_states("paused", "missing"),
+        _reinstall_mocks(),
+    ):
+        await lock.acquire()
+        try:
+            task = asyncio.create_task(worker._reinstall_app("locked_app"))
+            await asyncio.sleep(0.05)
+            assert not task.done()
+            subprocess_mock.assert_not_called()
+            assert await _status("locked_app") == Status.REINSTALLATION_QUEUED
+        finally:
+            lock.release()
+        await asyncio.wait_for(task, timeout=1)
+
+    assert await _status("locked_app") == Status.STOPPED
+
+
+async def test_teardown_left_containers_tolerates_a_missing_compose_file(
+    db, tmp_path, subprocess_mock
+):
+    """An app dir without a rendered compose file cannot be probed through
+    compose at all. Report no leftovers so the reinstall re-downloads it rather
+    than refusing to repair the app forever."""
+    app_dir = tmp_path / "core" / "installed_apps" / "no_compose_app"
+    app_dir.mkdir(parents=True)
+
+    with settings_override({"path_root": str(tmp_path)}):
+        assert await worker._teardown_left_containers("no_compose_app") is False
+
+    subprocess_mock.assert_not_called()
 
 
 async def test_reinstall_of_an_errored_app_is_queued(db, tmp_path):

@@ -100,6 +100,39 @@ async def test_full_tier_cycle_and_fast_wake(requests_mock, api_client):
         assert transitions["paused_to_stopped"] >= 1
 
 
+async def test_reinstall_while_paused(requests_mock, api_client):
+    """Issue #199 against real containers: docker refuses to recreate a paused
+    container, so a reinstall that does not unfreeze and remove the old stack
+    first ends in ERROR. Only a real daemon can fail this for the right reason —
+    a mocked compose call reports success either way."""
+    docker_client = docker.from_env()
+    get_status, container_status = _assert_state(docker_client, api_client)
+
+    with settings_override(PAUSE_ON):
+        await install_app(api_client, APP_NAME)
+        await _wake_via_request(api_client)
+
+        async def assert_paused():
+            assert container_status() == "paused"
+            assert await get_status() == Status.PAUSED
+
+        await retry_async(assert_paused, timeout=25, retry_errors=[AssertionError])
+        old_container_id = docker_client.containers.get(APP_NAME).id
+
+        response = await api_client.post(f"protected/apps/{APP_NAME}/reinstall")
+        assert response.status_code == status.HTTP_201_CREATED
+
+        async def assert_reinstalled():
+            assert await get_status() == Status.STOPPED
+            assert docker_client.containers.get(APP_NAME).id != old_container_id
+
+        await retry_async(
+            assert_reinstalled,
+            timeout=60,
+            retry_errors=[AssertionError, docker.errors.NotFound],
+        )
+
+
 async def test_uninstall_while_paused(requests_mock, api_client):
     docker_client = docker.from_env()
     get_status, container_status = _assert_state(docker_client, api_client)

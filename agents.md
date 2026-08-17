@@ -111,6 +111,11 @@ status is `REINSTALLING`, which no teardown gate accepts, so without the force f
 old containers survive the rmtree of the app dir and `compose up --no-start` collides
 with them (issue #199). Do not widen the gates to admit `REINSTALLING` instead — the
 same allow-lists gate the idle control tick, which must not touch an app mid-reinstall.
+The other half of that fix is in `app_tools`: the unpause both teardown helpers do first
+is decided from the real container state, not the stored status, which is what lets a
+reinstall repair a shard already stuck in `ERROR` with frozen containers. Reinstall then
+checks the containers are actually gone before it deletes the app directory — a
+half-failed teardown must leave the old install in place rather than destroy it.
 
 The task queue is in-memory only, so a restart loses whatever it held. Uninstall is
 made crash-safe by `reconcile_interrupted_uninstalls()`, a lifespan step that
