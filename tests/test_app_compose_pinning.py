@@ -141,7 +141,12 @@ async def test_app_operation_with_compose_file_pins_the_app_project(
     app_dir = _app_dir(tmp_path, "brokenapp")
     await _insert_app("brokenapp", Status.RUNNING)
 
-    with settings_override({"path_root": str(tmp_path)}):
+    with (
+        settings_override({"path_root": str(tmp_path)}),
+        patch.object(
+            app_tools, "get_app_container_state", new=AsyncMock(return_value="running")
+        ),
+    ):
         await app_tools.docker_stop_app("brokenapp")
 
     command = subprocess_mock.await_args.args
