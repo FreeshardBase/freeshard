@@ -129,19 +129,27 @@ REINSTALLING, DOWN, ERROR. (`InstalledApp.status` is typed plain `str`, app_meta
 Transitions as implemented (single serial in-memory queue, one worker,
 app_installation/worker.py):
 
-- install: row inserted as INSTALLATION_QUEUED → worker asserts it (worker.py:98,111) → INSTALLING → STOPPED on success | ERROR on failure
-- reinstall: any → REINSTALLATION_QUEUED (no precondition) → worker asserts (worker.py:148) → REINSTALLING → STOPPED | ERROR
-- uninstall: any → UNINSTALLATION_QUEUED → UNINSTALLING (**no status assertion**, worker.py:124-128) → row deleted
+- install: row inserted as INSTALLATION_QUEUED → worker asserts it (worker.py:101,114) → INSTALLING → STOPPED on success | ERROR on failure
+- reinstall: any → REINSTALLATION_QUEUED (no precondition) → worker asserts (worker.py:166) → REINSTALLING → STOPPED | ERROR. A teardown that leaves containers behind aborts into ERROR *before* the app dir is deleted, so the old install survives a failed reinstall (worker.py:180-181)
+- uninstall: any → UNINSTALLATION_QUEUED → UNINSTALLING (**no status assertion**, worker.py:127-136) → row deleted
 - ERROR is escaped only via uninstall or reinstall
 
 The four status **allow-lists** live in shard_core/service/app_tools.py:
 
 | Function | Acts only when status in | Line |
 |---|---|---|
-| `docker_start_app` | STOPPED, RUNNING, DOWN | app_tools.py:36 |
-| `docker_stop_app` | RUNNING, UNINSTALLING | app_tools.py:76 |
-| `docker_shutdown_app` | STOPPED, UNINSTALLING (or `force=True`) | app_tools.py:92 |
-| worker asserts | INSTALLATION_QUEUED / REINSTALLATION_QUEUED | worker.py:98,111,148 |
+| `start_app` (was `docker_start_app`) | `_REVIVABLE_STATUS` = STOPPED, RUNNING, DOWN, PAUSED | app_tools.py:41,127 |
+| `docker_stop_app` | RUNNING, PAUSED, UNINSTALLING | app_tools.py:223 |
+| `docker_shutdown_app` | STOPPED, UNINSTALLING (or `force=True`) | app_tools.py:241 |
+| worker asserts | INSTALLATION_QUEUED / REINSTALLATION_QUEUED | worker.py:101,114,166 |
+
+The **unpause** both teardown helpers do first is NOT gated on the stored status — it
+asks the daemon via `get_app_container_state()` (`_unfreeze_for_teardown`,
+app_tools.py:198-212). A frozen container can be neither stopped nor removed, and the
+status a teardown sees is routinely not PAUSED: REINSTALLING during a reinstall, ERROR
+on a shard the reinstall already broke, or a stale RUNNING after an out-of-band pause
+(issue #199). `_reinstall_app` reaches the teardown by passing `force=True`, not by
+widening the allow-lists — those also gate the idle control tick.
 
 Plus two **exclusion filters**:
 
