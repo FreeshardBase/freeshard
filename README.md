@@ -110,6 +110,17 @@ All communication is encrypted and authenticated using the shard IDs as trust an
 The Shard Core can be hosted on any machine that has access to the internet.
 It is recommended to use a machine that is always on, e.g. a virtual private server (VPS).
 
+### Where the apps come from
+
+A self-hosted shard is not self-contained. Both halves of the app catalogue are served by infrastructure Freeshard operates:
+
+- the catalogue metadata and the app packages come from an Azure blob container (`apps.app_store` in `config.toml`), and
+- the container images for the apps that do not use a public upstream image come from our container registry, `portalapps.azurecr.io`.
+
+Shard Core logs in to that registry at startup, using the credentials checked into `config.toml` under `[[apps.registries]]`. **Those credentials are committed on purpose.** The account is a Microsoft Entra service principal, `sp-apps-reader`, whose only role assignment anywhere in our subscription is `Reader`, scoped to that single registry — it can pull images and read registry metadata, and it can do nothing else: no push, no delete, no configuration change, no access to any other resource. It is shared with everyone who runs a shard because every shard needs it to install an app.
+
+If you would rather not depend on our infrastructure, note that this is what you would have to replace.
+
 ### Localhost
 
 In order to test freeshard, you might want to launch it on localhost first.
