@@ -1,6 +1,10 @@
 path_root = "/"
 path_root_host = "/home/shard"
 
+# `password` here is a fixed default, not a secret. Postgres publishes no port to
+# the host; it is reachable only from the `portal` docker network, which every app
+# container on the shard also joins. Changing it per shard would buy nothing as
+# long as that is true, so it is left at the default and stated plainly instead.
 [db]
 host = "postgres"
 port = 5432
@@ -26,6 +30,18 @@ acme_email = "contact@freeshard.net"
 base_url = "https://storageaccountportab0da.blob.core.windows.net"
 container_name = "app-store"
 
+# These credentials are checked in deliberately and are not a leak.
+#
+# `portalapps.azurecr.io` is the container registry the app images are served
+# from, and every shard — including a self-hosted one — logs in to it at startup
+# to pull them. The account is the Microsoft Entra service principal
+# `sp-apps-reader`, whose only role assignment anywhere in the subscription is
+# `Reader`, scoped to this one registry. `Reader` grants `*/read` and no data
+# actions at all: it can pull images and read registry metadata, and it cannot
+# push, delete, change registry configuration, or reach any other Azure resource.
+#
+# So the credential is shared with everyone who runs a shard by design. Do not
+# copy the pattern for anything that can write.
 [[apps.registries]]
 uri = "portalapps.azurecr.io"
 username = "0e4000f7-41b1-45d6-9f2f-7e4a952a19b0"
