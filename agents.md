@@ -156,6 +156,14 @@ Host-side: `settings().path_root_host` (typically `/home/shard`).
 - Models in `data_model/backend/` are copied from freeshard-controller — do not edit directly, use `just get-types`
   - The CI `drift-check` job re-runs `get-types` against controller **`origin/main`** and fails if the diff is non-empty. To fix drift: check out the controller at `origin/main` (a local `main` may be many commits behind — `git fetch` first), then run `just SOURCE_DIR=<abs path to controller>/freeshard-controller-backend/freeshard_controller/data_model get-types` from this repo and commit only the regenerated files. Never hand-edit them.
 
+## Commits
+
+[Scoped Commits](https://scopedcommits.com/): `<scope>: <description>`. The scope is the area of the tree the change touches, never a change type — write `service: retry app install on transient docker errors`, not `fix(service): ...`. Body and trailers are optional; a change's reasoning belongs in the body, not in a code comment.
+
+Scopes for this repo: `web` `service` `data_model` `database` `migrations` `tests` `scripts` `ci` `docs` `meta`
+
+`meta` covers repo-level files (agents.md, README, justfile). For a change spanning several scopes, use a broader one, list two comma-separated, or use `treewide`. Merges, reverts and generated commits (`set version to <v>`) keep their own format. Don't generate a changelog from the commit log — release notes come from merged PRs.
+
 ## Important Notes
 
 - The `Status` enum in `app_meta.py` covers the full app lifecycle: UNKNOWN, INSTALLATION_QUEUED, INSTALLING, STOPPED, RUNNING, DOWN, etc.
