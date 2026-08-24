@@ -1,5 +1,5 @@
--- shard-core-0003-oidc
--- depends: shard-core-0002-users
+-- shard-core-0004-oidc
+-- depends: shard-core-0003-app-status-message
 
 CREATE TABLE IF NOT EXISTS oidc_clients (
     client_id TEXT PRIMARY KEY,
