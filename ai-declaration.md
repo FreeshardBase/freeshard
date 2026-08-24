@@ -1,12 +1,12 @@
 # AI Declaration — Freeshard
 
-Freeshard is built by two people and a fleet of coding agents. This file states where AI is used and how far it goes, so nobody has to guess from the commit history.
+Freeshard is built by a small team and a fleet of coding agents. This file states where AI is used and how far it goes, so nobody has to guess from the commit history.
 
 Format follows the disclosure convention used by selfhosted@lemmy.world: each phase is rated Hint / Assisted / Pair / Generated.
 
 | Phase | Level | What that means here |
 |---|---|---|
-| Design | Pair | Architecture and product decisions are made by the two humans, in conversation with agents. Specs are drafted jointly and a human approves the spec before any code is written. |
+| Design | Pair | Architecture and product decisions are made by the humans on the team, in conversation with agents. Specs are drafted jointly and a human approves the spec before any code is written. |
 | Implementation | Generated | Most code in shard_core and the controller is written by headless agents working from triaged, specced issues — one fresh agent per issue, one pull request per issue. |
 | Testing | Generated | Tests are written by the same agents, including integration tests that run against real containers in CI. |
 | Documentation | Generated | Documentation, changelogs and the repository's own runbook libraries are agent-authored under a rule that every command, path and reference must be verified before it is written, then human-reviewed. |

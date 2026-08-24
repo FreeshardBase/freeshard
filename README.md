@@ -14,6 +14,8 @@
 
 Freeshard is a personal cloud computer that a consumer can rent for a small monthly fee (or selfhost) and which is as simple to use as a smartphone. Its aim is to restore people's sovereignty regarding the data they consume and produce - to give them a home on the internet.
 
+It is built by a small team working with coding agents. [ai-declaration.md](ai-declaration.md) states where AI is used and how far it goes.
+
 <div align="center" style="display: flex; flex-wrap: wrap; gap: 10px;">
     <a href="readme/gallery/pairing.png" target="_blank">
         <img src="readme/gallery/pairing.png" alt="Image 1" style="width: 150px; height: 100px; object-fit: cover;">
