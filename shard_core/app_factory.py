@@ -25,6 +25,7 @@ from .service import (
     backup,
     disk,
     telemetry,
+    user,
 )
 from .service.app_installation.util import (
     write_traefik_dyn_config,
@@ -79,6 +80,7 @@ def configure_logging():
 async def lifespan(_):
     await database.init_database()
     await identity.init_default_identity()
+    await user.ensure_owner_user()
 
     await write_traefik_dyn_config()
     await render_all_docker_compose_templates()
