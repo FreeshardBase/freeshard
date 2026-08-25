@@ -19,3 +19,6 @@ shard_core = "info"
 
 [telemetry]
 enabled = true
+
+[event_notifications.disk_full]
+enabled = false
