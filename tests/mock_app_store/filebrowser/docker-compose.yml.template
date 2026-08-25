@@ -1,3 +1,5 @@
+version: '3.5'
+
 networks:
     portal:
         external: true
@@ -7,8 +9,6 @@ services:
         restart: always
         image: portalapps.azurecr.io/ptl-apps/filebrowser:master
         container_name: filebrowser
-        ports:
-        - 80:80
         volumes:
         - "{{ fs.app_data }}:/data"
         - "{{ fs.shared }}:/data/shared"

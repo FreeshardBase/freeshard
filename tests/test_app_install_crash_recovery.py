@@ -13,7 +13,7 @@ from shard_core.service import app_installation, telemetry, websocket
 from shard_core.service.app_installation import worker
 from shard_core.service.app_tools import get_installed_apps_path
 from tests.conftest import mock_app_store
-from tests.util import docker_network_portal, mock_app_store_path, retry_async
+from tests.util import docker_network_portal, retry_async
 
 pytest_plugins = ("pytest_asyncio",)
 pytestmark = pytest.mark.asyncio
@@ -151,7 +151,7 @@ def _reload_stateful_modules():
     ],
 )
 async def test_unrecoverable_stranded_row_boots_and_settles_to_error(
-    requests_mock, mocker, status
+    requests_mock, mocker, status, mock_app_store_zips
 ):
     """A row with no recoverable source boots the shard and ends in ERROR.
 
@@ -160,7 +160,7 @@ async def test_unrecoverable_stranded_row_boots_and_settles_to_error(
     reconcile picks the wrong branch, giving it teeth.
     """
     _reload_stateful_modules()
-    mock_app_store(mocker)
+    mock_app_store(mocker, mock_app_store_zips)
 
     async def noop():
         pass
@@ -180,12 +180,14 @@ async def test_unrecoverable_stranded_row_boots_and_settles_to_error(
 
 
 @pytest.mark.parametrize("status", [Status.INSTALLATION_QUEUED, Status.INSTALLING])
-async def test_reconciled_install_completes_on_boot(requests_mock, mocker, status):
+async def test_reconciled_install_completes_on_boot(
+    requests_mock, mocker, status, mock_app_store_zips
+):
     """A stranded install whose zip is on disk is re-queued by reconcile and the
     worker drives it to STOPPED — proving reconcile's task_type and status reset
     line up with the worker's status assertion end to end."""
     _reload_stateful_modules()
-    mock_app_store(mocker)
+    mock_app_store(mocker, mock_app_store_zips)
 
     async def noop():
         pass
@@ -193,7 +195,7 @@ async def test_reconciled_install_completes_on_boot(requests_mock, mocker, statu
     mocker.patch("shard_core.service.app_installation.login_docker_registries", noop)
 
     await _seed_via_own_connection(status, InstallationReason.CUSTOM)
-    src = mock_app_store_path() / APP_NAME / f"{APP_NAME}.zip"
+    src = mock_app_store_zips / APP_NAME / f"{APP_NAME}.zip"
     dst = get_installed_apps_path() / APP_NAME / f"{APP_NAME}.zip"
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy(src, dst)

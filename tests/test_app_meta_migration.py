@@ -1,5 +1,4 @@
 import json
-import zipfile
 from pathlib import Path
 
 from shard_core.data_model.app_meta import AppMeta
@@ -76,18 +75,17 @@ def test_migrate_1_2_to_1_3_missing_lifecycle_gets_defaults():
 def test_all_mock_app_store_metas_migrate():
     """Every app_meta.json fixture (the app-repository stand-ins) must load
     through the migration chain without regeneration."""
-    zips = sorted(MOCK_APP_STORE.glob("*/*.zip"))
-    assert zips, "expected mock app store zips"
-    for zip_path in zips:
-        with zipfile.ZipFile(zip_path) as zf:
-            values = json.loads(zf.read("app_meta.json"))
+    metas = sorted(MOCK_APP_STORE.glob("*/app_meta.json"))
+    assert metas, "expected mock app store app_meta.json files"
+    for meta_path in metas:
+        values = json.loads(meta_path.read_text())
         old_lifecycle = values.get("lifecycle", {})
         app_meta = AppMeta.model_validate(values)
-        assert app_meta.v == "1.3", zip_path
+        assert app_meta.v == "1.3", meta_path
         if old_lifecycle.get("always_on"):
-            assert app_meta.lifecycle.always_on is True, zip_path
+            assert app_meta.lifecycle.always_on is True, meta_path
         elif "idle_time_for_shutdown" in old_lifecycle:
             assert (
                 app_meta.lifecycle.idle_for_pause
                 == old_lifecycle["idle_time_for_shutdown"]
-            ), zip_path
+            ), meta_path

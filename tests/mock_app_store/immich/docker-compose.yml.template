@@ -7,8 +7,6 @@ services:
         restart: always
         image: nginx:alpine
         container_name: immich
-        ports:
-        - 80:80
         volumes:
         - "{{ fs.app_data }}:/data"
         - "{{ fs.shared }}:/data/shared"

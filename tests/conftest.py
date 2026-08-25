@@ -4,12 +4,13 @@ import json
 import logging
 import re
 import shutil
+import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from logging import LogRecord
 from pathlib import Path
-from typing import List, AsyncGenerator
+from typing import List, AsyncGenerator, Generator
 
 import psycopg
 import pytest
@@ -39,9 +40,9 @@ from shard_core.service.app_tools import get_installed_apps_path
 from shard_core.settings import Settings, set_settings, reset_settings
 from shard_core.web.internal.call_peer import _get_app_for_ip_address
 from tests.util import (
+    build_mock_app_store_zips,
     docker_network_portal,
     wait_until_all_apps_installed,
-    mock_app_store_path,
 )
 
 pytest_plugins = ("pytest_asyncio",)
@@ -177,14 +178,16 @@ async def db():
 
 
 @pytest_asyncio.fixture
-async def api_client(requests_mock, mocker) -> AsyncGenerator[AsyncClient]:
+async def api_client(
+    requests_mock, mocker, mock_app_store_zips
+) -> AsyncGenerator[AsyncClient]:
     # Modules that define some global state need to be reloaded
     importlib.reload(websocket)
     importlib.reload(app_installation.worker)
     importlib.reload(telemetry)
 
     # Mocks must be set up after modules are reloaded or else they will be overwritten
-    mock_app_store(mocker)
+    mock_app_store(mocker, mock_app_store_zips)
 
     async def noop():
         pass
@@ -368,9 +371,16 @@ def peer_mock_requests(mocker):
     _get_app_for_ip_address.cache_clear()
 
 
-def mock_app_store(mocker):
+@pytest.fixture(scope="session")
+def mock_app_store_zips() -> Generator[Path]:
+    """The mock app store packed into zips, the shape the store serves them in."""
+    with tempfile.TemporaryDirectory() as target_root:
+        yield build_mock_app_store_zips(Path(target_root))
+
+
+def mock_app_store(mocker, zips_path: Path):
     async def mock_download_app_zip(name: str, _=None) -> Path:
-        source_zip = mock_app_store_path() / name / f"{name}.zip"
+        source_zip = zips_path / name / f"{name}.zip"
         target_zip = get_installed_apps_path() / name / f"{name}.zip"
         target_zip.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(source_zip, target_zip.parent)
@@ -383,7 +393,7 @@ def mock_app_store(mocker):
     )
 
     async def mock_app_exists_in_store(name: str) -> bool:
-        source_zip = mock_app_store_path() / name / f"{name}.zip"
+        source_zip = zips_path / name / f"{name}.zip"
         return source_zip.exists()
 
     mocker.patch(

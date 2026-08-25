@@ -9,7 +9,6 @@ from shard_core.service.app_installation.app_zip import (
     validate_app_zip,
 )
 from shard_core.service.app_installation.exceptions import InvalidAppZip
-from tests.util import mock_app_store_path
 
 
 def _app_meta(**overrides) -> str:
@@ -203,8 +202,8 @@ def test_extract_rejects_path_traversal(tmp_path):
     assert not (tmp_path / "installed_apps" / "escaped.txt").exists()
 
 
-def test_extract_mock_app_store_zip(tmp_path):
-    zip_file = mock_app_store_path() / "mock_app" / "mock_app.zip"
+def test_extract_mock_app_store_zip(tmp_path, mock_app_store_zips):
+    zip_file = mock_app_store_zips / "mock_app" / "mock_app.zip"
     target_dir = tmp_path / "installed_apps" / "mock_app"
     target_dir.mkdir(parents=True)
 

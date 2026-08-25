@@ -1,5 +1,6 @@
 import io
 import zipfile
+from pathlib import Path
 
 import docker
 import pytest
@@ -13,7 +14,6 @@ from shard_core.database.connection import db_conn
 from shard_core.service.app_tools import get_installed_apps_path
 from tests.util import (
     wait_until_app_installed,
-    mock_app_store_path,
     wait_until_app_uninstalled,
 )
 
@@ -146,26 +146,26 @@ async def _upload_custom_app(api_client: AsyncClient, filename: str, content: by
     )
 
 
-def _mock_app_zip_bytes() -> bytes:
-    return (mock_app_store_path() / "mock_app" / "mock_app.zip").read_bytes()
+def _mock_app_zip_bytes(zips_path: Path) -> bytes:
+    return (zips_path / "mock_app" / "mock_app.zip").read_bytes()
 
 
-def _nested_mock_app_zip_bytes() -> bytes:
+def _nested_mock_app_zip_bytes(zips_path: Path) -> bytes:
     """The mock_app zip, but with all files inside a single top-level directory."""
     buffer = io.BytesIO()
-    with zipfile.ZipFile(io.BytesIO(_mock_app_zip_bytes())) as source:
+    with zipfile.ZipFile(io.BytesIO(_mock_app_zip_bytes(zips_path))) as source:
         with zipfile.ZipFile(buffer, "w") as target:
             for name in source.namelist():
                 target.writestr(f"mock_app/{name}", source.read(name))
     return buffer.getvalue()
 
 
-async def test_install_custom_app(api_client: AsyncClient):
+async def test_install_custom_app(api_client: AsyncClient, mock_app_store_zips):
     app_name = "mock_app"
     docker_client = docker.from_env()
 
     response = await _upload_custom_app(
-        api_client, f"{app_name}.zip", _mock_app_zip_bytes()
+        api_client, f"{app_name}.zip", _mock_app_zip_bytes(mock_app_store_zips)
     )
     assert response.status_code == status.HTTP_201_CREATED
 
@@ -177,9 +177,13 @@ async def test_install_custom_app(api_client: AsyncClient):
     assert len(response) == 4
 
 
-async def test_install_custom_app_uses_name_from_app_meta(api_client: AsyncClient):
+async def test_install_custom_app_uses_name_from_app_meta(
+    api_client: AsyncClient, mock_app_store_zips
+):
     response = await _upload_custom_app(
-        api_client, "some-unrelated-filename.zip", _mock_app_zip_bytes()
+        api_client,
+        "some-unrelated-filename.zip",
+        _mock_app_zip_bytes(mock_app_store_zips),
     )
     assert response.status_code == status.HTTP_201_CREATED
 
@@ -189,12 +193,14 @@ async def test_install_custom_app_uses_name_from_app_meta(api_client: AsyncClien
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
-async def test_install_custom_app_with_single_top_level_dir(api_client: AsyncClient):
+async def test_install_custom_app_with_single_top_level_dir(
+    api_client: AsyncClient, mock_app_store_zips
+):
     app_name = "mock_app"
     docker_client = docker.from_env()
 
     response = await _upload_custom_app(
-        api_client, f"{app_name}.zip", _nested_mock_app_zip_bytes()
+        api_client, f"{app_name}.zip", _nested_mock_app_zip_bytes(mock_app_store_zips)
     )
     assert response.status_code == status.HTTP_201_CREATED
 
