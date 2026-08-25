@@ -489,9 +489,9 @@ async def register_client(
         ),
     }
     async with db_conn() as conn:
-        await db_oidc.upsert_client(conn, row)
+        stored = await db_oidc.upsert_client(conn, row)
     log.info(f"registered OIDC client for app {app_name}")
-    return row
+    return stored
 
 
 async def userinfo_for_access_token(access_token: str) -> dict | None:
