@@ -115,6 +115,4 @@ async def test_always_on_app_starts(requests_mock, api_client):
     await retry_async(assert_app_running, timeout=30, retry_errors=[AssertionError])
 
 
-# todo: test_large_app_does_not_start
-
 # todo: test app with size comparison

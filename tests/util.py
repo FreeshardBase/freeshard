@@ -1,5 +1,7 @@
 import asyncio
+import subprocess as std_subprocess
 import time
+import zipfile
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Callable
@@ -100,6 +102,39 @@ async def install_app(async_client: AsyncClient, app_name: str):
 
 def mock_app_store_path():
     return Path(__file__).parent / "mock_app_store"
+
+
+def _git_tracked_mock_app_store_files() -> set[Path]:
+    store = mock_app_store_path()
+    listing = std_subprocess.run(
+        ["git", "ls-files", "-z"],
+        cwd=store,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return {store / name for name in listing.stdout.split("\0") if name}
+
+
+def build_mock_app_store_zips(target_root: Path) -> Path:
+    """Pack every mock app directory into <target_root>/<name>/<name>.zip.
+
+    Fixture files that are not committed would be absent from a fresh checkout,
+    so the packed app would differ between a developer machine and CI.
+    """
+    tracked = _git_tracked_mock_app_store_files()
+    for app_dir in sorted(p for p in mock_app_store_path().iterdir() if p.is_dir()):
+        sources = sorted(p for p in app_dir.rglob("*") if p.is_file())
+        untracked = [str(p.relative_to(app_dir)) for p in sources if p not in tracked]
+        assert (
+            not untracked
+        ), f"{app_dir.name} has uncommitted fixture files: {untracked}"
+        zip_path = target_root / app_dir.name / f"{app_dir.name}.zip"
+        zip_path.parent.mkdir(parents=True)
+        with zipfile.ZipFile(zip_path, "w") as zip_file:
+            for source in sources:
+                zip_file.write(source, source.relative_to(app_dir))
+    return target_root
 
 
 def verify_signature_auth(request: PreparedRequest, pubkey: PublicKey) -> VerifyResult:
