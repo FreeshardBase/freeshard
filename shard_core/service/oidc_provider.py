@@ -36,7 +36,7 @@ from joserfc.jwk import RSAKey
 from shard_core.database import kv_store
 from shard_core.database import oidc as db_oidc
 from shard_core.database import users as db_users
-from shard_core.database.connection import db_conn
+from shard_core.database.connection import db_conn, with_conn
 from shard_core.data_model.user import User
 
 log = logging.getLogger(__name__)
@@ -47,6 +47,7 @@ REFRESH_TOKEN_LIFETIME = 30 * 24 * 3600
 CODE_EXPIRES_IN = 300
 SUPPORTED_SCOPES = ["openid", "profile", "email"]
 TOKEN_RATE_LIMIT = 30  # token requests per minute, enforced by the web layer
+BRIDGE_TIMEOUT = 30  # seconds a storage hook waits on the event loop
 
 _state: dict = {"issuer": None, "jwk": None, "loop": None}
 
@@ -62,9 +63,32 @@ def hash_secret(value: str) -> str:
 
 
 def _run(coro):
-    """Bridge for Authlib's sync storage hooks (called inside asyncio.to_thread)
-    back to the main event loop, where the connection pool lives."""
-    return asyncio.run_coroutine_threadsafe(coro, _state["loop"]).result()
+    """Run a coroutine on the main event loop from inside a worker thread.
+
+    Authlib's server core is synchronous, so request handling runs in a thread
+    (asyncio.to_thread). Its storage hooks still need Postgres, and the psycopg
+    pool belongs to the loop that opened it — a connection cannot be driven from
+    another thread, and asyncio.run() here would create a second loop the pool
+    knows nothing about. So the coroutine goes back to the original loop and
+    this thread blocks on the result: loop -> thread -> same loop.
+
+    This does not deadlock because the route awaits its to_thread call, leaving
+    the loop free to service what we submit. Block the loop on the thread
+    instead and it deadlocks immediately.
+    """
+    loop = _state["loop"]
+    if loop is None or loop.is_closed():
+        raise RuntimeError(
+            "OIDC provider has no running event loop — reach it through _get_server()"
+        )
+    future = asyncio.run_coroutine_threadsafe(coro, loop)
+    try:
+        return future.result(BRIDGE_TIMEOUT)
+    except TimeoutError:
+        # the coroutine would otherwise keep running and commit under a request
+        # that has already failed
+        future.cancel()
+        raise
 
 
 # --- models ------------------------------------------------------------------
@@ -234,11 +258,6 @@ def public_jwks() -> dict:
 # --- storage bridges (called from Authlib's sync hooks) ---------------------------
 
 
-async def _with_conn(fn, *args):
-    async with db_conn() as conn:
-        return await fn(conn, *args)
-
-
 # --- grants ------------------------------------------------------------------------
 
 
@@ -248,7 +267,7 @@ class ShardAuthCodeGrant(grants.AuthorizationCodeGrant):
     def save_authorization_code(self, code, request):
         data = request.payload.data
         _run(
-            _with_conn(
+            with_conn(
                 db_oidc.insert_code,
                 {
                     "code_hash": hash_secret(code),
@@ -278,16 +297,16 @@ class ShardAuthCodeGrant(grants.AuthorizationCodeGrant):
         # atomic burn-on-query: any redemption attempt (even one that later
         # fails PKCE) consumes the code, and two concurrent requests can't
         # both get it (RFC 9700 single-use)
-        row = _run(_with_conn(db_oidc.redeem_code, hash_secret(code), client.client_id))
+        row = _run(with_conn(db_oidc.redeem_code, hash_secret(code), client.client_id))
         if row is None:
             stale = _run(
-                _with_conn(db_oidc.get_code, hash_secret(code), client.client_id)
+                with_conn(db_oidc.get_code, hash_secret(code), client.client_id)
             )
             if stale and stale["redeemed"]:
                 # reuse of a redeemed code signals interception — kill every
                 # token issued to this (client, user) grant
                 _run(
-                    _with_conn(
+                    with_conn(
                         db_oidc.revoke_all_for_grant,
                         client.client_id,
                         stale["user_sub"],
@@ -310,7 +329,7 @@ class ShardRefreshTokenGrant(grants.RefreshTokenGrant):
 
     def authenticate_refresh_token(self, refresh_token):
         row = _run(
-            _with_conn(db_oidc.get_token_by_refresh_hash, hash_secret(refresh_token))
+            with_conn(db_oidc.get_token_by_refresh_hash, hash_secret(refresh_token))
         )
         if row is None:
             return None
@@ -318,7 +337,7 @@ class ShardRefreshTokenGrant(grants.RefreshTokenGrant):
             # replay of a rotated-out refresh token — revoke the whole family
             # so a thief who rotated first doesn't keep a live token
             _run(
-                _with_conn(
+                with_conn(
                     db_oidc.revoke_all_for_grant, row["client_id"], row["user_sub"]
                 )
             )
@@ -331,7 +350,7 @@ class ShardRefreshTokenGrant(grants.RefreshTokenGrant):
         return _run(_user_from_id_async(credential.row["user_sub"]))
 
     def revoke_old_credential(self, credential):
-        _run(_with_conn(db_oidc.revoke_token, credential.row["access_token_hash"]))
+        _run(with_conn(db_oidc.revoke_token, credential.row["access_token_hash"]))
 
 
 class _TokenRecord:
@@ -358,7 +377,7 @@ class _TokenRecord:
 
 class ShardOpenIDCode(OpenIDCode):
     def exists_nonce(self, nonce, request):
-        return _run(_with_conn(db_oidc.exists_nonce, nonce, request.payload.client_id))
+        return _run(with_conn(db_oidc.exists_nonce, nonce, request.payload.client_id))
 
     def get_authorization_code_claims(self, authorization_code):
         # Base impl always emits "nonce", as null when the client sent none.
@@ -415,7 +434,7 @@ def _save_token(token: dict, request):
         request, "refresh_token", None
     )
     _run(
-        _with_conn(
+        with_conn(
             db_oidc.insert_token,
             {
                 "access_token_hash": hash_secret(token["access_token"]),
@@ -437,7 +456,7 @@ def _save_token(token: dict, request):
 
 
 def _query_client(client_id: str):
-    return OidcClient.from_row(_run(_with_conn(db_oidc.get_client, client_id)))
+    return OidcClient.from_row(_run(with_conn(db_oidc.get_client, client_id)))
 
 
 class S256CodeChallenge(CodeChallenge):
