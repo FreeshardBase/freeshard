@@ -7,6 +7,7 @@ oidc section and whose compose template consumes {{ oidc.* }} variables.
 import pytest
 from httpx import AsyncClient
 
+from shard_core.data_model.oidc import OidcClient
 from shard_core.database.connection import db_conn
 from shard_core.database import oidc as db_oidc
 from shard_core.service.app_tools import get_installed_apps_path
@@ -15,7 +16,7 @@ from tests.util import wait_until_app_installed, wait_until_app_uninstalled
 APP_NAME = "oidc_app"
 
 
-async def _get_client_row() -> dict | None:
+async def _get_client_row() -> OidcClient | None:
     async with db_conn() as conn:
         return await db_oidc.get_client_by_app_name(conn, APP_NAME)
 
@@ -31,14 +32,14 @@ async def test_install_registers_client_and_renders_creds(api_client: AsyncClien
 
     row = await _get_client_row()
     assert row is not None
-    assert row["client_secret"]
+    assert row.client_secret
 
     domain = (await api_client.get("public/meta/whoareyou")).json()["domain"]
-    assert row["redirect_uris"] == [f"https://{APP_NAME}.{domain}/callback"]
+    assert row.redirect_uris == [f"https://{APP_NAME}.{domain}/callback"]
 
     compose = (get_installed_apps_path() / APP_NAME / "docker-compose.yml").read_text()
-    assert f"OIDC_CLIENT_ID={row['client_id']}" in compose
-    assert f"OIDC_CLIENT_SECRET={row['client_secret']}" in compose
+    assert f"OIDC_CLIENT_ID={row.client_id}" in compose
+    assert f"OIDC_CLIENT_SECRET={row.client_secret}" in compose
     assert f"OIDC_ISSUER=https://{domain}/core/public/oidc" in compose
 
 
@@ -51,8 +52,8 @@ async def test_reinstall_keeps_client_credentials(api_client: AsyncClient):
     await wait_until_app_installed(api_client, APP_NAME)
 
     after = await _get_client_row()
-    assert after["client_id"] == before["client_id"]
-    assert after["client_secret"] == before["client_secret"]
+    assert after.client_id == before.client_id
+    assert after.client_secret == before.client_secret
 
 
 @pytest.mark.config_override({"oidc": {"enabled": False}})

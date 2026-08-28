@@ -37,16 +37,13 @@ async def get_client(conn: AsyncConnection, client_id: str) -> OidcClient | None
         return await cur.fetchone()
 
 
-async def get_client_by_app_name(conn: AsyncConnection, app_name: str) -> dict | None:
+async def get_client_by_app_name(
+    conn: AsyncConnection, app_name: str
+) -> OidcClient | None:
     sql: LiteralString = "SELECT * FROM oidc_clients WHERE app_name = %s"
-    async with conn.cursor(row_factory=dict_row) as cur:
+    async with conn.cursor(row_factory=class_row(OidcClient)) as cur:
         await cur.execute(sql, (app_name,))
         return await cur.fetchone()
-
-
-async def remove_client_by_app_name(conn: AsyncConnection, app_name: str):
-    sql: LiteralString = "DELETE FROM oidc_clients WHERE app_name = %s"
-    await conn.execute(sql, (app_name,))
 
 
 # --- authorization codes ------------------------------------------------------
