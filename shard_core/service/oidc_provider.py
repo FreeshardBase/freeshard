@@ -48,7 +48,10 @@ REFRESH_TOKEN_LIFETIME = 30 * 24 * 3600
 CODE_EXPIRES_IN = 300
 SUPPORTED_SCOPES = ["openid", "profile", "email"]
 TOKEN_RATE_LIMIT = 30  # token requests per minute, enforced by the web layer
-BRIDGE_TIMEOUT = 30  # seconds a storage hook waits on the event loop
+BRIDGE_TIMEOUT = 10  # seconds a storage hook waits on the event loop;
+# matches the connection pool's own timeout — waiting longer than the pool
+# will spend acquiring a connection cannot help, and outliving the app's
+# 20s lifespan shutdown would leave a worker thread on a loop that is gone
 
 _state: dict = {"issuer": None, "jwk": None, "loop": None}
 
