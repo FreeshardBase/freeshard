@@ -39,6 +39,9 @@ from shard_core.settings import settings
 
 log = logging.getLogger(__name__)
 
+# traefik routes <domain>/core/* here and strips the prefix
+CORE_PREFIX = "/core"
+
 
 def _require_enabled():
     """404 rather than 403 — a shard without the rollout must not advertise an IdP."""
@@ -74,14 +77,28 @@ class StarletteOAuth2Request(OAuth2Request):
 
 
 def _public_url(request: Request) -> str:
-    """The URL this request has from outside, rebuilt from the shard's own domain.
+    """The URL this request has from outside.
 
     Traefik terminates TLS and strips the `/core/` prefix, so the URL Starlette
-    sees is neither https nor prefixed. Rebuilding it from the default identity
-    keeps the provider off the X-Forwarded-* headers entirely — an app container
-    on the portal network can reach shard_core directly and set them at will.
+    sees is neither https nor prefixed. Scheme and host come from the forwarded
+    headers, the prefix from our own traefik config, and the shard's default
+    identity is the fallback when the headers are absent (direct access, tests).
+
+    Read here by hand rather than through uvicorn's proxy-header middleware:
+    that middleware also rewrites request.client from X-Forwarded-For, and
+    /internal/call_peer identifies the calling app by request.client.host, so
+    enabling it process-wide would turn direct reach into app impersonation
+    (#188). Taking the headers for the URL alone leaves request.client meaning
+    the real socket peer.
     """
-    url = f"{request.app.state.oidc_public_base}{request.url.path}"
+    proto = request.headers.get("x-forwarded-proto")
+    host = request.headers.get("x-forwarded-host")
+    base = (
+        f"{proto}://{host}{CORE_PREFIX}"
+        if proto and host
+        else request.app.state.oidc_public_base
+    )
+    url = f"{base}{request.url.path}"
     return f"{url}?{request.url.query}" if request.url.query else url
 
 
