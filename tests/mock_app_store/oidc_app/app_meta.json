@@ -16,7 +16,10 @@
     }
   },
   "oidc": {
-    "redirect_uris": ["https://oidc_app.{{ portal.domain }}/callback"]
+    "redirect_uris": [
+      "https://oidc_app.{{ portal.domain }}/callback"
+    ],
+    "backchannel_logout_uri": "https://oidc_app.{{ portal.domain }}/backchannel-logout"
   },
   "lifecycle": {
     "always_on": false,
