@@ -19,7 +19,7 @@ import hashlib
 import logging
 import secrets
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from authlib.oauth2.rfc6749 import (
@@ -37,6 +37,7 @@ from shard_core.database import kv_store
 from shard_core.database import oidc as db_oidc
 from shard_core.database import users as db_users
 from shard_core.database.connection import db_conn, with_conn
+from shard_core.data_model.oidc import OidcClient, OidcCode, OidcToken
 from shard_core.data_model.user import User
 
 log = logging.getLogger(__name__)
@@ -131,30 +132,19 @@ async def _user_from_id_async(user_id: int) -> ShardUser | None:
         return ShardUser.from_user(await db_users.get_by_id(conn, user_id))
 
 
-@dataclass
-class OidcClient(ClientMixin):
-    client_id: str
-    client_secret: str | None
-    app_name: str
-    redirect_uris: list[str]
-    scope: str
-    token_endpoint_auth_method: str
-    grant_types: list[str] = field(
-        default_factory=lambda: ["authorization_code", "refresh_token"]
-    )
+class AuthlibClient(OidcClient, ClientMixin):
+    """The stored client (data_model.oidc.OidcClient) plus what Authlib calls.
+
+    Every method below exists for Authlib's grants, which look them up by name
+    on the client object. Nothing in this codebase calls them directly, so an
+    apparent lack of callers is expected rather than dead code.
+    """
+
+    grant_types: list[str] = ["authorization_code", "refresh_token"]
 
     @classmethod
-    def from_row(cls, row: dict | None):
-        if row is None:
-            return None
-        return cls(
-            client_id=row["client_id"],
-            client_secret=row["client_secret"],
-            app_name=row["app_name"],
-            redirect_uris=row["redirect_uris"],
-            scope=row["scope"],
-            token_endpoint_auth_method=row["token_endpoint_auth_method"],
-        )
+    def from_row(cls, row: OidcClient | None):
+        return cls(**row.model_dump()) if row is not None else None
 
     def get_client_id(self):
         return self.client_id
@@ -207,10 +197,11 @@ class AuthorizationCode(AuthorizationCodeMixin):
     auth_time: int
 
     @classmethod
-    def from_row(cls, code: str, row: dict | None):
+    def from_row(cls, code: str, row: OidcCode | None):
         if row is None:
             return None
-        fields = {k: row[k] for k in cls.__dataclass_fields__ if k in row}
+        stored = row.model_dump()
+        fields = {k: stored[k] for k in cls.__dataclass_fields__ if k in stored}
         return cls(code=code, **fields)
 
     def get_redirect_uri(self):
@@ -302,14 +293,14 @@ class ShardAuthCodeGrant(grants.AuthorizationCodeGrant):
             stale = _run(
                 with_conn(db_oidc.get_code, hash_secret(code), client.client_id)
             )
-            if stale and stale["redeemed"]:
+            if stale and stale.redeemed:
                 # reuse of a redeemed code signals interception — kill every
                 # token issued to this (client, user) grant
                 _run(
                     with_conn(
                         db_oidc.revoke_all_for_grant,
                         client.client_id,
-                        stale["user_sub"],
+                        stale.user_sub,
                     )
                 )
             return None
@@ -333,46 +324,42 @@ class ShardRefreshTokenGrant(grants.RefreshTokenGrant):
         )
         if row is None:
             return None
-        if row["revoked"]:
+        if row.revoked:
             # replay of a rotated-out refresh token — revoke the whole family
             # so a thief who rotated first doesn't keep a live token
-            _run(
-                with_conn(
-                    db_oidc.revoke_all_for_grant, row["client_id"], row["user_sub"]
-                )
-            )
+            _run(with_conn(db_oidc.revoke_all_for_grant, row.client_id, row.user_sub))
             return None
-        if row["issued_at"] + REFRESH_TOKEN_LIFETIME > time.time():
+        if row.issued_at + REFRESH_TOKEN_LIFETIME > time.time():
             return _TokenRecord(row)
         return None
 
     def authenticate_user(self, credential):
-        return _run(_user_from_id_async(credential.row["user_sub"]))
+        return _run(_user_from_id_async(credential.row.user_sub))
 
     def revoke_old_credential(self, credential):
-        _run(with_conn(db_oidc.revoke_token, credential.row["access_token_hash"]))
+        _run(with_conn(db_oidc.revoke_token, credential.row.access_token_hash))
 
 
 class _TokenRecord:
-    def __init__(self, row: dict):
+    def __init__(self, row: OidcToken):
         self.row = row
 
     @property
     def terminal_id(self):
-        return self.row["terminal_id"]
+        return self.row.terminal_id
 
     @property
     def sid(self):
-        return self.row["sid"]
+        return self.row.sid
 
     def check_client(self, client):
-        return self.row["client_id"] == client.client_id
+        return self.row.client_id == client.client_id
 
     def get_scope(self):
-        return self.row["scope"]
+        return self.row.scope
 
     def get_expires_in(self):
-        return self.row["expires_in"]
+        return self.row.expires_in
 
 
 class ShardOpenIDCode(OpenIDCode):
@@ -456,7 +443,7 @@ def _save_token(token: dict, request):
 
 
 def _query_client(client_id: str):
-    return OidcClient.from_row(_run(with_conn(db_oidc.get_client, client_id)))
+    return AuthlibClient.from_row(_run(with_conn(db_oidc.get_client, client_id)))
 
 
 class S256CodeChallenge(CodeChallenge):
@@ -487,8 +474,7 @@ async def register_client(
     redirect_uris: list[str],
     public_client: bool = False,
     scope: str = "openid profile email",
-    backchannel_logout_uri: str | None = None,
-) -> dict:
+) -> OidcClient:
     """Create (or replace) the OIDC client for an installed app.
 
     The client secret is stored plaintext: docker-compose templates consume it
@@ -501,7 +487,6 @@ async def register_client(
         "client_secret": client_secret,
         "app_name": app_name,
         "redirect_uris": redirect_uris,
-        "backchannel_logout_uri": backchannel_logout_uri,
         "scope": scope,
         "token_endpoint_auth_method": (
             "none" if public_client else "client_secret_basic"
@@ -516,15 +501,13 @@ async def register_client(
 async def userinfo_for_access_token(access_token: str) -> dict | None:
     async with db_conn() as conn:
         row = await db_oidc.get_token_by_access_hash(conn, hash_secret(access_token))
-        if row is None or row["issued_at"] + row["expires_in"] < time.time():
+        if row is None or row.issued_at + row.expires_in < time.time():
             return None
-        user = ShardUser.from_user(await db_users.get_by_id(conn, row["user_sub"]))
+        user = ShardUser.from_user(await db_users.get_by_id(conn, row.user_sub))
     if user is None:
         return None
     return dict(
-        ShardOpenIDCode(require_nonce=False).generate_user_info(
-            user, row["scope"] or ""
-        )
+        ShardOpenIDCode(require_nonce=False).generate_user_info(user, row.scope or "")
     )
 
 

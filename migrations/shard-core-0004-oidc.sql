@@ -4,9 +4,9 @@
 CREATE TABLE IF NOT EXISTS oidc_clients (
     client_id TEXT PRIMARY KEY,
     client_secret TEXT,
-    app_name TEXT UNIQUE NOT NULL,
+    app_name TEXT UNIQUE NOT NULL
+        REFERENCES installed_apps (name) ON DELETE CASCADE,
     redirect_uris JSONB NOT NULL,
-    backchannel_logout_uri TEXT,
     scope TEXT NOT NULL DEFAULT 'openid profile email',
     token_endpoint_auth_method TEXT NOT NULL DEFAULT 'client_secret_basic',
     created TIMESTAMPTZ NOT NULL DEFAULT now()

@@ -18,6 +18,7 @@ from joserfc.jwk import KeySet
 
 from psycopg.rows import dict_row
 
+from shard_core.data_model.oidc import OidcClient
 from shard_core.database.connection import db_conn
 from shard_core.database import oidc as db_oidc
 from shard_core.database import terminals as db_terminals
@@ -45,17 +46,27 @@ async def expected_issuer() -> str:
     return f"https://{identity.domain}/core/public/oidc"
 
 
-async def make_client(public_client: bool = False, scope: str = None) -> dict:
+async def make_client(public_client: bool = False, scope: str = None) -> OidcClient:
     kwargs = {"scope": scope} if scope else {}
+    await _ensure_app_row("testapp")
     return await oidc_provider.register_client(
         "testapp", [REDIRECT_URI], public_client=public_client, **kwargs
     )
 
 
+async def _ensure_app_row(name: str):
+    """oidc_clients.app_name is an FK, so the app has to exist before its client."""
+    async with db_conn() as conn:
+        await conn.execute(
+            "INSERT INTO installed_apps (name) VALUES (%s) ON CONFLICT DO NOTHING",
+            (name,),
+        )
+
+
 async def authorize(client: AsyncClient, oidc_client: dict, verifier: str, **overrides):
     params = {
         "response_type": "code",
-        "client_id": oidc_client["client_id"],
+        "client_id": oidc_client.client_id,
         "redirect_uri": REDIRECT_URI,
         "scope": "openid profile email",
         "state": secrets.token_urlsafe(8),
@@ -96,11 +107,11 @@ async def exchange_code(
     }
     if verifier is not None:
         data["code_verifier"] = verifier
-    if oidc_client["client_secret"] is None:
-        data.setdefault("client_id", oidc_client["client_id"])
+    if oidc_client.client_secret is None:
+        data.setdefault("client_id", oidc_client.client_id)
         auth = None
     else:
-        auth = (oidc_client["client_id"], oidc_client["client_secret"])
+        auth = (oidc_client.client_id, oidc_client.client_secret)
     return await client.post(TOKEN, data=data, auth=auth)
 
 
@@ -191,7 +202,7 @@ async def test_confidential_code_pkce_flow(app_client: AsyncClient):
     keyset = await jwks_keyset(app_client)
     claims = joserfc_jwt.decode(tok["id_token"], keyset).claims
     assert claims["iss"] == await expected_issuer()
-    assert claims["aud"] == [oidc_client["client_id"]]
+    assert claims["aud"] == [oidc_client.client_id]
     assert claims["nonce"] == params["nonce"]
     assert claims["sub"] == str(owner.id)
     assert claims["exp"] > claims["iat"]
@@ -218,7 +229,7 @@ async def test_id_token_omits_nonce_when_client_sent_none(app_client: AsyncClien
 async def test_public_client_pkce_flow(app_client: AsyncClient):
     await pair_new_terminal(app_client)
     oidc_client = await make_client(public_client=True)
-    assert oidc_client["client_secret"] is None
+    assert oidc_client.client_secret is None
 
     tok, _ = await run_code_flow(app_client, oidc_client)
     assert all(k in tok for k in ("access_token", "refresh_token", "id_token"))
@@ -244,8 +255,8 @@ async def test_client_secret_post_accepted(app_client: AsyncClient):
             "code": code,
             "redirect_uri": REDIRECT_URI,
             "code_verifier": verifier,
-            "client_id": oidc_client["client_id"],
-            "client_secret": oidc_client["client_secret"],
+            "client_id": oidc_client.client_id,
+            "client_secret": oidc_client.client_secret,
         },
     )
     assert r.status_code == 200, r.text
@@ -286,7 +297,7 @@ async def test_refresh_rotation(app_client: AsyncClient):
     await pair_new_terminal(app_client)
     oidc_client = await make_client()
     tok, _ = await run_code_flow(app_client, oidc_client)
-    auth = (oidc_client["client_id"], oidc_client["client_secret"])
+    auth = (oidc_client.client_id, oidc_client.client_secret)
 
     r = await app_client.post(
         TOKEN,
@@ -349,7 +360,9 @@ async def test_token_wrong_client_secret(app_client: AsyncClient):
     oidc_client = await make_client()
     verifier = secrets.token_urlsafe(32)
     code = await get_code(app_client, oidc_client, verifier)
-    bad = {**oidc_client, "client_secret": "wrong-" + secrets.token_urlsafe(16)}
+    bad = oidc_client.model_copy(
+        update={"client_secret": "wrong-" + secrets.token_urlsafe(16)}
+    )
     r = await exchange_code(app_client, bad, code, verifier)
     assert r.status_code == 401, r.text
 
@@ -374,7 +387,7 @@ async def test_token_expired_code(app_client: AsyncClient):
             conn,
             {
                 "code_hash": oidc_provider.hash_secret(code),
-                "client_id": oidc_client["client_id"],
+                "client_id": oidc_client.client_id,
                 "redirect_uri": REDIRECT_URI,
                 "scope": "openid",
                 "user_sub": owner.id,
@@ -594,7 +607,7 @@ async def test_refresh_preserves_the_terminal_binding(app_client: AsyncClient):
     r = await app_client.post(
         TOKEN,
         data={"grant_type": "refresh_token", "refresh_token": tok["refresh_token"]},
-        auth=(oidc_client["client_id"], oidc_client["client_secret"]),
+        auth=(oidc_client.client_id, oidc_client.client_secret),
     )
     assert r.status_code == 200, r.text
 

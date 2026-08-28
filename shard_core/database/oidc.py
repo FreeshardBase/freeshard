@@ -1,37 +1,37 @@
 from typing import LiteralString
 
 from psycopg import AsyncConnection
-from psycopg.rows import dict_row
+from psycopg.rows import class_row
 from psycopg.types.json import Jsonb
+
+from shard_core.data_model.oidc import OidcClient, OidcCode, OidcToken
 
 # --- clients ---------------------------------------------------------------
 
 
-async def upsert_client(conn: AsyncConnection, client: dict) -> dict:
+async def upsert_client(conn: AsyncConnection, client: dict) -> OidcClient:
     sql: LiteralString = """INSERT INTO oidc_clients
-        (client_id, client_secret, app_name, redirect_uris, backchannel_logout_uri,
+        (client_id, client_secret, app_name, redirect_uris,
          scope, token_endpoint_auth_method)
         VALUES (%(client_id)s, %(client_secret)s, %(app_name)s, %(redirect_uris)s,
-                %(backchannel_logout_uri)s,
                 %(scope)s, %(token_endpoint_auth_method)s)
         ON CONFLICT (app_name) DO UPDATE SET
             client_id = EXCLUDED.client_id,
             client_secret = EXCLUDED.client_secret,
             redirect_uris = EXCLUDED.redirect_uris,
-            backchannel_logout_uri = EXCLUDED.backchannel_logout_uri,
             scope = EXCLUDED.scope,
             token_endpoint_auth_method = EXCLUDED.token_endpoint_auth_method
         RETURNING *"""
-    async with conn.cursor(row_factory=dict_row) as cur:
+    async with conn.cursor(row_factory=class_row(OidcClient)) as cur:
         await cur.execute(
             sql, {**client, "redirect_uris": Jsonb(client["redirect_uris"])}
         )
         return await cur.fetchone()
 
 
-async def get_client(conn: AsyncConnection, client_id: str) -> dict | None:
+async def get_client(conn: AsyncConnection, client_id: str) -> OidcClient | None:
     sql: LiteralString = "SELECT * FROM oidc_clients WHERE client_id = %s"
-    async with conn.cursor(row_factory=dict_row) as cur:
+    async with conn.cursor(row_factory=class_row(OidcClient)) as cur:
         await cur.execute(sql, (client_id,))
         return await cur.fetchone()
 
@@ -52,24 +52,24 @@ async def insert_code(conn: AsyncConnection, code: dict):
 
 async def redeem_code(
     conn: AsyncConnection, code_hash: str, client_id: str
-) -> dict | None:
+) -> OidcCode | None:
     """Atomically consume the code — the single UPDATE makes concurrent
     redemptions of the same code impossible (only one caller gets the row)."""
     sql: LiteralString = """UPDATE oidc_codes SET redeemed = TRUE
         WHERE code_hash = %s AND client_id = %s AND NOT redeemed AND expires_at > now()
         RETURNING *"""
-    async with conn.cursor(row_factory=dict_row) as cur:
+    async with conn.cursor(row_factory=class_row(OidcCode)) as cur:
         await cur.execute(sql, (code_hash, client_id))
         return await cur.fetchone()
 
 
 async def get_code(
     conn: AsyncConnection, code_hash: str, client_id: str
-) -> dict | None:
+) -> OidcCode | None:
     sql: LiteralString = (
         "SELECT * FROM oidc_codes WHERE code_hash = %s AND client_id = %s"
     )
-    async with conn.cursor(row_factory=dict_row) as cur:
+    async with conn.cursor(row_factory=class_row(OidcCode)) as cur:
         await cur.execute(sql, (code_hash, client_id))
         return await cur.fetchone()
 
@@ -96,22 +96,22 @@ async def insert_token(conn: AsyncConnection, token: dict):
 
 async def get_token_by_access_hash(
     conn: AsyncConnection, access_token_hash: str
-) -> dict | None:
+) -> OidcToken | None:
     sql: LiteralString = (
         "SELECT * FROM oidc_tokens WHERE access_token_hash = %s AND NOT revoked"
     )
-    async with conn.cursor(row_factory=dict_row) as cur:
+    async with conn.cursor(row_factory=class_row(OidcToken)) as cur:
         await cur.execute(sql, (access_token_hash,))
         return await cur.fetchone()
 
 
 async def get_token_by_refresh_hash(
     conn: AsyncConnection, refresh_token_hash: str
-) -> dict | None:
+) -> OidcToken | None:
     # revoked rows included on purpose — rotated-token replay must be
     # distinguishable from an unknown token (reuse detection)
     sql: LiteralString = "SELECT * FROM oidc_tokens WHERE refresh_token_hash = %s"
-    async with conn.cursor(row_factory=dict_row) as cur:
+    async with conn.cursor(row_factory=class_row(OidcToken)) as cur:
         await cur.execute(sql, (refresh_token_hash,))
         return await cur.fetchone()
 
