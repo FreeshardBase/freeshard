@@ -1,7 +1,6 @@
 import asyncio
 import logging
 
-import httpx
 import requests
 from fastapi.requests import Request
 from http_message_signatures import HTTPSignatureKeyResolver, algorithms
@@ -30,7 +29,13 @@ async def update_all_peer_pubkeys():
     async with db_conn() as conn:
         all_peers = await db_peers.get_all(conn)
     peers_with_pubkey = [Peer(**p) for p in all_peers if p.get("public_bytes_b64")]
-    await asyncio.gather(*[update_peer_meta(peer) for peer in peers_with_pubkey])
+    results = await asyncio.gather(
+        *[update_peer_meta(peer) for peer in peers_with_pubkey],
+        return_exceptions=True,
+    )
+    for peer, result in zip(peers_with_pubkey, results):
+        if isinstance(result, Exception):
+            log.warning(f"Failed to update peer meta for {peer.short_id}: {result}")
 
 
 async def update_peer_meta(peer: Peer):
@@ -49,7 +54,7 @@ async def update_peer_meta(peer: Peer):
 
     try:
         response.raise_for_status()
-    except httpx.HTTPStatusError as e:
+    except requests.HTTPError as e:
         log.debug(f"Could not update peer meta for {peer.short_id}: {e}")
         async with db_conn() as conn:
             await db_peers.update_by_id(conn, peer.id, {"is_reachable": False})
