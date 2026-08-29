@@ -47,20 +47,34 @@ async def test_template_is_written(api_client):
             "app-error",
             "auth",
             "strip",
+            "strip-sundial",
+            "redirect-sundial-slash",
             "auth-public",
             "auth-private",
             "auth-management",
         }
         assert "authResponseHeadersRegex" in out_middlewares["auth"]["forwardAuth"]
+        assert out_middlewares["strip-sundial"]["stripPrefix"]["prefixes"] == [
+            "/sundial"
+        ]
+        assert out_middlewares["redirect-sundial-slash"]["redirectRegex"] == {
+            "regex": "^(https?://[^/]+)/sundial$",
+            "replacement": "${1}/sundial/",
+            "permanent": True,
+        }
 
         out_services_http: dict = output["http"]["services"]
         assert set(out_services_http.keys()) == {
             "shard_core",
             "web-terminal",
+            "sundial",
             "filebrowser_http",
             "paperless-ngx_http",
             "immich_http",
         }
+        assert out_services_http["sundial"]["loadBalancer"]["servers"] == [
+            {"url": "http://sundial:80/"}
+        ]
         assert out_services_http["filebrowser_http"]["loadBalancer"]["servers"] == [
             {"url": "http://filebrowser:80"}
         ]
@@ -71,12 +85,23 @@ async def test_template_is_written(api_client):
             "shard_core_public",
             "shard_core_management",
             "web-terminal",
+            "sundial",
             "traefik",
             "filebrowser_http",
             "paperless-ngx_http",
             "immich_http",
         }
         assert out_routers_http["filebrowser_http"]["service"] == "filebrowser_http"
+
+        sundial_router = out_routers_http["sundial"]
+        assert sundial_router["rule"] == "PathPrefix(`/sundial`)"
+        assert sundial_router["service"] == "sundial"
+        assert sundial_router["middlewares"] == [
+            "redirect-sundial-slash",
+            "strip-sundial",
+        ]
+        assert sundial_router["priority"] > out_routers_http["web-terminal"]["priority"]
+        assert out_routers_http["web-terminal"]["rule"] == "PathPrefix(`/`)"
 
 
 def _write_app_meta(app_name: str):
