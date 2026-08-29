@@ -5,6 +5,7 @@ from fastapi import APIRouter, status, HTTPException
 from fastapi.responses import Response
 
 from shard_core.database.connection import db_conn
+from shard_core.database import oidc as db_oidc
 from shard_core.database import terminals as db_terminals
 from shard_core.data_model.terminal import Terminal, InputTerminal
 from shard_core.service import pairing
@@ -60,6 +61,7 @@ async def edit_terminal(id_: str, terminal: InputTerminal):
 )
 async def delete_terminal_by_id(id_: str):
     async with db_conn() as conn:
+        await db_oidc.revoke_for_terminal(conn, id_)
         await db_terminals.remove(conn, id_)
     await on_terminals_update.send_async()
 

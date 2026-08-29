@@ -66,6 +66,7 @@ services:
       - FREESHARD_TRAEFIK__DISABLE_SSL=${DISABLE_SSL:-false}
       - FREESHARD_PATH_ROOT_HOST=${FREESHARD_DIR:?}
       - FREESHARD_APPS__LIFECYCLE__PAUSE_ENABLED=${PAUSE_ENABLED:-false}
+      - FREESHARD_OIDC__ENABLED=${OIDC_ENABLED:-false}
     depends_on:
       postgres:
         condition: service_healthy

@@ -53,3 +53,9 @@ def get_connection_pool() -> AsyncConnectionPool:
 async def db_conn() -> AsyncGenerator[AsyncConnection, None]:
     async with get_connection_pool().connection() as conn:
         yield conn
+
+
+async def with_conn(fn, *args):
+    """Run a single conn-first database function on its own pooled connection."""
+    async with db_conn() as conn:
+        return await fn(conn, *args)
