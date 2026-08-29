@@ -88,6 +88,16 @@ class Entrypoint(BaseModel):
     entrypoint_port: EntrypointPort
 
 
+class OidcMeta(BaseModel):
+    # entries may reference {{ portal.domain }}, rendered at client registration
+    redirect_uris: List[str]
+    public_client: bool = False
+    scope: str = "openid profile email"
+    # OIDC Back-Channel Logout 1.0 endpoint. Optional: an app that omits it
+    # cannot be signed out from our side, only from its own UI.
+    backchannel_logout_uri: str | None = None
+
+
 class Lifecycle(BaseModel):
     always_on: bool = False
     skip_pause: bool = False
@@ -136,6 +146,7 @@ class AppMeta(BaseModel):
     lifecycle: Lifecycle = Lifecycle()
     minimum_portal_size: VMSize = VMSize.XS
     store_info: Optional[StoreInfo] = None
+    oidc: Optional[OidcMeta] = None
 
     @model_validator(mode="before")
     @classmethod

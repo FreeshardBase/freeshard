@@ -1,0 +1,15 @@
+networks:
+    portal:
+        external: true
+
+services:
+    oidc_app:
+        restart: always
+        image: nginx:alpine
+        container_name: oidc_app
+        environment:
+        - OIDC_CLIENT_ID={{ oidc.client_id }}
+        - OIDC_CLIENT_SECRET={{ oidc.client_secret }}
+        - OIDC_ISSUER={{ oidc.issuer }}
+        networks:
+        - portal
