@@ -50,6 +50,7 @@ async def test_template_is_written(api_client):
             "auth-public",
             "auth-private",
             "auth-management",
+            "verify-traefik",
         }
         assert "authResponseHeadersRegex" in out_middlewares["auth"]["forwardAuth"]
 
