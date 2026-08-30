@@ -123,6 +123,14 @@ Shard Core logs in to that registry at startup, using the credentials checked in
 
 If you would rather not depend on our infrastructure, note that this is what you would have to replace.
 
+### The owner's email address
+
+The owner's address lives on their user row and is verified by definition: a new address is only a candidate until somebody opens a confirmation link that was delivered to it. On a hosted shard the controller does that delivery, and it is also what mails the owner about disk space, billing and service notices.
+
+A self-hosted shard has no controller and therefore no way to send mail at all, so it cannot run that round trip. Set `oidc.email_verification = false` in `local_config.toml` and the address is taken as given, with no candidate step and no confirmation mail — acceptable because you control the machine. Leave it at its default of `true` and a self-hosted shard can never complete an address change, because the mail it waits for is never sent.
+
+The address is what the built-in OIDC provider emits as the `email` claim, alongside `email_verified`. With no confirmed address it emits neither, and apps you log into through it will create fresh accounts rather than linking to an existing one by address.
+
 ### Localhost
 
 In order to test freeshard, you might want to launch it on localhost first.
