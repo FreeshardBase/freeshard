@@ -11,6 +11,7 @@ from . import (
     management,
     settings,
     stats,
+    users,
     ws,
 )
 
@@ -29,4 +30,5 @@ router.include_router(help.router)
 router.include_router(management.router)
 router.include_router(settings.router)
 router.include_router(stats.router)
+router.include_router(users.router)
 router.include_router(ws.router)

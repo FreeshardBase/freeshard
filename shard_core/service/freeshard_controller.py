@@ -1,3 +1,4 @@
+import json
 import logging
 
 from shard_core.data_model.backend.shard_model import ShardDb
@@ -15,6 +16,45 @@ async def call_freeshard_controller(path: str, method: str = "GET", body: bytes 
     url = f"{base_url}/{path}"
     log.debug(f"call to {method} {url}")
     return await signed_request(method, url, data=body)
+
+
+async def relay_email_to_owner(subject: str, body: list[str]):
+    """Ask the controller to mail the shard's owner.
+
+    The recipient is always the address the controller currently has on file;
+    the shard cannot choose it. That is why a notification about an address
+    change has to be sent before the change is mirrored back.
+    """
+    response = await call_freeshard_controller(
+        "api/email_relay",
+        method="POST",
+        body=json.dumps({"subject": subject, "body": body}).encode(),
+    )
+    response.raise_for_status()
+
+
+async def send_verification_email(address: str, token: str):
+    """Ask the controller to mail a confirmation link to an unconfirmed address.
+
+    The controller owns the template and builds the link from the shard domain
+    it already knows, so no shard-supplied URL is ever rendered into an email.
+    """
+    response = await call_freeshard_controller(
+        "api/email_verification",
+        method="POST",
+        body=json.dumps({"address": address, "token": token}).encode(),
+    )
+    response.raise_for_status()
+
+
+async def set_owner_email(address: str | None):
+    """Mirror a confirmed address to shards.owner_email on the controller."""
+    response = await call_freeshard_controller(
+        "api/shards/self/owner-email",
+        method="PUT",
+        body=json.dumps({"address": address}).encode(),
+    )
+    response.raise_for_status()
 
 
 async def refresh_shared_secret():

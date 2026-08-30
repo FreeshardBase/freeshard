@@ -84,6 +84,10 @@ class TelemetrySettings(BaseModel):
 
 class OidcSettings(BaseModel):
     enabled: bool = False  # rollout kill-switch for the embedded OIDC provider
+    # A self-hosted shard has no controller and therefore no way to send mail at
+    # all, so it sets an address without confirming it. Never inferred from a
+    # failed delivery — a controller outage would silently downgrade this.
+    email_verification: bool = True
 
 
 class ManagementSettings(BaseModel):
