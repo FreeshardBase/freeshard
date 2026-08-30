@@ -10,15 +10,12 @@ import json
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
-import pytest
 import responses
 from httpx import AsyncClient
 
 from shard_core.database import users as db_users
 from shard_core.database.connection import db_conn
 from shard_core.settings import settings
-from shard_core.web.protected.users import _email_send_limit
-from shard_core.web.public.users import _confirm_limit
 from tests.conftest import settings_override
 from tests.util import pair_new_terminal
 
@@ -34,13 +31,6 @@ MIRROR_PATH = "/api/shards/self/owner-email"
 NEW_ADDRESS = "owner@example.org"
 # what the mocked controller reports as the shard's owner (tests.conftest.mock_shard)
 PROFILE_ADDRESS = "testowner@foobar.com"
-
-
-@pytest.fixture(autouse=True)
-def reset_rate_limits():
-    """The limiters are module-level, so they otherwise leak across tests."""
-    _confirm_limit.reset()
-    _email_send_limit.reset()
 
 
 def controller_url(path: str) -> str:
@@ -183,6 +173,31 @@ async def test_an_invalid_address_is_rejected(requests_mock, app_client: AsyncCl
     assert calls_to(requests_mock, VERIFY_PATH) == []
 
 
+async def test_an_empty_address_is_rejected_rather_than_treated_as_a_clear(
+    requests_mock, app_client: AsyncClient
+):
+    """A form that blanks its field sends "", not null. Routing that to the
+    clear path would wipe the controller's copy — the only way we reach a paying
+    customer — on what the user meant as a correction."""
+    await pair_new_terminal(app_client)
+
+    response = await app_client.patch(ME, json={"email": ""})
+
+    assert response.status_code == 422
+    assert calls_to(requests_mock, RELAY_PATH) == []
+    assert calls_to(requests_mock, MIRROR_PATH) == []
+
+
+async def test_the_address_is_stored_normalized(requests_mock, app_client: AsyncClient):
+    """It is asserted as verified to third parties, so the domain casing must
+    not be whatever the owner happened to type."""
+    await pair_new_terminal(app_client)
+
+    body = await set_address(app_client, "Owner@EXAMPLE.ORG")
+
+    assert body["pending_email"] == "Owner@example.org"
+
+
 async def test_omitting_the_address_leaves_it_untouched(
     requests_mock, app_client: AsyncClient
 ):
@@ -212,6 +227,30 @@ async def test_a_failed_delivery_reports_an_error_and_keeps_the_candidate(
     owner = await get_owner()
     assert owner.pending_email == NEW_ADDRESS
     assert owner.email is None
+
+
+async def test_a_member_cannot_touch_the_owners_address(
+    requests_mock, app_client: AsyncClient
+):
+    """The relay mails the shard's owner and the mirror rewrites the owner's
+    address on the controller, whoever asked."""
+    await pair_new_terminal(app_client)
+    async with db_conn() as conn:
+        await db_users.update(conn, (await get_owner()).id, {"role": "member"})
+
+    assert (await app_client.patch(ME, json={"email": NEW_ADDRESS})).status_code == 403
+    assert (await app_client.post(RESEND)).status_code == 403
+    assert (await app_client.delete(PENDING)).status_code == 403
+    # a member may still rename themselves
+    assert (await app_client.patch(ME, json={"display_name": "M"})).status_code == 200
+
+
+async def test_a_disabled_user_is_forbidden(requests_mock, app_client: AsyncClient):
+    await pair_new_terminal(app_client)
+    async with db_conn() as conn:
+        await db_users.update(conn, (await get_owner()).id, {"disabled": True})
+
+    assert (await app_client.get(ME)).status_code == 403
 
 
 # --- confirming ------------------------------------------------------------------
@@ -271,6 +310,48 @@ async def test_confirming_survives_a_controller_that_cannot_send_mail(
     assert (await get_owner()).email == NEW_ADDRESS
 
 
+async def test_confirming_survives_a_controller_that_cannot_mirror(
+    requests_mock, app_client: AsyncClient
+):
+    """The shard owns the address; a failed mirror must not undo a confirmation
+    the owner already completed — but it must suppress the success mail, which
+    the relay would otherwise send to the address we just abandoned."""
+    await pair_new_terminal(app_client)
+    await set_address(app_client)
+    token = sent_token(requests_mock)
+    requests_mock.replace(
+        responses.PUT, controller_url(MIRROR_PATH), status=500, body="nope"
+    )
+
+    response = await app_client.post(CONFIRM, json={"token": token})
+
+    assert response.status_code == 204
+    assert (await get_owner()).email == NEW_ADDRESS
+    assert len(calls_to(requests_mock, RELAY_PATH)) == 1
+
+
+async def test_a_candidate_set_while_a_link_was_in_flight_survives(
+    requests_mock, app_client: AsyncClient
+):
+    """The confirmation promotes the address its own link was sent to, or
+    nothing — it must never clear a candidate it knows nothing about."""
+    await pair_new_terminal(app_client)
+    await set_address(app_client, "first@example.org")
+    stale_token = sent_token(requests_mock)
+    await set_address(app_client, "second@example.org")
+    fresh_token = sent_token(requests_mock)
+
+    assert (
+        await app_client.post(CONFIRM, json={"token": stale_token})
+    ).status_code == 204
+
+    owner = await get_owner()
+    assert owner.email is None
+    assert owner.pending_email == "second@example.org"
+    await app_client.post(CONFIRM, json={"token": fresh_token})
+    assert (await get_owner()).email == "second@example.org"
+
+
 async def test_an_unknown_token_changes_nothing_and_says_nothing(
     requests_mock, app_client: AsyncClient
 ):
@@ -322,19 +403,36 @@ async def test_a_token_works_only_once(requests_mock, app_client: AsyncClient):
 
 
 async def test_a_malformed_token_is_refused(requests_mock, app_client: AsyncClient):
-    assert (await app_client.post(CONFIRM, json={"token": ""})).status_code == 400
+    assert (await app_client.post(CONFIRM, json={"token": ""})).status_code == 422
     assert (
         await app_client.post(CONFIRM, json={"token": "x" * 513})
-    ).status_code == 400
+    ).status_code == 422
     assert (await app_client.post(CONFIRM, json={})).status_code == 422
 
 
-async def test_confirming_is_rate_limited(requests_mock, app_client: AsyncClient):
-    for _ in range(10):
-        r = await app_client.post(CONFIRM, json={"token": "guess"})
-        assert r.status_code == 204
+async def test_there_is_no_get_confirmation_route(app_client: AsyncClient):
+    """A GET would be consumed by mail scanners and link prefetchers, burning
+    the single-use token before the owner ever clicked."""
+    assert (await app_client.get(f"{CONFIRM}?token=whatever")).status_code == 405
 
+
+async def test_a_flood_of_guesses_cannot_lock_the_owner_out(
+    requests_mock, app_client: AsyncClient
+):
+    """Only misses are charged. A global limiter that counted hits too would let
+    any anonymous caller keep the owner off the one route that verifies an
+    address, until the token expired."""
+    await pair_new_terminal(app_client)
+    await set_address(app_client)
+    token = sent_token(requests_mock)
+    for _ in range(20):
+        assert (
+            await app_client.post(CONFIRM, json={"token": "guess"})
+        ).status_code == 204
     assert (await app_client.post(CONFIRM, json={"token": "guess"})).status_code == 429
+
+    assert (await app_client.post(CONFIRM, json={"token": token})).status_code == 204
+    assert (await get_owner()).email == NEW_ADDRESS
 
 
 # --- resending and discarding ----------------------------------------------------
@@ -365,7 +463,7 @@ async def test_resending_without_a_candidate_is_refused(
 
     response = await app_client.post(RESEND)
 
-    assert response.status_code == 404
+    assert response.status_code == 409
     assert calls_to(requests_mock, VERIFY_PATH) == []
 
 
@@ -381,6 +479,21 @@ async def test_sending_confirmation_mail_is_rate_limited(
 
     assert (await app_client.post(RESEND)).status_code == 429
     assert (await app_client.patch(ME, json={"email": NEW_ADDRESS})).status_code == 429
+
+
+async def test_resending_mints_the_first_token_for_a_seeded_candidate(
+    requests_mock, app_client: AsyncClient
+):
+    """Where every existing shard starts: the 0005 migration and first pairing
+    both leave a candidate with no token, and resend is the only way forward."""
+    await pair_new_terminal(app_client)
+    owner = await get_owner()
+    assert (owner.pending_email, owner.email_token_hash) == (PROFILE_ADDRESS, None)
+
+    assert (await app_client.post(RESEND)).status_code == 204
+
+    await app_client.post(CONFIRM, json={"token": sent_token(requests_mock)})
+    assert (await get_owner()).email == PROFILE_ADDRESS
 
 
 async def test_discarding_the_candidate_drops_its_token(
@@ -446,6 +559,46 @@ async def test_without_verification_the_address_is_set_directly(
     assert json.loads(calls_to(requests_mock, MIRROR_PATH)[0].request.body) == {
         "address": NEW_ADDRESS
     }
+
+
+async def test_clearing_an_address_that_is_already_empty_does_nothing(
+    requests_mock, app_client: AsyncClient
+):
+    """Where every shard sits right after the 0005 migration, while the
+    controller still holds the signup address. Mirroring a null there is what
+    silently stops disk, billing and wind-down mail to a paying customer."""
+    await pair_new_terminal(app_client)
+    await app_client.delete(PENDING)
+
+    response = await app_client.patch(ME, json={"email": None})
+
+    assert response.status_code == 200
+    assert calls_to(requests_mock, RELAY_PATH) == []
+    assert calls_to(requests_mock, MIRROR_PATH) == []
+
+
+async def test_without_verification_resending_is_refused(
+    requests_mock, app_client: AsyncClient
+):
+    await pair_new_terminal(app_client)
+
+    with settings_override({"oidc": {"email_verification": False}}):
+        response = await app_client.post(RESEND)
+
+    assert response.status_code == 409
+    assert calls_to(requests_mock, VERIFY_PATH) == []
+
+
+async def test_without_verification_the_send_budget_is_not_spent(
+    requests_mock, app_client: AsyncClient
+):
+    """A shard that cannot send mail at all has nothing to ration."""
+    with settings_override({"oidc": {"email_verification": False}}):
+        await pair_new_terminal(app_client)
+        for i in range(8):
+            assert (await set_address(app_client, f"a{i}@example.org"))[
+                "email"
+            ] == f"a{i}@example.org"
 
 
 async def test_without_verification_clearing_sends_no_notification(

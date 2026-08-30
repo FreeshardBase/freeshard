@@ -1,4 +1,3 @@
-import json
 import logging
 
 from shard_core.data_model.backend.shard_model import ShardDb
@@ -18,6 +17,19 @@ async def call_freeshard_controller(path: str, method: str = "GET", body: bytes 
     return await signed_request(method, url, data=body)
 
 
+async def post_json(path: str, payload: dict, method: str = "POST"):
+    """Call the controller with a JSON body, declared as JSON.
+
+    requests sends no Content-Type for a raw-bytes body, and the controller only
+    parses those because it has strict_content_type switched off — a temporary
+    concession it intends to withdraw (FreeshardBase/freeshard-controller#272).
+    """
+    base_url = settings().freeshard_controller.base_url
+    url = f"{base_url}/{path}"
+    log.debug(f"call to {method} {url}")
+    return await signed_request(method, url, json=payload)
+
+
 async def relay_email_to_owner(subject: str, body: list[str]):
     """Ask the controller to mail the shard's owner.
 
@@ -25,11 +37,7 @@ async def relay_email_to_owner(subject: str, body: list[str]):
     the shard cannot choose it. That is why a notification about an address
     change has to be sent before the change is mirrored back.
     """
-    response = await call_freeshard_controller(
-        "api/email_relay",
-        method="POST",
-        body=json.dumps({"subject": subject, "body": body}).encode(),
-    )
+    response = await post_json("api/email_relay", {"subject": subject, "body": body})
     response.raise_for_status()
 
 
@@ -39,20 +47,16 @@ async def send_verification_email(address: str, token: str):
     The controller owns the template and builds the link from the shard domain
     it already knows, so no shard-supplied URL is ever rendered into an email.
     """
-    response = await call_freeshard_controller(
-        "api/email_verification",
-        method="POST",
-        body=json.dumps({"address": address, "token": token}).encode(),
+    response = await post_json(
+        "api/email_verification", {"address": address, "token": token}
     )
     response.raise_for_status()
 
 
 async def set_owner_email(address: str | None):
     """Mirror a confirmed address to shards.owner_email on the controller."""
-    response = await call_freeshard_controller(
-        "api/shards/self/owner-email",
-        method="PUT",
-        body=json.dumps({"address": address}).encode(),
+    response = await post_json(
+        "api/shards/self/owner-email", {"address": address}, method="PUT"
     )
     response.raise_for_status()
 

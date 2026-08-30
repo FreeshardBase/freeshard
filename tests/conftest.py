@@ -85,6 +85,18 @@ def settings_override(override: dict):
         set_settings(old)
 
 
+@pytest.fixture(autouse=True)
+def reset_rate_limits():
+    """The rate limiters are module-level, so they leak between tests otherwise
+    — and a 429 in an unrelated test points at entirely the wrong code."""
+    from shard_core.service.owner_email import _send_limit
+    from shard_core.web.public.oidc import _token_limit
+    from shard_core.web.public.users import _miss_limit
+
+    for limiter in (_send_limit, _token_limit, _miss_limit):
+        limiter.reset()
+
+
 @pytest.fixture(scope="session")
 def docker_compose_file():
     return str(Path(__file__).parent / "docker-compose.yml")

@@ -70,6 +70,13 @@ async def test_snapshot_roundtrip_restores_core_state(db, tmp_path):
             ).fetchone()
             assert identity == ("shard-id-abc", "PRIVATE-KEY-PEM", True)
 
+            owner = await (
+                await conn.execute("SELECT email, pending_email FROM users")
+            ).fetchone()
+            # a confirmed address must survive a restore untouched; only a
+            # pre-0005 snapshot gets demoted to a candidate
+            assert owner == ("owner@shard.test", None)
+
             terminal = await (await conn.execute("SELECT id FROM terminals")).fetchone()
             assert terminal == ("term-1",)
 

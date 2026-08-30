@@ -6,6 +6,7 @@ import pytest
 
 from shard_core.database.connection import db_conn
 from shard_core.database import (
+    users as db_users,
     installed_apps as db_installed_apps,
     identities as db_identities,
     terminals as db_terminals,
@@ -49,6 +50,12 @@ async def test_tinydb_migration(place_tinydb_file, db):
         for record in kv_records.values():
             value = await db_kv_store.get_value(conn, record["key"])
             assert value is not None
+
+        # the owner: a TinyDB-era address was never verified either, so it
+        # arrives as a candidate rather than as the owner's address
+        owner = await db_users.get_owner(conn)
+        assert owner.email is None
+        assert owner.pending_email == "max@vtettenborn.net"
 
         # identities
         identity_records = expected.get("identities", {})

@@ -71,6 +71,15 @@ async def enrich_identity_from_profile(_):
         if profile.owner_email:
             owner = await db_users.get_owner(conn)
             if owner and owner.email is None:
+                # The token is bound to whatever pending_email holds when it is
+                # opened, so replacing the candidate must retire it — this
+                # handler re-fires whenever the last terminal is re-paired.
                 await db_users.update(
-                    conn, owner.id, {"pending_email": profile.owner_email}
+                    conn,
+                    owner.id,
+                    {
+                        "pending_email": profile.owner_email,
+                        "email_token_hash": None,
+                        "email_token_expires": None,
+                    },
                 )

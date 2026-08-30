@@ -50,15 +50,19 @@ class SlidingWindow:
         self._window = window
         self._attempts: deque[float] = deque()
 
-    def is_exceeded(self) -> bool:
-        """Record an attempt and report whether it busts the limit."""
+    def try_acquire(self) -> bool:
+        """Take a slot if one is free, reporting whether it was granted.
+
+        Named for the fact that it records: a predicate name invites calling it
+        twice to branch, which silently spends two slots.
+        """
         now = time.monotonic()
         while self._attempts and self._attempts[0] < now - self._window:
             self._attempts.popleft()
         if len(self._attempts) >= self._limit:
-            return True
+            return False
         self._attempts.append(now)
-        return False
+        return True
 
     def reset(self):
         self._attempts.clear()

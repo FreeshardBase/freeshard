@@ -94,33 +94,12 @@ Started at app lifespan startup, stopped at shutdown:
 - Various telemetry and peer key refresh tasks
 
 ### The Owner's Email Address
-`users.email` is the single home for a person's address and is **verified by
-definition**; `users.pending_email` is an unverified candidate, at most one in
-flight per user. That invariant is the whole reason the OIDC provider may assert
-`email_verified: true` — a relying party consults that claim before linking an
-OIDC identity to an existing local account. With no verified address the provider
-emits no `email` claim and no `email_verified` at all; there is deliberately no
-synthetic fallback.
+`users.email` is the single home for a person's address and is **verified by definition**; `users.pending_email` is an unverified candidate, at most one in flight per user. That invariant is the only reason the OIDC provider may assert `email_verified: true` — with no verified address it emits neither claim, and there is deliberately no synthetic fallback.
 
-`service/owner_email.py` owns the transitions. Setting an address writes the
-candidate, mints a single-use token (1h, stored as a SHA-256 digest) and asks the
-controller to deliver it — the controller owns the template and builds the link
-from the shard domain it already knows, so no shard-supplied URL is ever mailed.
-`POST /public/users/confirm-email` is the only unauthenticated surface: the token
-is its sole credential, compared with `secrets.compare_digest`, rate limited, and
-answered with an identical 204 whether or not it matched, so it cannot be used to
-probe for pending addresses. There is no `GET` confirmation route on purpose —
-mail scanners and link prefetchers would burn the single-use token.
-
-On confirmation, in this order: notify the old address, promote the candidate,
-mirror to `shards.owner_email` on the controller, notify the new address. The
-first step must precede the mirror, because the controller's relay only ever
-sends to the address it currently has on file.
-
-`oidc.email_verification` (default `true`) is the explicit self-hosted signal. A
-self-hosted shard has no controller and therefore no mail at all, so it sets the
-address directly. Never infer this from a failed delivery — a controller outage
-would silently downgrade a security control.
+- `service/owner_email.py` owns every transition. Anything that writes `pending_email` must retire the token with it, or the token promotes an address it was never sent to.
+- On confirmation, in this order: notify the old address, promote, mirror to `shards.owner_email`, notify the new one. The first step must precede the mirror — the controller's relay only ever reaches the address it currently has on file.
+- `POST /public/users/confirm-email` is unauthenticated by design and the token is its only credential. There is no `GET`: mail scanners and link prefetchers would burn a single-use token.
+- `oidc.email_verification` (default `true`) is the explicit self-hosted signal — no controller means no mail, so the address is set directly. Never infer it from a failed delivery; a controller outage would silently downgrade a security control.
 
 ### Signals (Event System)
 Blinker-based async signals defined in `util/signals.py`. DB-writing handlers are async and called via `await signal.send_async()`:

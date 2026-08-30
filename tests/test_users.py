@@ -41,6 +41,10 @@ async def test_ensure_owner_user_is_idempotent(db):
     assert first.id == second.id
     async with db_conn() as conn:
         assert await db_users.count(conn) == 1
+    # the second call is the one every restart makes, and the one the deleted
+    # synthetic-address backfill used to run on
+    assert second.email is None
+    assert second.pending_email is None
 
 
 async def test_ensure_owner_user_leaves_an_existing_owner_alone(db):
