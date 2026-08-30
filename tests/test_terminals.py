@@ -78,7 +78,13 @@ async def test_pairing_happy(requests_mock, app_client: AsyncClient):
     response = await app_client.get("protected/identities/default")
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["name"] == "test owner"
-    assert response.json()["email"] == "testowner@foobar.com"
+
+    response = await app_client.get("protected/users/me")
+    assert response.status_code == status.HTTP_200_OK
+    # the controller's signup address was never verified, so it arrives as a
+    # candidate rather than as the owner's address
+    assert response.json()["email"] is None
+    assert response.json()["pending_email"] == "testowner@foobar.com"
 
 
 async def test_pairing_two(app_client: AsyncClient):
@@ -195,7 +201,9 @@ async def test_pairing_with_profile_missing_owner(
         response = await app_client.get("protected/identities/default")
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["name"] == "Shard Owner"
-        assert response.json()["email"] == "testowner@foobar.com"
+
+        response = await app_client.get("protected/users/me")
+        assert response.json()["pending_email"] == "testowner@foobar.com"
 
 
 async def test_pairing_with_profile_missing_email(
@@ -211,7 +219,10 @@ async def test_pairing_with_profile_missing_email(
         response = await app_client.get("protected/identities/default")
         assert response.status_code == status.HTTP_200_OK
         assert response.json()["name"] == "test owner"
+
+        response = await app_client.get("protected/users/me")
         assert response.json()["email"] is None
+        assert response.json()["pending_email"] is None
 
 
 async def test_last_connection(api_client: AsyncClient):

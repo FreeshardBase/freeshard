@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 
 import pytest
@@ -116,6 +117,55 @@ async def test_restore_skipped_when_db_already_populated(db, tmp_path):
                 ).fetchall()
             ]
         assert ids == ["other-id"]
+
+
+@pytest.mark.asyncio
+async def test_restore_of_a_pre_0005_snapshot(db, tmp_path):
+    """A snapshot written before identities.email was dropped must still
+    restore, and the address it carries must come back unverified — it was
+    either the synthetic owner@<domain> or an unconfirmed copy."""
+    with settings_override({"path_root": str(tmp_path)}):
+        _snapshot_path().parent.mkdir(parents=True, exist_ok=True)
+        _snapshot_path().write_text(
+            json.dumps(
+                {
+                    "identities": [
+                        {
+                            "id": "shard-id-abc",
+                            "name": "default",
+                            "email": "old@shard.test",
+                            "description": None,
+                            "private_key": "PRIVATE-KEY-PEM",
+                            "is_default": True,
+                        }
+                    ],
+                    "users": [
+                        {
+                            "id": 1,
+                            "username": "owner",
+                            "display_name": "Shard Owner",
+                            "email": "owner@shard-id.freeshard.cloud",
+                            "role": "owner",
+                            "password_hash": None,
+                            "disabled": False,
+                            "created": "2026-01-01T00:00:00+00:00",
+                        }
+                    ],
+                }
+            )
+        )
+
+        await restore_db_snapshot()
+
+        async with db_conn() as conn:
+            identity = await (
+                await conn.execute("SELECT id, private_key FROM identities")
+            ).fetchone()
+            assert identity == ("shard-id-abc", "PRIVATE-KEY-PEM")
+            owner = await (
+                await conn.execute("SELECT email, pending_email FROM users")
+            ).fetchone()
+        assert owner == (None, "old@shard.test")
 
 
 @pytest.mark.asyncio

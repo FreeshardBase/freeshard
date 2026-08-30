@@ -320,6 +320,9 @@ def requests_mock_context(
                 body=_shard_self_response_body(shard or mock_shard, subscription),
             )
             rsps.post(f"{controller_base_url}/api/feedback")
+            rsps.post(f"{controller_base_url}/api/email_relay", status=201)
+            rsps.post(f"{controller_base_url}/api/email_verification", status=201)
+            rsps.put(f"{controller_base_url}/api/shards/self/owner-email", status=204)
             rsps.get(f"{controller_base_url}/api/foo")
             rsps.add_passthru("")
             yield rsps

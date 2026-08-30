@@ -11,8 +11,9 @@ from shard_core.util.misc import SlidingWindow
 
 log = logging.getLogger(__name__)
 
-# Verification mail is rare and every send costs the controller a real email.
-_resend_limit = SlidingWindow(limit=5, window=3600)
+# Every confirmation mail costs the controller a real send, and both routes that
+# trigger one share the budget — otherwise alternating between them doubles it.
+_email_send_limit = SlidingWindow(limit=5, window=3600)
 
 router = APIRouter(
     prefix="/users",
@@ -61,6 +62,8 @@ async def patch_me(update: InputUser, authorization: str = Cookie(None)):
         if update.email is None:
             user = await owner_email.clear_email(user)
         else:
+            if _email_send_limit.is_exceeded():
+                raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS)
             try:
                 user = await owner_email.set_email(user, update.email)
             except owner_email.DeliveryFailed:
@@ -80,7 +83,7 @@ async def patch_me(update: InputUser, authorization: str = Cookie(None)):
 )
 async def resend_confirmation(authorization: str = Cookie(None)):
     user = await _session_user(authorization)
-    if _resend_limit.is_exceeded():
+    if _email_send_limit.is_exceeded():
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS)
     try:
         await owner_email.resend_verification(user)

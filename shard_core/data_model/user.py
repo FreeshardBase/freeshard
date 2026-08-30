@@ -50,7 +50,11 @@ class InputUser(BaseModel):
     def validate_email(cls, v):
         if v:
             try:
-                validate_email(v)
+                # No deliverability check: it is a blocking DNS query on the
+                # event loop, and an MX record says nothing about whether the
+                # person reads that mailbox. The confirmation mail is what
+                # settles that.
+                validate_email(v, check_deliverability=False)
             except EmailNotValidError as e:
                 raise ValueError(f"invalid email: {e}") from e
         return v

@@ -391,6 +391,10 @@ class ShardOpenIDCode(OpenIDCode):
             info["name"] = user.display_name
             info["preferred_username"] = user.username
         if "email" in scope and user.email:
+            # users.email only ever holds a confirmed address (service.owner_email),
+            # which is what lets a relying party trust email_verified enough to
+            # link this identity to an existing local account. An owner who has
+            # confirmed nothing gets no email claim at all.
             info["email"] = user.email
             info["email_verified"] = True
         return info
