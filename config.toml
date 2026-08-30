@@ -75,7 +75,9 @@ send_interval_seconds = 300
 
 [oidc]
 enabled = false
-email_verification = true
+
+[email]
+enabled = true
 
 [management]
 api_url = "https://ptlfunctionapp.azurewebsites.net/api/management"

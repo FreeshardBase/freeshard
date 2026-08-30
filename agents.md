@@ -99,7 +99,7 @@ Started at app lifespan startup, stopped at shutdown:
 - `service/owner_email.py` owns every transition. Anything that writes `pending_email` must retire the token with it, or the token promotes an address it was never sent to.
 - On confirmation, in this order: notify the old address, promote, mirror to `shards.owner_email`, notify the new one. The first step must precede the mirror — the controller's relay only ever reaches the address it currently has on file.
 - `POST /public/users/confirm-email` is unauthenticated by design and the token is its only credential. There is no `GET`: mail scanners and link prefetchers would burn a single-use token.
-- `oidc.email_verification` (default `true`) is the explicit self-hosted signal — no controller means no mail, so the address is set directly. Never infer it from a failed delivery; a controller outage would silently downgrade a security control.
+- `email.enabled` (default `true`) says whether the shard can send mail at all, and is the explicit self-hosted signal — no controller means no mail, so the address is set directly. Never infer it from a failed delivery; a controller outage would silently downgrade a security control.
 
 ### Signals (Event System)
 Blinker-based async signals defined in `util/signals.py`. DB-writing handlers are async and called via `await signal.send_async()`:

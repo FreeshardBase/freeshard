@@ -547,7 +547,7 @@ async def test_without_verification_the_address_is_set_directly(
 ):
     await pair_new_terminal(app_client)
 
-    with settings_override({"oidc": {"email_verification": False}}):
+    with settings_override({"email": {"enabled": False}}):
         body = await set_address(app_client)
 
     assert body["email"] == NEW_ADDRESS
@@ -582,7 +582,7 @@ async def test_without_verification_resending_is_refused(
 ):
     await pair_new_terminal(app_client)
 
-    with settings_override({"oidc": {"email_verification": False}}):
+    with settings_override({"email": {"enabled": False}}):
         response = await app_client.post(RESEND)
 
     assert response.status_code == 409
@@ -593,7 +593,7 @@ async def test_without_verification_the_send_budget_is_not_spent(
     requests_mock, app_client: AsyncClient
 ):
     """A shard that cannot send mail at all has nothing to ration."""
-    with settings_override({"oidc": {"email_verification": False}}):
+    with settings_override({"email": {"enabled": False}}):
         await pair_new_terminal(app_client)
         for i in range(8):
             assert (await set_address(app_client, f"a{i}@example.org"))[
@@ -606,7 +606,7 @@ async def test_without_verification_clearing_sends_no_notification(
 ):
     await pair_new_terminal(app_client)
 
-    with settings_override({"oidc": {"email_verification": False}}):
+    with settings_override({"email": {"enabled": False}}):
         await set_address(app_client)
         response = await app_client.patch(ME, json={"email": None})
 

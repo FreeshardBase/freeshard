@@ -9,7 +9,7 @@ candidate is in flight per user; a superseded one is simply replaced.
 The shard mints and checks the confirmation token itself. The controller is only
 asked to deliver mail — it never learns what the token unlocks. A self-hosted
 shard has no controller and therefore no mail at all, which is why
-`oidc.email_verification = false` sets the address directly instead.
+`email.enabled = false` sets the address directly instead.
 """
 
 import hashlib
@@ -72,7 +72,7 @@ async def set_email(user: User, address: str) -> User:
     Without verification there is no way to send the link, so the address is
     taken as-is.
     """
-    if not settings().oidc.email_verification:
+    if not settings().email.enabled:
         async with db_conn() as conn:
             updated = await db_users.update(
                 conn, user.id, {"email": address, **_CLEARED_PENDING}
@@ -103,7 +103,7 @@ async def resend_verification(user: User) -> None:
     The previous token is replaced rather than re-sent: it is stored as a digest
     and cannot be recovered.
     """
-    if not settings().oidc.email_verification:
+    if not settings().email.enabled:
         raise VerificationDisabled
     if user.pending_email is None:
         raise NoPendingEmail
@@ -141,7 +141,7 @@ async def clear_email(user: User) -> User:
     if user.email is None and user.pending_email is None:
         return user
 
-    if settings().oidc.email_verification:
+    if settings().email.enabled:
         await _notify(
             "The contact address for your Freeshard is being removed",
             [
