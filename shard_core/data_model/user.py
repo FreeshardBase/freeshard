@@ -2,7 +2,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel
+from email_validator import validate_email, EmailNotValidError
+from pydantic import BaseModel, field_validator
 
 
 class Role(str, Enum):
@@ -16,9 +17,40 @@ class User(BaseModel):
     username: str
     display_name: str
     email: Optional[str] = None
+    pending_email: Optional[str] = None
+    email_token_hash: Optional[str] = None
+    email_token_expires: Optional[datetime] = None
     role: Role = Role.MEMBER
     disabled: bool = False
     created: Optional[datetime] = None
 
     def __str__(self):
         return f"User[{self.id}, {self.username}]"
+
+
+class OutputUser(BaseModel):
+    id: int
+    username: str
+    display_name: str
+    email: Optional[str] = None
+    pending_email: Optional[str] = None
+    role: Role
+
+    @classmethod
+    def from_user(cls, user: User) -> "OutputUser":
+        return cls(**user.model_dump())
+
+
+class InputUser(BaseModel):
+    display_name: Optional[str] = None
+    email: Optional[str] = None
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v):
+        if v:
+            try:
+                validate_email(v)
+            except EmailNotValidError as e:
+                raise ValueError(f"invalid email: {e}") from e
+        return v

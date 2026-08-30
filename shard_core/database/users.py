@@ -5,7 +5,16 @@ from psycopg.rows import class_row
 
 from shard_core.data_model.user import User
 
-_UPDATABLE_COLUMNS = {"username", "display_name", "email", "role", "disabled"}
+_UPDATABLE_COLUMNS = {
+    "username",
+    "display_name",
+    "email",
+    "pending_email",
+    "email_token_hash",
+    "email_token_expires",
+    "role",
+    "disabled",
+}
 
 
 async def get_by_id(conn: AsyncConnection, id: int) -> User | None:
@@ -45,6 +54,18 @@ async def update(conn: AsyncConnection, id: int, data: dict) -> User | None:
     async with conn.cursor(row_factory=class_row(User)) as cur:
         await cur.execute(sql, params)
         return await cur.fetchone()
+
+
+async def get_all_with_pending_email_token(conn: AsyncConnection) -> list[User]:
+    """Every user holding a confirmation token, for constant-time token matching.
+
+    Looking the digest up in SQL would be simpler, but the comparison then
+    happens inside the index rather than in secrets.compare_digest.
+    """
+    sql: LiteralString = "SELECT * FROM users WHERE email_token_hash IS NOT NULL"
+    async with conn.cursor(row_factory=class_row(User)) as cur:
+        await cur.execute(sql)
+        return await cur.fetchall()
 
 
 async def count(conn: AsyncConnection) -> int:

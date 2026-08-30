@@ -14,8 +14,8 @@ async def ensure_owner_user() -> User:
 
     The owner user is created by the 0002 migration on shards that already
     have an identity; on fresh shards it is created here, right after the
-    default identity. Also backfills the email for migration-created owners —
-    OIDC clients need an email-shaped identifier to auto-provision accounts.
+    default identity. A fresh owner has no address: users.email is verified by
+    definition, and nothing has been verified yet.
     Idempotent — called on every startup, before any pairing can happen.
     """
     async with db_conn() as conn:
@@ -28,15 +28,9 @@ async def ensure_owner_user() -> User:
                 {
                     "username": "owner",
                     "display_name": identity.name,
-                    "email": identity.email or f"owner@{identity.domain}",
+                    "email": None,
                     "role": Role.OWNER.value,
                 },
             )
             log.info(f"created owner user {owner.id}")
-        elif owner.email is None:
-            identity_row = await db_identities.get_default(conn)
-            identity = Identity(**identity_row)
-            owner = await db_users.update(
-                conn, owner.id, {"email": f"owner@{identity.domain}"}
-            )
     return owner

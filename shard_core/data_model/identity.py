@@ -1,7 +1,6 @@
 from typing import Optional
 
-from email_validator import validate_email, EmailNotValidError
-from pydantic import field_validator, BaseModel, computed_field
+from pydantic import BaseModel, computed_field
 
 from shard_core.service import crypto
 from shard_core.settings import settings
@@ -10,7 +9,6 @@ from shard_core.settings import settings
 class Identity(BaseModel):
     id: str
     name: str
-    email: Optional[str] = None
     description: Optional[str] = None
     private_key: str
     is_default: bool = False
@@ -18,26 +16,13 @@ class Identity(BaseModel):
     def __str__(self):
         return f"Identity[{self.short_id}, {self.name}]"
 
-    @field_validator("email")
     @classmethod
-    def validate_email(cls, v):
-        if v:
-            try:
-                validate_email(v)
-            except EmailNotValidError as e:
-                raise ValueError(f"invalid email: {e}") from e
-        return v
-
-    @classmethod
-    def create(
-        cls, name: str, description: str = None, email: str = None
-    ) -> "Identity":
+    def create(cls, name: str, description: str = None) -> "Identity":
         private_key = crypto.PrivateKey()
         return Identity(
             id=private_key.get_public_key().to_hash_id(),
             name=name,
             description=description,
-            email=email,
             private_key=private_key.to_bytes().decode(),
         )
 
@@ -86,7 +71,6 @@ class SafeIdentity(BaseModel):
 class OutputIdentity(BaseModel):
     id: str
     name: str
-    email: Optional[str] = None
     description: Optional[str] = None
     is_default: bool
     public_key_pem: str
@@ -96,15 +80,4 @@ class OutputIdentity(BaseModel):
 class InputIdentity(BaseModel):
     id: Optional[str] = None
     name: Optional[str] = ""
-    email: Optional[str] = ""
     description: Optional[str] = ""
-
-    @field_validator("email")
-    @classmethod
-    def validate_email(cls, v):
-        if v:
-            try:
-                validate_email(v)
-            except EmailNotValidError as e:
-                raise ValueError(f"invalid email: {e}") from e
-        return v
