@@ -85,6 +85,18 @@ def settings_override(override: dict):
         set_settings(old)
 
 
+@pytest.fixture(autouse=True)
+def reset_rate_limits():
+    """The rate limiters are module-level, so they leak between tests otherwise
+    — and a 429 in an unrelated test points at entirely the wrong code."""
+    from shard_core.service.owner_email import _send_limit
+    from shard_core.web.public.oidc import _token_limit
+    from shard_core.web.public.users import _miss_limit
+
+    for limiter in (_send_limit, _token_limit, _miss_limit):
+        limiter.reset()
+
+
 @pytest.fixture(scope="session")
 def docker_compose_file():
     return str(Path(__file__).parent / "docker-compose.yml")
@@ -320,6 +332,9 @@ def requests_mock_context(
                 body=_shard_self_response_body(shard or mock_shard, subscription),
             )
             rsps.post(f"{controller_base_url}/api/feedback")
+            rsps.post(f"{controller_base_url}/api/email_relay", status=201)
+            rsps.post(f"{controller_base_url}/api/email_verification", status=201)
+            rsps.put(f"{controller_base_url}/api/shards/self/owner-email", status=204)
             rsps.get(f"{controller_base_url}/api/foo")
             rsps.add_passthru("")
             yield rsps

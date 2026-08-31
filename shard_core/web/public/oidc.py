@@ -12,8 +12,6 @@ time) and the signing key lives in the database.
 
 import asyncio
 import logging
-import time
-from collections import deque
 from urllib.parse import quote
 
 from authlib.oauth2.rfc6749 import AuthorizationServer, OAuth2Request
@@ -36,6 +34,7 @@ from shard_core.service.oidc_provider import (
     userinfo_for_access_token,
 )
 from shard_core.settings import settings
+from shard_core.util.misc import SlidingWindow
 
 log = logging.getLogger(__name__)
 
@@ -152,7 +151,7 @@ async def _get_server(request: Request) -> StarletteAuthorizationServer:
                 issuer = f"{app.state.oidc_public_base}/public/oidc"
                 jwk = await ensure_jwk()
                 configure(issuer, jwk, asyncio.get_running_loop())
-                _token_request_times.clear()
+                _token_limit.reset()
                 app.state.oidc_server = build_authorization_server(
                     StarletteAuthorizationServer
                 )
@@ -181,18 +180,7 @@ async def _session_user(authorization: str | None) -> ShardUser | None:
 
 # --- token endpoint rate limit ------------------------------------------------------
 
-_token_request_times: deque = deque()
-_RATE_WINDOW = 60
-
-
-def _rate_limited() -> bool:
-    now = time.monotonic()
-    while _token_request_times and _token_request_times[0] < now - _RATE_WINDOW:
-        _token_request_times.popleft()
-    if len(_token_request_times) >= TOKEN_RATE_LIMIT:
-        return True
-    _token_request_times.append(now)
-    return False
+_token_limit = SlidingWindow(limit=TOKEN_RATE_LIMIT, window=60)
 
 
 # --- endpoints -------------------------------------------------------------------
@@ -225,7 +213,7 @@ async def authorize(request: Request, authorization: str = Cookie(None)):
 @router.post("/token")
 async def token(request: Request):
     server = await _get_server(request)
-    if _rate_limited():
+    if not _token_limit.try_acquire():
         return JSONResponse({"error": "slow_down"}, status_code=429)
     oreq = await _build_oauth2_request(request)
     return await asyncio.to_thread(server.create_token_response, oreq)

@@ -138,6 +138,13 @@ async def get_owner():
         return await db_users.get_owner(conn)
 
 
+async def confirm_owner_address(address: str = "owner@example.org"):
+    """Give the owner a verified address, the state that earns an email claim."""
+    async with db_conn() as conn:
+        owner = await db_users.get_owner(conn)
+        return await db_users.update(conn, owner.id, {"email": address})
+
+
 # --- discovery + jwks ---------------------------------------------------------
 
 
@@ -267,10 +274,10 @@ async def test_client_secret_post_accepted(app_client: AsyncClient):
 
 async def test_userinfo(app_client: AsyncClient):
     await pair_new_terminal(app_client)
+    owner = await confirm_owner_address()
     oidc_client = await make_client()
     tok, _ = await run_code_flow(app_client, oidc_client)
 
-    owner = await get_owner()
     r = await app_client.get(
         USERINFO, headers={"Authorization": f"Bearer {tok['access_token']}"}
     )
@@ -278,6 +285,7 @@ async def test_userinfo(app_client: AsyncClient):
     info = r.json()
     assert info["sub"] == str(owner.id)
     assert info["email"] == owner.email
+    assert info["email_verified"] is True
     assert info["preferred_username"] == owner.username
 
     r = await app_client.get(
@@ -288,6 +296,43 @@ async def test_userinfo(app_client: AsyncClient):
 
     r = await app_client.get(USERINFO)
     assert r.status_code == 401
+
+
+async def test_no_email_claim_without_a_confirmed_address(app_client: AsyncClient):
+    """email_verified is what a relying party consults before linking an OIDC
+    identity to an existing local account, so an unconfirmed owner gets neither
+    the claim nor the address it would qualify."""
+    await pair_new_terminal(app_client)
+    assert (await get_owner()).email is None
+    keyset = await jwks_keyset(app_client)
+    oidc_client = await make_client()
+    tok, _ = await run_code_flow(app_client, oidc_client)
+
+    claims = joserfc_jwt.decode(tok["id_token"], keyset).claims
+    assert "email" not in claims
+    assert "email_verified" not in claims
+
+    r = await app_client.get(
+        USERINFO, headers={"Authorization": f"Bearer {tok['access_token']}"}
+    )
+    assert r.status_code == 200
+    assert "email" not in r.json()
+    assert "email_verified" not in r.json()
+
+
+async def test_a_pending_address_is_not_claimed(app_client: AsyncClient):
+    """A candidate is exactly the thing nobody has proved they can read."""
+    await pair_new_terminal(app_client)
+    async with db_conn() as conn:
+        owner = await db_users.get_owner(conn)
+        await db_users.update(conn, owner.id, {"pending_email": "nobody@example.org"})
+    oidc_client = await make_client()
+    tok, _ = await run_code_flow(app_client, oidc_client)
+
+    r = await app_client.get(
+        USERINFO, headers={"Authorization": f"Bearer {tok['access_token']}"}
+    )
+    assert "email" not in r.json()
 
 
 # --- refresh rotation --------------------------------------------------------------

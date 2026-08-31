@@ -391,6 +391,8 @@ class ShardOpenIDCode(OpenIDCode):
             info["name"] = user.display_name
             info["preferred_username"] = user.username
         if "email" in scope and user.email:
+            # users.email only ever holds a confirmed address — see
+            # service.owner_email, which is what makes this claim true
             info["email"] = user.email
             info["email_verified"] = True
         return info

@@ -1,5 +1,6 @@
 import inspect
 import time
+from collections import deque
 
 
 def throttle(min_duration: float):
@@ -34,6 +35,37 @@ def throttle(min_duration: float):
         return wrapper_throttle
 
     return decorator_throttle
+
+
+class SlidingWindow:
+    """Counts attempts in a moving time window, to cap a request rate.
+
+    In-process and shared by every caller of the endpoint it guards. A shard has
+    one owner, so splitting the budget per client would only offer an attacker a
+    fresh budget per source address.
+    """
+
+    def __init__(self, limit: int, window: float):
+        self._limit = limit
+        self._window = window
+        self._attempts: deque[float] = deque()
+
+    def try_acquire(self) -> bool:
+        """Take a slot if one is free, reporting whether it was granted.
+
+        Named for the fact that it records: a predicate name invites calling it
+        twice to branch, which silently spends two slots.
+        """
+        now = time.monotonic()
+        while self._attempts and self._attempts[0] < now - self._window:
+            self._attempts.popleft()
+        if len(self._attempts) >= self._limit:
+            return False
+        self._attempts.append(now)
+        return True
+
+    def reset(self):
+        self._attempts.clear()
 
 
 def format_error(e: Exception):

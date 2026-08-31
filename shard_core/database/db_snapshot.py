@@ -101,11 +101,39 @@ async def restore_db_snapshot():
             if not rows:
                 continue
             col_types = await _column_types(conn, table)
+            _warn_about_dropped_columns(table, rows[0], col_types)
             for row in rows:
                 await _insert_row(conn, table, row, col_types)
             await _reset_sequences(conn, table, list(col_types))
             restored += len(rows)
+        await _demote_unverified_owner_email(conn, snapshot)
     log.info(f"restored {restored} rows from DB snapshot")
+
+
+async def _demote_unverified_owner_email(conn: AsyncConnection, snapshot: dict):
+    """Apply the 0005 migration's rule to a snapshot that predates it.
+
+    Before 0005 the owner's users.email was the synthetic owner@<domain> or an
+    unverified copy of identities.email, and restoring it as-is would hand the
+    OIDC provider an address it would assert as verified. A snapshot from that
+    era is recognisable by its identity rows still carrying an email column.
+    """
+    identities = snapshot.get("identities") or []
+    if not any("email" in row for row in identities):
+        return
+    candidate = next(
+        (
+            row["email"]
+            for row in identities
+            if row.get("is_default") and row.get("email")
+        ),
+        None,
+    )
+    await conn.execute(
+        "UPDATE users SET email = NULL, pending_email = %s WHERE role = 'owner'",
+        (candidate,),
+    )
+    log.info("restored owner address from a pre-0005 snapshot as unverified")
 
 
 async def _list_data_tables(conn: AsyncConnection) -> list[str]:
@@ -172,7 +200,9 @@ async def _column_types(conn: AsyncConnection, table: str) -> dict[str, str]:
 async def _insert_row(
     conn: AsyncConnection, table: str, row: dict, col_types: dict[str, str]
 ):
-    values = {c: _adapt_value(v, col_types.get(c)) for c, v in row.items()}
+    values = {
+        c: _adapt_value(v, col_types[c]) for c, v in row.items() if c in col_types
+    }
     columns = list(values)
     query = sql.SQL(
         "INSERT INTO {table} ({columns}) VALUES ({placeholders}) "
@@ -183,6 +213,15 @@ async def _insert_row(
         placeholders=sql.SQL(", ").join(map(sql.Placeholder, columns)),
     )
     await conn.execute(query, values)
+
+
+def _warn_about_dropped_columns(table: str, row: dict, col_types: dict[str, str]):
+    """A snapshot written by an older version carries columns this schema has
+    since dropped. _insert_row skips them — inserting them would abort the whole
+    restore — but a silent skip on a disaster-recovery path deserves a line."""
+    dropped = [c for c in row if c not in col_types]
+    if dropped:
+        log.warning(f"ignoring columns no longer in {table}: {', '.join(dropped)}")
 
 
 def _adapt_value(value, data_type: str | None):

@@ -3,7 +3,7 @@ from typing import LiteralString
 from psycopg import AsyncConnection
 from psycopg.rows import dict_row
 
-_UPDATABLE_COLUMNS = {"name", "email", "description", "private_key", "is_default"}
+_UPDATABLE_COLUMNS = {"name", "description", "private_key", "is_default"}
 
 
 async def get_all(conn: AsyncConnection) -> list[dict]:
@@ -35,8 +35,8 @@ async def search_by_name(conn: AsyncConnection, name: str) -> list[dict]:
 
 
 async def insert(conn: AsyncConnection, identity: dict) -> dict:
-    sql: LiteralString = """INSERT INTO identities (id, name, email, description, private_key, is_default)
-        VALUES (%(id)s, %(name)s, %(email)s, %(description)s, %(private_key)s, %(is_default)s)
+    sql: LiteralString = """INSERT INTO identities (id, name, description, private_key, is_default)
+        VALUES (%(id)s, %(name)s, %(description)s, %(private_key)s, %(is_default)s)
         RETURNING *"""
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(sql, identity)

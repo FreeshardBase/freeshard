@@ -2,6 +2,7 @@ import logging
 
 from shard_core.database.connection import db_conn
 from shard_core.database import identities as db_identities
+from shard_core.database import users as db_users
 from shard_core.data_model.identity import Identity
 from shard_core.service.portal_controller import refresh_profile
 from shard_core.util.signals import async_on_first_terminal_add, on_identity_update
@@ -64,12 +65,21 @@ async def enrich_identity_from_profile(_):
 
     async with db_conn() as conn:
         default = await db_identities.get_default(conn)
-        if not default:
-            return
-        update_data = {}
-        if profile.owner:
-            update_data["name"] = profile.owner
+        if default and profile.owner:
+            await update_identity(default["id"], {"name": profile.owner})
+
         if profile.owner_email:
-            update_data["email"] = profile.owner_email
-        if update_data:
-            await update_identity(default["id"], update_data)
+            owner = await db_users.get_owner(conn)
+            if owner and owner.email is None:
+                # The token is bound to whatever pending_email holds when it is
+                # opened, so replacing the candidate must retire it — this
+                # handler re-fires whenever the last terminal is re-paired.
+                await db_users.update(
+                    conn,
+                    owner.id,
+                    {
+                        "pending_email": profile.owner_email,
+                        "email_token_hash": None,
+                        "email_token_expires": None,
+                    },
+                )

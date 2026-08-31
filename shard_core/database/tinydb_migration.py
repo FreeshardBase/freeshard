@@ -29,7 +29,7 @@ log = logging.getLogger(__name__)
 _TINYDATE_PREFIX = "{TinyDate}:"
 
 # Columns that exist in the DB for each table — used to filter out computed fields
-_IDENTITY_COLUMNS = {"id", "name", "email", "description", "private_key", "is_default"}
+_IDENTITY_COLUMNS = {"id", "name", "description", "private_key", "is_default"}
 _INSTALLED_APP_COLUMNS = {"name", "installation_reason", "status", "last_access"}
 _TERMINAL_COLUMNS = {"id", "name", "icon", "last_connection"}
 _PEER_COLUMNS = {"id", "name", "public_bytes_b64", "is_reachable"}
@@ -71,8 +71,8 @@ async def migrate_tinydb_data():
 
     async with db_conn() as conn:
         await _migrate_kv_store(conn, data.get("_default", {}))
-        await _migrate_identities(conn, data.get("identities", {}))
-        owner_id = await _ensure_owner_user(conn)
+        pending_email = await _migrate_identities(conn, data.get("identities", {}))
+        owner_id = await _ensure_owner_user(conn, pending_email)
         await _migrate_installed_apps(conn, data.get("installed_apps", {}))
         await _migrate_terminals(conn, data.get("terminals", {}), owner_id)
         await _migrate_peers(conn, data.get("peers", {}))
@@ -96,16 +96,25 @@ async def _migrate_kv_store(conn: AsyncConnection, records: dict):
     log.info(f"migrated {len(records)} kv_store entries")
 
 
-async def _migrate_identities(conn: AsyncConnection, records: dict):
+async def _migrate_identities(conn: AsyncConnection, records: dict) -> str | None:
+    """Insert the identities and return the default one's TinyDB-era address.
+
+    That address was never verified, so it is handed to the owner user as a
+    candidate rather than written to the identity, which no longer holds one.
+    """
+    default_email = None
     for record in records.values():
+        if record.get("is_default") and record.get("email"):
+            default_email = record["email"]
         filtered = _filter_keys(record, _IDENTITY_COLUMNS)
         await conn.execute(
-            """INSERT INTO identities (id, name, email, description, private_key, is_default)
-               VALUES (%(id)s, %(name)s, %(email)s, %(description)s, %(private_key)s, %(is_default)s)
+            """INSERT INTO identities (id, name, description, private_key, is_default)
+               VALUES (%(id)s, %(name)s, %(description)s, %(private_key)s, %(is_default)s)
                ON CONFLICT (id) DO NOTHING""",
             filtered,
         )
     log.info(f"migrated {len(records)} identities")
+    return default_email
 
 
 async def _migrate_installed_apps(conn: AsyncConnection, records: dict):
@@ -122,17 +131,22 @@ async def _migrate_installed_apps(conn: AsyncConnection, records: dict):
     log.info(f"migrated {len(records)} installed apps")
 
 
-async def _ensure_owner_user(conn: AsyncConnection) -> int | None:
+async def _ensure_owner_user(
+    conn: AsyncConnection, pending_email: str | None
+) -> int | None:
     """Terminals require a user (NOT NULL); create the owner from the just-
     migrated default identity, mirroring the 0002 migration's backfill."""
     cur = await conn.execute("SELECT id FROM users WHERE role = 'owner'")
     row = await cur.fetchone()
     if row:
         return row[0]
-    cur = await conn.execute("""INSERT INTO users (username, display_name, email, role)
-           SELECT 'owner', COALESCE(name, 'Shard Owner'), email, 'owner'
+    cur = await conn.execute(
+        """INSERT INTO users (username, display_name, pending_email, role)
+           SELECT 'owner', COALESCE(name, 'Shard Owner'), %s, 'owner'
            FROM identities WHERE is_default = TRUE
-           RETURNING id""")
+           RETURNING id""",
+        (pending_email,),
+    )
     row = await cur.fetchone()
     return row[0] if row else None
 

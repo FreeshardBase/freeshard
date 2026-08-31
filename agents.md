@@ -29,6 +29,7 @@ shard_core/
     memory_pressure.py  PSI parsing (/host/pressure/memory), cgroup v2 memory.reclaim page-out
     pause_metrics.py    In-memory pause-tier telemetry accumulators (transitions, latencies, PSI snapshots)
     pairing.py          Terminal pairing (JWT creation, code generation)
+    owner_email.py      Owner address: candidate, confirmation token, promotion
     backup.py           Azure Blob Storage backup via rclone
     peer.py             Peer shard management
     crypto.py           RSA-4096 key generation, signing, verification (PSS padding)
@@ -41,7 +42,9 @@ shard_core/
   database/           → PostgreSQL access layer (per-entity modules, conn-first-arg pattern)
   data_model/         → Pydantic v2 models
     app_meta.py         App metadata, Status enum, VMSize enum
-    identity.py         Shard identity (keys, domain, short_id)
+    identity.py         Shard identity (keys, domain, short_id) — the shard's
+                        public profile, published unauthenticated; holds no address
+    user.py             People on the shard (owner, later members) and their address
     terminal.py         Paired device models
     peer.py             Peer shard models
     backend/            Models copied from freeshard-controller (via `just get-types`)
@@ -71,7 +74,7 @@ async with db_conn() as conn:
     await db_installed_apps.update_status(conn, "myapp", Status.RUNNING)
 ```
 
-Tables: `identities`, `terminals`, `installed_apps`, `peers`, `backups`, `tours`, `app_usage_tracks`, `kv_store`.
+Tables: `identities`, `users`, `terminals`, `installed_apps`, `peers`, `backups`, `tours`, `app_usage_tracks`, `kv_store`, `oidc_clients`, `oidc_codes`, `oidc_tokens`.
 
 Postgres data is not part of the rclone backup set (which only syncs `core/`/`user_data/`). To keep it, `database/db_snapshot.py` dumps all application tables to `core/db_snapshot.json` before each backup, and `init_database()` restores it on a fresh shard (before the default identity is generated, so the restored identity survives). Pre-0.38 backups are restored from TinyDB by `tinydb_migration.py` instead.
 
@@ -89,6 +92,14 @@ Started at app lifespan startup, stopped at shutdown:
 - `CronTask(start_backup, "0 3 * * *")` — daily backup with random delay
 - `CronTask(docker_prune_images, daily)` — image cleanup
 - Various telemetry and peer key refresh tasks
+
+### The Owner's Email Address
+`users.email` is the single home for a person's address and is **verified by definition**; `users.pending_email` is an unverified candidate, at most one in flight per user. That invariant is the only reason the OIDC provider may assert `email_verified: true` — with no verified address it emits neither claim, and there is deliberately no synthetic fallback.
+
+- `service/owner_email.py` owns every transition. Anything that writes `pending_email` must retire the token with it, or the token promotes an address it was never sent to.
+- On confirmation, in this order: notify the old address, promote, mirror to `shards.owner_email`, notify the new one. The first step must precede the mirror — the controller's relay only ever reaches the address it currently has on file.
+- `POST /public/users/confirm-email` is unauthenticated by design and the token is its only credential. There is no `GET`: mail scanners and link prefetchers would burn a single-use token.
+- `email.enabled` (default `true`) says whether the shard can send mail at all, and is the explicit self-hosted signal — no controller means no mail, so the address is set directly. Never infer it from a failed delivery; a controller outage would silently downgrade a security control.
 
 ### Signals (Event System)
 Blinker-based async signals defined in `util/signals.py`. DB-writing handlers are async and called via `await signal.send_async()`:
