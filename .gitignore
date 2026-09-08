@@ -105,3 +105,4 @@ core/
 # local agent state
 .serena/
 .worktrees/
+.claude/worktrees/
