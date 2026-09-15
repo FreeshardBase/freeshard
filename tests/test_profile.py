@@ -1,14 +1,46 @@
 from datetime import datetime, timezone
 
+import pytest
 from httpx import AsyncClient
+from pydantic import ValidationError
 
 from shard_core.data_model.backend.shard_model import (
+    Cloud,
     ShardResponse,
     ShardSubscriptionSummary,
 )
 from shard_core.data_model.backend.subscription_model import SubscriptionStatus
 from shard_core.data_model.profile import Profile
 from tests import conftest
+
+
+def _shard_self_payload(cloud: str) -> dict:
+    """The body `refresh_profile` validates, with the cloud as the wire sends it."""
+    now = datetime.now(timezone.utc)
+    return {
+        **conftest.mock_shard.model_dump(mode="json"),
+        "cloud": cloud,
+        "telemetry": [],
+        "telemetry_start": now.isoformat(),
+        "telemetry_end": now.isoformat(),
+    }
+
+
+def test_a_shard_on_ionos_can_read_its_own_profile():
+    """The controller may answer `GET /shards/self` with cloud=ionos. Before the
+    vendored enum learned that value, model_validate raised and both
+    refresh_profile and refresh_shared_secret died with it."""
+    shard = ShardResponse.model_validate(_shard_self_payload("ionos"))
+
+    assert shard.cloud is Cloud.IONOS
+    assert Profile.from_shard(shard).vm_id == conftest.mock_shard.machine_id
+
+
+def test_an_unknown_cloud_is_still_rejected():
+    """Proves the test above has teeth: the field really is validated against
+    the enum, so a value missing from it fails rather than passing through."""
+    with pytest.raises(ValidationError):
+        ShardResponse.model_validate(_shard_self_payload("hetzner"))
 
 
 def test_from_shard_carries_billing_fields():
