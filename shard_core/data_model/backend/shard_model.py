@@ -73,6 +73,13 @@ class Cloud(StrEnum):
     DEFAULT = auto()
     AZURE = auto()
     OVHCLOUD = auto()
+    IONOS = auto()
+
+
+# A Cube's templateUuid is fixed at creation and IONOS offers no in-place resize in
+# either direction, so IonosManager.resize_instance raises. The API consults this to
+# refuse with a 409 rather than leave a shard in ERROR.
+CLOUDS_WITHOUT_INSTANCE_RESIZE = frozenset({Cloud.IONOS})
 
 
 class ShardBase(BaseModel):
