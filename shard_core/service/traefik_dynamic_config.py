@@ -125,7 +125,7 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
         "app-error": t.HttpMiddleware(
             root=t.HttpMiddlewareItem8(
                 errors=t.ErrorsMiddleware(
-                    status=["500-599", "400-499"],
+                    status=["500-599", "401"],
                     service="shard_core",
                     query="/internal/app_error/{status}",
                 )

@@ -147,3 +147,28 @@ async def test_uninstalling_app_is_not_routed(app_client):
     await write_traefik_dyn_config()
 
     assert "uninstalling_app_http" not in _read_traefik_dyn_config()["http"]["routers"]
+
+
+def _covers(status_spec: list[str], code: int) -> bool:
+    for entry in status_spec:
+        if "-" in entry:
+            low, high = (int(part) for part in entry.split("-"))
+            if low <= code <= high:
+                return True
+        elif int(entry) == code:
+            return True
+    return False
+
+
+async def test_app_error_leaves_client_errors_to_the_app(api_client):
+    """The splash replaces the upstream body, so it may only claim statuses it renders
+    something meaningful for: a server error, a container that is not up yet, and the
+    forwardAuth rejection."""
+    status_spec = _read_traefik_dyn()["http"]["middlewares"]["app-error"]["errors"][
+        "status"
+    ]
+
+    for code in (500, 502, 503, 401):
+        assert _covers(status_spec, code), code
+    for code in (400, 403, 404, 409, 422):
+        assert not _covers(status_spec, code), code
