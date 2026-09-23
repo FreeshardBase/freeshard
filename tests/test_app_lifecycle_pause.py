@@ -181,9 +181,11 @@ async def test_per_app_idle_overrides_win(docker_mocks):
 
 
 @pytest.mark.parametrize(
-    "status", [Status.STOPPED, Status.RUNNING, Status.PAUSED, Status.DOWN]
+    "status", [Status.PAUSED, Status.STOPPED, Status.DOWN, Status.RUNNING]
 )
-async def test_always_on_app_is_started_not_paused(docker_mocks, status):
+async def test_always_on_app_is_started_whatever_its_stored_status(
+    docker_mocks, status
+):
     app = _app("a", status, idle=9999)
     with (
         settings_override(PAUSE_ON),
@@ -200,7 +202,7 @@ async def test_always_on_app_is_started_not_paused(docker_mocks, status):
 
 
 async def test_always_on_app_too_big_for_the_shard_is_not_started(docker_mocks):
-    app = _app("a", Status.RUNNING, idle=0)
+    app = _app("a", Status.DOWN, idle=9999)
     with (
         settings_override(PAUSE_ON),
         patch.object(
@@ -214,6 +216,8 @@ async def test_always_on_app_too_big_for_the_shard_is_not_started(docker_mocks):
     ):
         await app_lifecycle._control_app_time(app, pause_enabled=True)
     docker_mocks["start"].assert_not_awaited()
+    docker_mocks["pause"].assert_not_awaited()
+    docker_mocks["stop"].assert_not_awaited()
 
 
 async def test_low_disk_stops_even_always_on_apps(docker_mocks):
