@@ -262,15 +262,24 @@ async def test_start_app_running_container_is_a_noop_but_reconciles_status(
     assert await _status("running_app") == Status.RUNNING
 
 
-@pytest.mark.parametrize("status", [Status.DOWN, Status.RUNNING])
-async def test_start_app_starts_a_missing_stack(db, tmp_path, subprocess_mock, status):
+@pytest.mark.parametrize(
+    "status, state",
+    [
+        (Status.DOWN, "missing"),
+        (Status.RUNNING, "missing"),
+        (Status.RUNNING, "exited"),
+    ],
+)
+async def test_start_app_starts_a_stack_that_is_not_running(
+    db, tmp_path, subprocess_mock, status, state
+):
     _app_dir(tmp_path, "gone_app")
     await _insert_app("gone_app", status)
 
     with (
         settings_override({"path_root": str(tmp_path)}),
         patch.object(
-            app_tools, "get_app_container_state", new=AsyncMock(return_value="missing")
+            app_tools, "get_app_container_state", new=AsyncMock(return_value=state)
         ),
     ):
         await app_tools.start_app("gone_app")
