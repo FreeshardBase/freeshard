@@ -180,10 +180,10 @@ async def test_per_app_idle_overrides_win(docker_mocks):
     docker_mocks["stop"].assert_not_awaited()
 
 
-@pytest.mark.parametrize("status", [Status.STOPPED, Status.RUNNING])
+@pytest.mark.parametrize(
+    "status", [Status.STOPPED, Status.RUNNING, Status.PAUSED, Status.DOWN]
+)
 async def test_always_on_app_is_started_not_paused(docker_mocks, status):
-    # A RUNNING row can outlive its containers when shard_core is killed
-    # mid-shutdown (#239); start_app reads the real state, so it is always asked.
     app = _app("a", status, idle=9999)
     with (
         settings_override(PAUSE_ON),
@@ -197,6 +197,23 @@ async def test_always_on_app_is_started_not_paused(docker_mocks, status):
     docker_mocks["start"].assert_awaited_once_with("a")
     docker_mocks["pause"].assert_not_awaited()
     docker_mocks["stop"].assert_not_awaited()
+
+
+async def test_always_on_app_too_big_for_the_shard_is_not_started(docker_mocks):
+    app = _app("a", Status.RUNNING, idle=0)
+    with (
+        settings_override(PAUSE_ON),
+        patch.object(
+            app_lifecycle,
+            "get_app_metadata",
+            return_value=_meta(Lifecycle(always_on=True)),
+        ),
+        patch.object(
+            app_lifecycle, "size_is_compatible", new=AsyncMock(return_value=False)
+        ),
+    ):
+        await app_lifecycle._control_app_time(app, pause_enabled=True)
+    docker_mocks["start"].assert_not_awaited()
 
 
 async def test_low_disk_stops_even_always_on_apps(docker_mocks):
