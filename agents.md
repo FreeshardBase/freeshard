@@ -87,7 +87,7 @@ Postgres data is not part of the rclone backup set (which only syncs `core/`/`us
 ### Background Tasks
 Started at app lifespan startup, stopped at shutdown:
 - `InstallationWorker` — async task queue for app install/uninstall
-- `PeriodicTask(control_apps, 30s)` — app idle lifecycle. With `apps.lifecycle.pause_enabled` (default off): RUNNING pauses after `idle_for_pause` (cgroup freeze + page-out to swap), PAUSED stops after `idle_for_stop`, and high memory PSI demotes the LRU app one tier per cycle. Flag off: legacy stop-only
+- `PeriodicTask(control_apps, 30s)` — app idle lifecycle. With `apps.lifecycle.pause_enabled` (default off): RUNNING pauses after `idle_for_pause` (cgroup freeze + page-out to swap), PAUSED stops after `idle_for_stop`, and high memory PSI demotes the LRU app one tier per cycle. Flag off: legacy stop-only. Independent of the flag, an `always_on` app is handed to `start_app` on every tick unless disk is low or the app is too big for the shard; `start_app` decides from the real container state and still skips non-revivable statuses, so a `RUNNING` row whose containers are gone (shard_core killed mid-shutdown) comes back
 - `PeriodicTask(update_disk_space, 30s)` — disk monitoring
 - `CronTask(start_backup, "0 3 * * *")` — daily backup with random delay
 - `CronTask(docker_prune_images, daily)` — image cleanup
