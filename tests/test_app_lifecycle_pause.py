@@ -180,8 +180,11 @@ async def test_per_app_idle_overrides_win(docker_mocks):
     docker_mocks["stop"].assert_not_awaited()
 
 
-async def test_always_on_app_is_started_not_paused(docker_mocks):
-    app = _app("a", Status.STOPPED, idle=9999)
+@pytest.mark.parametrize("status", [Status.STOPPED, Status.RUNNING])
+async def test_always_on_app_is_started_not_paused(docker_mocks, status):
+    # A RUNNING row can outlive its containers when shard_core is killed
+    # mid-shutdown (#239); start_app reads the real state, so it is always asked.
+    app = _app("a", status, idle=9999)
     with (
         settings_override(PAUSE_ON),
         patch.object(
