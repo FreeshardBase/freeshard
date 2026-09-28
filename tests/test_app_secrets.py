@@ -1,3 +1,4 @@
+import json
 import shutil
 import string
 
@@ -19,6 +20,33 @@ pytestmark = pytest.mark.asyncio
 _SECRET_CHARS = set(string.ascii_letters + string.digits)
 
 
+def _write_app_files(app_name: str, template: str) -> None:
+    """Materialise what an installed app has on disk: the compose template plus
+    the app_meta.json the render path reads to decide whether it wants OIDC."""
+    app_dir = get_installed_apps_path() / app_name
+    app_dir.mkdir(parents=True, exist_ok=True)
+    (app_dir / "docker-compose.yml.template").write_text(template)
+    (app_dir / "app_meta.json").write_text(
+        json.dumps(
+            {
+                "v": "1.3",
+                "app_version": "0.1.0",
+                "name": app_name,
+                "pretty_name": app_name,
+                "icon": "icon.svg",
+                "entrypoints": [
+                    {
+                        "container_name": app_name,
+                        "container_port": 80,
+                        "entrypoint_port": "http",
+                    }
+                ],
+                "paths": {"": {"access": "private"}},
+            }
+        )
+    )
+
+
 async def _install_app_with_template(app_name: str, template: str) -> InstalledApp:
     app = InstalledApp(
         name=app_name,
@@ -27,9 +55,7 @@ async def _install_app_with_template(app_name: str, template: str) -> InstalledA
     )
     async with db_conn() as conn:
         await db_installed_apps.insert(conn, app.model_dump())
-    app_dir = get_installed_apps_path() / app_name
-    app_dir.mkdir(parents=True, exist_ok=True)
-    (app_dir / "docker-compose.yml.template").write_text(template)
+    _write_app_files(app_name, template)
     return app
 
 
@@ -85,10 +111,8 @@ async def test_secret_reused_after_reinstall():
     await render_docker_compose_template(app)
     first = _rendered_env("reinstall_app")["PASSWORD"]
 
-    app_dir = get_installed_apps_path() / "reinstall_app"
-    shutil.rmtree(app_dir)
-    app_dir.mkdir(parents=True)
-    (app_dir / "docker-compose.yml.template").write_text(_TEMPLATE)
+    shutil.rmtree(get_installed_apps_path() / "reinstall_app")
+    _write_app_files("reinstall_app", _TEMPLATE)
 
     await render_docker_compose_template(app)
     assert _rendered_env("reinstall_app")["PASSWORD"] == first
