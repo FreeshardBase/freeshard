@@ -26,6 +26,7 @@ class ShardStatus(StrEnum):
     EXPANDING_VOLUME = auto()
     UPGRADING = auto()
     RESIZING = auto()
+    CUTTING_OVER = auto()
     ERROR = auto()
 
 
@@ -170,6 +171,7 @@ class ShardCreateDb(BaseModel):
 
 class ShardUpdateDb(BaseModel):
     machine_id: str | None = None
+    cloud: Cloud | None = None
     hash_id: str | None = None
     domain: str | None = None
     address: str | None = None

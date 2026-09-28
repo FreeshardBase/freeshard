@@ -25,6 +25,7 @@ class Permission(StrEnum):
     SSH_SHARD = auto()
     OPEN_DIAGNOSTIC = auto()
     RUN_DIAGNOSTIC = auto()
+    MIGRATE_SHARD = auto()
 
 
 class PermissionHolder(BaseModel):
