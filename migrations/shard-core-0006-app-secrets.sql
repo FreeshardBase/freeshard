@@ -1,5 +1,5 @@
--- shard-core-0002-app-secrets
--- depends: shard-core-0001-init
+-- shard-core-0006-app-secrets
+-- depends: shard-core-0005-owner-email-verification
 
 CREATE TABLE IF NOT EXISTS app_secrets (
     app_name TEXT NOT NULL,
