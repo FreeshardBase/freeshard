@@ -67,6 +67,7 @@ services:
       - FREESHARD_PATH_ROOT_HOST=${FREESHARD_DIR:?}
       - FREESHARD_APPS__LIFECYCLE__PAUSE_ENABLED=${PAUSE_ENABLED:-false}
       - FREESHARD_OIDC__ENABLED=${OIDC_ENABLED:-false}
+      - FREESHARD_SUNDIAL__ENABLED=${SUNDIAL_ENABLED:-false}
     depends_on:
       postgres:
         condition: service_healthy
@@ -74,6 +75,13 @@ services:
   web-terminal:
     image: ghcr.io/freeshardbase/web-terminal:0.37.4
     container_name: web-terminal
+    restart: always
+    networks:
+      - portal
+
+  sundial:
+    image: ghcr.io/freeshardbase/sundial:0.1.0
+    container_name: sundial
     restart: always
     networks:
       - portal
