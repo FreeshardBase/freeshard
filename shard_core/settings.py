@@ -86,6 +86,10 @@ class OidcSettings(BaseModel):
     enabled: bool = False  # rollout kill-switch for the embedded OIDC provider
 
 
+class SundialSettings(BaseModel):
+    enabled: bool = False  # swaps the root UI from web-terminal to Sundial
+
+
 class EmailSettings(BaseModel):
     # Whether this shard can send mail at all. A self-hosted shard has no
     # controller and therefore no way to, so an address is set without being
@@ -134,6 +138,7 @@ class Settings(BaseSettings):
     apps: AppsSettings
     telemetry: TelemetrySettings = TelemetrySettings()
     oidc: OidcSettings = OidcSettings()
+    sundial: SundialSettings = SundialSettings()
     email: EmailSettings = EmailSettings()
     management: ManagementSettings
     freeshard_controller: FreeshardControllerSettings

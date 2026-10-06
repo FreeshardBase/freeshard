@@ -76,6 +76,9 @@ send_interval_seconds = 300
 [oidc]
 enabled = false
 
+[sundial]
+enabled = false
+
 [email]
 enabled = true
 
