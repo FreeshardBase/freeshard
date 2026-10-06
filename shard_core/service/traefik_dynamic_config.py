@@ -66,7 +66,7 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
             rule="PathPrefix(`/`)",
             priority=1,
             entryPoints=[http_entrypoint],
-            service="web-terminal",
+            service="sundial" if settings().sundial.enabled else "web-terminal",
             tls=make_http_cert_resolver(portal),
         ),
         "traefik": t.HttpRouter(
@@ -144,6 +144,13 @@ def _add_http_section(model: t.Model, portal: SafeIdentity):
             root=t.HttpServiceItem(
                 loadBalancer=t.HttpLoadBalancerService(
                     servers=[t.Server(url="http://web-terminal:80/")]
+                )
+            )
+        ),
+        "sundial": t.HttpService(
+            root=t.HttpServiceItem(
+                loadBalancer=t.HttpLoadBalancerService(
+                    servers=[t.Server(url="http://sundial:80/")]
                 )
             )
         ),

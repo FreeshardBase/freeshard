@@ -12,6 +12,7 @@ from shard_core.database.connection import db_conn
 from shard_core.service.app_installation.util import write_traefik_dyn_config
 from shard_core.service.app_tools import get_installed_apps_path
 from shard_core.settings import settings
+from tests.conftest import settings_override
 
 pytestmark = pytest.mark.asyncio
 
@@ -57,12 +58,16 @@ async def test_template_is_written(api_client):
         assert set(out_services_http.keys()) == {
             "shard_core",
             "web-terminal",
+            "sundial",
             "filebrowser_http",
             "paperless-ngx_http",
             "immich_http",
         }
         assert out_services_http["filebrowser_http"]["loadBalancer"]["servers"] == [
             {"url": "http://filebrowser:80"}
+        ]
+        assert out_services_http["sundial"]["loadBalancer"]["servers"] == [
+            {"url": "http://sundial:80/"}
         ]
 
         out_routers_http: dict = output["http"]["routers"]
@@ -77,6 +82,23 @@ async def test_template_is_written(api_client):
             "immich_http",
         }
         assert out_routers_http["filebrowser_http"]["service"] == "filebrowser_http"
+        assert out_routers_http["web-terminal"]["service"] == "web-terminal"
+
+
+async def test_sundial_enabled_swaps_root_router(api_client):
+    """The flag replaces web-terminal at `/` with Sundial — it does not add a
+    second path. Only the root router's target changes; no new router or
+    middleware is involved, since Sundial also serves at root natively."""
+    with settings_override({"sundial": {"enabled": True}}):
+        await write_traefik_dyn_config()
+        output = _read_traefik_dyn()
+
+    out_routers_http: dict = output["http"]["routers"]
+    assert out_routers_http["web-terminal"]["service"] == "sundial"
+    assert out_routers_http["web-terminal"]["rule"] == "PathPrefix(`/`)"
+    assert (
+        "sundial" not in out_routers_http
+    ), "the flag swaps the root router, it does not add a second one"
 
 
 def _write_app_meta(app_name: str):

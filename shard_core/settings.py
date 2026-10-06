@@ -82,6 +82,10 @@ class TelemetrySettings(BaseModel):
     send_interval_seconds: int = 300
 
 
+class SundialSettings(BaseModel):
+    enabled: bool = False  # swaps the root UI from web-terminal to Sundial
+
+
 class ManagementSettings(BaseModel):
     api_url: str
 
@@ -121,6 +125,7 @@ class Settings(BaseSettings):
     traefik: TraefikSettings
     apps: AppsSettings
     telemetry: TelemetrySettings = TelemetrySettings()
+    sundial: SundialSettings = SundialSettings()
     management: ManagementSettings
     freeshard_controller: FreeshardControllerSettings
     log: LogSettings = LogSettings()

@@ -57,6 +57,9 @@ enabled = false
 enabled = false
 send_interval_seconds = 300
 
+[sundial]
+enabled = false
+
 [management]
 api_url = "https://ptlfunctionapp.azurewebsites.net/api/management"
 
