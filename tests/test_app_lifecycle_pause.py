@@ -17,11 +17,11 @@ from shard_core.data_model.app_meta import (
     Lifecycle,
     Status,
 )
-from shard_core.service import app_lifecycle
+from shard_core.service import app_lifecycle, app_tools
 from tests.conftest import settings_override
 
 
-def _meta(lifecycle: Lifecycle) -> AppMeta:
+def _meta(lifecycle: Lifecycle, minimum_freeshard_version: str | None = None) -> AppMeta:
     return AppMeta(
         v="1.3",
         app_version="1.0.0",
@@ -31,6 +31,7 @@ def _meta(lifecycle: Lifecycle) -> AppMeta:
         entrypoints=[],
         paths={},
         lifecycle=lifecycle,
+        minimum_freeshard_version=minimum_freeshard_version,
     )
 
 
@@ -194,6 +195,73 @@ async def test_always_on_app_is_started_not_paused(docker_mocks):
     docker_mocks["start"].assert_awaited_once_with("a")
     docker_mocks["pause"].assert_not_awaited()
     docker_mocks["stop"].assert_not_awaited()
+
+
+async def test_incompatible_freeshard_version_blocks_wake(docker_mocks):
+    # An installed app whose shard was downgraded below its requirement must not
+    # be revived, the same way a portal-size-incompatible app is left inactive.
+    app = _app("a", Status.STOPPED, idle=0)
+    with (
+        settings_override(PAUSE_ON),
+        patch.object(
+            app_tools, "get_freeshard_version", return_value="0.40.6"
+        ),
+        patch.object(
+            app_lifecycle,
+            "get_app_metadata",
+            return_value=_meta(Lifecycle(), minimum_freeshard_version="0.41.0"),
+        ),
+        patch.object(
+            app_lifecycle.disk,
+            "current_disk_usage",
+            app_lifecycle.disk.DiskUsage(total_gb=10, free_gb=9, disk_space_low=False),
+        ),
+    ):
+        await app_lifecycle.ensure_app_is_running(app)
+        await asyncio.sleep(0)
+    docker_mocks["start"].assert_not_awaited()
+
+
+async def test_compatible_freeshard_version_allows_wake(docker_mocks):
+    app = _app("a", Status.STOPPED, idle=0)
+    with (
+        settings_override(PAUSE_ON),
+        patch.object(
+            app_tools, "get_freeshard_version", return_value="0.41.0"
+        ),
+        patch.object(
+            app_lifecycle,
+            "get_app_metadata",
+            return_value=_meta(Lifecycle(), minimum_freeshard_version="0.41.0"),
+        ),
+        patch.object(
+            app_lifecycle.disk,
+            "current_disk_usage",
+            app_lifecycle.disk.DiskUsage(total_gb=10, free_gb=9, disk_space_low=False),
+        ),
+    ):
+        await app_lifecycle.ensure_app_is_running(app)
+        await asyncio.sleep(0)
+    docker_mocks["start"].assert_awaited_once_with("a")
+
+
+async def test_incompatible_freeshard_version_blocks_always_on_restart(docker_mocks):
+    app = _app("a", Status.STOPPED, idle=9999)
+    with (
+        settings_override(PAUSE_ON),
+        patch.object(
+            app_tools, "get_freeshard_version", return_value="0.40.6"
+        ),
+        patch.object(
+            app_lifecycle,
+            "get_app_metadata",
+            return_value=_meta(
+                Lifecycle(always_on=True), minimum_freeshard_version="0.41.0"
+            ),
+        ),
+    ):
+        await app_lifecycle._control_app_time(app, pause_enabled=True)
+    docker_mocks["start"].assert_not_awaited()
 
 
 async def test_low_disk_stops_even_always_on_apps(docker_mocks):

@@ -19,3 +19,16 @@ async def test_get_whoareyou(app_client: AsyncClient):
 async def test_get_whoami(app_client: AsyncClient):
     whoami = (await app_client.get("public/meta/whoami")).json()
     assert whoami["type"] == "anonymous"
+
+
+async def test_get_version(app_client: AsyncClient):
+    from packaging.version import Version
+
+    from shard_core.service.app_tools import get_freeshard_version
+
+    response = await app_client.get("public/meta/version")
+    response.raise_for_status()
+    body = response.json()
+    assert body["version"] == get_freeshard_version()
+    # it is a usable semver string, not an empty placeholder
+    assert Version(body["version"]) >= Version("0.0.0")
