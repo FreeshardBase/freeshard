@@ -3,7 +3,10 @@ import json
 import logging
 import time
 from collections import defaultdict
-from importlib.metadata import version as _distribution_version
+from importlib.metadata import (
+    PackageNotFoundError,
+    version as _distribution_version,
+)
 from pathlib import Path
 from typing import Literal
 
@@ -297,20 +300,22 @@ def get_freeshard_version() -> str:
 def freeshard_version_is_compatible(minimum_freeshard_version: str | None) -> bool:
     """Whether the running shard satisfies an app's minimum_freeshard_version.
 
-    None (no declared requirement) is always compatible. An unparseable
-    requirement is treated as incompatible: we cannot confirm the shard is new
-    enough, so we fail safe rather than run an app that may be broken.
+    The requirement is a version string compared with PEP 440 / semver ordering.
+    None (no declared requirement) is always compatible. Anything we cannot
+    resolve or parse — an unreadable running version, an unparseable requirement
+    — is treated as incompatible: we cannot confirm the shard is new enough, so
+    we fail safe rather than run an app that may be broken.
     """
     if not minimum_freeshard_version:
         return True
     try:
         return Version(get_freeshard_version()) >= Version(minimum_freeshard_version)
-    except InvalidVersion:
+    except (InvalidVersion, PackageNotFoundError) as e:
         log.warning(
-            "cannot compare freeshard version %r against requirement %r; "
+            "cannot compare freeshard version against requirement %r (%s); "
             "treating app as incompatible",
-            get_freeshard_version(),
             minimum_freeshard_version,
+            e,
         )
         return False
 
