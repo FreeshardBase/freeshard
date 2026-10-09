@@ -72,6 +72,25 @@ def test_migrate_1_2_to_1_3_missing_lifecycle_gets_defaults():
     assert app_meta.lifecycle.idle_for_stop is None
 
 
+def test_minimum_freeshard_version_defaults_to_none_when_absent():
+    # The field is additive and optional: existing files that never declared it
+    # must still validate, with no requirement.
+    values = _base_app_meta_json("1.3", None)
+    values["pretty_name"] = "Test"
+
+    app_meta = AppMeta.model_validate(values)
+    assert app_meta.minimum_freeshard_version is None
+
+
+def test_minimum_freeshard_version_is_read_when_present():
+    values = _base_app_meta_json("1.3", None)
+    values["pretty_name"] = "Test"
+    values["minimum_freeshard_version"] = "0.41.0"
+
+    app_meta = AppMeta.model_validate(values)
+    assert app_meta.minimum_freeshard_version == "0.41.0"
+
+
 def test_all_mock_app_store_metas_migrate():
     """Every app_meta.json fixture (the app-repository stand-ins) must load
     through the migration chain without regeneration."""

@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.13"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -1857,6 +1857,7 @@ dependencies = [
     { name = "fastapi", extra = ["standard"] },
     { name = "httpx" },
     { name = "jinja2" },
+    { name = "packaging" },
     { name = "psycopg", extra = ["binary"] },
     { name = "psycopg-pool" },
     { name = "pydantic" },
@@ -1906,6 +1907,7 @@ requires-dist = [
     { name = "fastapi", extras = ["standard"] },
     { name = "httpx" },
     { name = "jinja2" },
+    { name = "packaging" },
     { name = "psycopg", extras = ["binary"] },
     { name = "psycopg-pool" },
     { name = "pydantic", specifier = ">=2,<3" },

@@ -12,6 +12,7 @@ from shard_core.service.app_tools import (
     docker_stop_app,
     docker_pause_app,
     get_app_metadata,
+    freeshard_version_is_compatible,
     size_is_compatible,
 )
 from shard_core.settings import settings
@@ -31,7 +32,11 @@ async def ensure_app_is_running(app: InstalledApp):
     if disk.current_disk_usage.disk_space_low:
         return
     app_meta = get_app_metadata(app.name)
-    if await size_is_compatible(app_meta.minimum_portal_size):
+    # Both gates must pass to (re)start an app. size_is_compatible is async (it
+    # reads the profile); freeshard_version_is_compatible is a sync local check.
+    if await size_is_compatible(
+        app_meta.minimum_portal_size
+    ) and freeshard_version_is_compatible(app_meta.minimum_freeshard_version):
         global last_access_dict
         last_access_dict[app.name] = time.time()
         # One idempotent revive primitive decides unpause vs up from the real
@@ -76,8 +81,10 @@ async def _control_app_time(app: InstalledApp, pause_enabled: bool):
         return
 
     if app_meta.lifecycle.always_on:
-        if app.status != Status.RUNNING and await size_is_compatible(
-            app_meta.minimum_portal_size
+        if (
+            app.status != Status.RUNNING
+            and await size_is_compatible(app_meta.minimum_portal_size)
+            and freeshard_version_is_compatible(app_meta.minimum_freeshard_version)
         ):
             await start_app(app.name)
         return
