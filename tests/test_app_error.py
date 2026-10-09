@@ -69,7 +69,35 @@ async def test_splash_ok_when_version_compatible(mocker):
     request = SimpleNamespace(path_params={"status": "502"})
     behaviour = await app_error.get_splash_behaviour(request)
 
-    assert "Shard too old" not in behaviour.display_status
+    assert behaviour.display_status == "Unknown Status..."
+    assert behaviour.do_reload is True
+
+
+async def test_splash_error_status_overrides_version_message(mocker):
+    # The version branch sets do_reload=False, but an explicit 500 still wins
+    # on the display text (same precedence the portal-size branch has). Pin it
+    # so a change to the ordering is noticed.
+    mocker.patch.object(app_error, "get_app_name", return_value="test")
+    mocker.patch.object(
+        app_error, "get_app_metadata", return_value=_meta("0.41.0")
+    )
+    mocker.patch.object(app_error, "get_container_status", return_value="created")
+    mocker.patch.object(app_error, "data_url", return_value="data:,")
+    mocker.patch.object(
+        app_error, "size_is_compatible", new=AsyncMock(return_value=True)
+    )
+    mocker.patch.object(app_tools, "get_freeshard_version", return_value="0.40.6")
+    mocker.patch.object(
+        app_error.disk,
+        "current_disk_usage",
+        app_error.disk.DiskUsage(total_gb=10, free_gb=9, disk_space_low=False),
+    )
+
+    request = SimpleNamespace(path_params={"status": "500"})
+    behaviour = await app_error.get_splash_behaviour(request)
+
+    assert behaviour.display_status == "Error"
+    assert behaviour.do_reload is False
 
 
 async def test_status_404(api_client):
