@@ -32,6 +32,8 @@ async def ensure_app_is_running(app: InstalledApp):
     if disk.current_disk_usage.disk_space_low:
         return
     app_meta = get_app_metadata(app.name)
+    # Both gates must pass to (re)start an app. size_is_compatible is async (it
+    # reads the profile); freeshard_version_is_compatible is a sync local check.
     if await size_is_compatible(
         app_meta.minimum_portal_size
     ) and freeshard_version_is_compatible(app_meta.minimum_freeshard_version):
