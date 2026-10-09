@@ -10,12 +10,26 @@ from pydantic import BaseModel
 from shard_core.data_model.auth import AuthState
 from shard_core.data_model.identity import OutputIdentity
 from shard_core.service import pairing, identity, avatar
+from shard_core.service.app_tools import get_freeshard_version
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/meta",
 )
+
+
+class OutputVersion(BaseModel):
+    version: str
+
+
+@router.get("/version", response_model=OutputVersion)
+async def get_version():
+    # The shard's own running version. The store (web-terminal/Sundial) reads
+    # it to decide which apps are eligible: an app whose minimum_freeshard_version
+    # exceeds this is hidden while not installed. The shard is the authoritative
+    # source for the version it actually runs (the controller's record can lag).
+    return OutputVersion(version=get_freeshard_version())
 
 
 @router.get("/whoareyou", response_model=OutputIdentity)
