@@ -244,6 +244,7 @@ class ConfigOverrideKey(StrEnum):
     needed."""
 
     PAUSE_ENABLED = "PAUSE_ENABLED"
+    SUNDIAL_ENABLED = "SUNDIAL_ENABLED"
 
 
 class ConfigOverrideRequest(BaseModel):
