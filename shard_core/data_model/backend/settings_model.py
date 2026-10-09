@@ -55,7 +55,8 @@ class SettingValueInvalid(ValueError):
 
 class SettingSchemaEntry(BaseModel):
     """One row of the settings matrix, as the client needs it. Flat rather than raw JSON
-    Schema so the generated TypeScript carries a real type instead of an opaque object."""
+    Schema so the generated TypeScript carries a real type instead of an opaque object.
+    """
 
     key: SettingKey
     value_type: str
@@ -90,8 +91,12 @@ def setting_schema_entry(key: SettingKey) -> SettingSchemaEntry:
         key=key,
         value_type="str" if is_enum else annotation.__name__,
         options=[str(member.value) for member in annotation] if is_enum else None,
-        ge=next((m.ge for m in field.metadata if isinstance(m, annotated_types.Ge)), None),
-        le=next((m.le for m in field.metadata if isinstance(m, annotated_types.Le)), None),
+        ge=next(
+            (m.ge for m in field.metadata if isinstance(m, annotated_types.Ge)), None
+        ),
+        le=next(
+            (m.le for m in field.metadata if isinstance(m, annotated_types.Le)), None
+        ),
         scope=setting_scope(key),
     )
 
@@ -101,7 +106,9 @@ def validate_setting_value(key: SettingKey, value: Any) -> str | bool | int | fl
     try:
         return _adapter(key).validate_python(value)
     except pydantic.ValidationError as e:
-        raise SettingValueInvalid(f"{key}: {'; '.join(err['msg'] for err in e.errors())}") from e
+        raise SettingValueInvalid(
+            f"{key}: {'; '.join(err['msg'] for err in e.errors())}"
+        ) from e
 
 
 def _field(key: SettingKey) -> FieldInfo:
@@ -111,6 +118,7 @@ def _field(key: SettingKey) -> FieldInfo:
 @lru_cache
 def _adapter(key: SettingKey) -> TypeAdapter:
     """Validating one field on its own needs `Annotated[annotation, field]`: the field is
-    what carries `ge=0`, so dropping it would type-check the value and skip the bound."""
+    what carries `ge=0`, so dropping it would type-check the value and skip the bound.
+    """
     field = _field(key)
     return TypeAdapter(Annotated[field.annotation, field])

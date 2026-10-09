@@ -21,7 +21,9 @@ from shard_core.service import app_lifecycle, app_tools
 from tests.conftest import settings_override
 
 
-def _meta(lifecycle: Lifecycle, minimum_freeshard_version: str | None = None) -> AppMeta:
+def _meta(
+    lifecycle: Lifecycle, minimum_freeshard_version: str | None = None
+) -> AppMeta:
     return AppMeta(
         v="1.3",
         app_version="1.0.0",
@@ -203,9 +205,7 @@ async def test_incompatible_freeshard_version_blocks_wake(docker_mocks):
     app = _app("a", Status.STOPPED, idle=0)
     with (
         settings_override(PAUSE_ON),
-        patch.object(
-            app_tools, "get_freeshard_version", return_value="0.40.6"
-        ),
+        patch.object(app_tools, "get_freeshard_version", return_value="0.40.6"),
         patch.object(
             app_lifecycle,
             "get_app_metadata",
@@ -226,9 +226,7 @@ async def test_compatible_freeshard_version_allows_wake(docker_mocks):
     app = _app("a", Status.STOPPED, idle=0)
     with (
         settings_override(PAUSE_ON),
-        patch.object(
-            app_tools, "get_freeshard_version", return_value="0.41.0"
-        ),
+        patch.object(app_tools, "get_freeshard_version", return_value="0.41.0"),
         patch.object(
             app_lifecycle,
             "get_app_metadata",
@@ -249,9 +247,7 @@ async def test_incompatible_freeshard_version_blocks_always_on_restart(docker_mo
     app = _app("a", Status.STOPPED, idle=9999)
     with (
         settings_override(PAUSE_ON),
-        patch.object(
-            app_tools, "get_freeshard_version", return_value="0.40.6"
-        ),
+        patch.object(app_tools, "get_freeshard_version", return_value="0.40.6"),
         patch.object(
             app_lifecycle,
             "get_app_metadata",

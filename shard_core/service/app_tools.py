@@ -293,7 +293,9 @@ def get_app_metadata(app_name: str) -> AppMeta:
 
 
 def get_freeshard_version() -> str:
-    """The running shard_core (freeshard) version, as recorded in pyproject."""
+    """The running shard_core (freeshard) version, from the installed package
+    metadata (tracks pyproject only after a (re)install, same source FastAPI's
+    OpenAPI version uses in app_factory)."""
     return _distribution_version("shard_core")
 
 
