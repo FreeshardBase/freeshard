@@ -145,6 +145,19 @@ class AppMeta(BaseModel):
     paths: Dict[str, Path]
     lifecycle: Lifecycle = Lifecycle()
     minimum_portal_size: VMSize = VMSize.XS
+    # Minimum shard (freeshard) version this app needs, as a semver string
+    # (e.g. "0.41.0"); None means "no requirement". It is compared against the
+    # running shard_core version to decide eligibility, mirroring how
+    # minimum_portal_size gates on the VM size.
+    #
+    # Deliberately NOT tied to the app_meta format version `v`: this is a
+    # semantic gate on the *product* version, and the field is additive and
+    # optional. Bumping `v` for it would make every older shard raise KeyError
+    # on the file inside migrate() (migrations are forward-only, see
+    # app_meta_migration) rather than read the field and degrade gracefully.
+    # Keeping it optional with a default lets old and new cores both validate
+    # the file.
+    minimum_freeshard_version: str | None = None
     store_info: Optional[StoreInfo] = None
     oidc: Optional[OidcMeta] = None
 
