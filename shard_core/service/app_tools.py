@@ -3,8 +3,11 @@ import json
 import logging
 import time
 from collections import defaultdict
+from importlib.metadata import version as _distribution_version
 from pathlib import Path
 from typing import Literal
+
+from packaging.version import InvalidVersion, Version
 
 import shard_core.data_model.profile
 from shard_core.database.connection import db_conn
@@ -284,6 +287,32 @@ def get_app_metadata(app_name: str) -> AppMeta:
             return AppMeta.model_validate(json.load(f))
     except (FileNotFoundError, json.JSONDecodeError):
         raise MetadataNotFound(app_name)
+
+
+def get_freeshard_version() -> str:
+    """The running shard_core (freeshard) version, as recorded in pyproject."""
+    return _distribution_version("shard_core")
+
+
+def freeshard_version_is_compatible(minimum_freeshard_version: str | None) -> bool:
+    """Whether the running shard satisfies an app's minimum_freeshard_version.
+
+    None (no declared requirement) is always compatible. An unparseable
+    requirement is treated as incompatible: we cannot confirm the shard is new
+    enough, so we fail safe rather than run an app that may be broken.
+    """
+    if not minimum_freeshard_version:
+        return True
+    try:
+        return Version(get_freeshard_version()) >= Version(minimum_freeshard_version)
+    except InvalidVersion:
+        log.warning(
+            "cannot compare freeshard version %r against requirement %r; "
+            "treating app as incompatible",
+            get_freeshard_version(),
+            minimum_freeshard_version,
+        )
+        return False
 
 
 async def size_is_compatible(app_size) -> bool:
