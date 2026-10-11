@@ -24,7 +24,7 @@ async def test_get_whoami(app_client: AsyncClient):
 async def test_get_version(app_client: AsyncClient):
     from packaging.version import Version
 
-    from shard_core.service.app_tools import get_freeshard_version
+    from shard_core.util.misc import get_freeshard_version
 
     response = await app_client.get("public/meta/version")
     response.raise_for_status()

@@ -3,10 +3,7 @@ import json
 import logging
 import time
 from collections import defaultdict
-from importlib.metadata import (
-    PackageNotFoundError,
-    version as _distribution_version,
-)
+from importlib.metadata import PackageNotFoundError
 from pathlib import Path
 from typing import Literal
 
@@ -24,7 +21,7 @@ from shard_core.data_model.app_meta import (
 )
 from shard_core.settings import settings
 from shard_core.util import signals
-from shard_core.util.misc import throttle
+from shard_core.util.misc import get_freeshard_version, throttle
 from shard_core.util.subprocess import subprocess, SubprocessError, app_compose_command
 
 log = logging.getLogger(__name__)
@@ -290,13 +287,6 @@ def get_app_metadata(app_name: str) -> AppMeta:
             return AppMeta.model_validate(json.load(f))
     except (FileNotFoundError, json.JSONDecodeError):
         raise MetadataNotFound(app_name)
-
-
-def get_freeshard_version() -> str:
-    """The running shard_core (freeshard) version, from the installed package
-    metadata (tracks pyproject only after a (re)install, same source FastAPI's
-    OpenAPI version uses in app_factory)."""
-    return _distribution_version("shard_core")
 
 
 def freeshard_version_is_compatible(minimum_freeshard_version: str | None) -> bool:

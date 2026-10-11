@@ -44,6 +44,9 @@ class SplashBehaviour(BaseModel):
 
 async def get_splash_behaviour(request: Request):
     # todo: add special splash screen for app that is not size compatible
+    # Later branches below intentionally overwrite earlier ones: an explicit
+    # 401/500 status wins over both compatibility messages, and version wins
+    # over size when an app happens to fail both gates.
     status_code = int(request.path_params["status"])
     app_name = get_app_name(request)
     app_meta = get_app_metadata(app_name)
@@ -64,9 +67,6 @@ async def get_splash_behaviour(request: Request):
         display_size = app_meta.minimum_portal_size.value.upper()
         behaviour.display_status = f"VM too small, need at least {display_size}"
         behaviour.do_reload = False
-    # Later branches intentionally overwrite earlier ones: an explicit 401/500
-    # status wins over both compatibility messages, and version wins over size
-    # when an app happens to fail both gates.
     if not freeshard_version_is_compatible(app_meta.minimum_freeshard_version):
         behaviour.display_status = (
             f"Shard too old, need at least v{app_meta.minimum_freeshard_version}"
