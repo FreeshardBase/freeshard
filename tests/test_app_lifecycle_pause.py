@@ -209,7 +209,7 @@ async def test_incompatible_freeshard_version_blocks_wake(docker_mocks):
         patch.object(
             app_lifecycle,
             "get_app_metadata",
-            return_value=_meta(Lifecycle(), minimum_freeshard_version="0.41.0"),
+            return_value=_meta(Lifecycle(), minimum_freeshard_version=">=0.41.0"),
         ),
         patch.object(
             app_lifecycle.disk,
@@ -230,7 +230,7 @@ async def test_compatible_freeshard_version_allows_wake(docker_mocks):
         patch.object(
             app_lifecycle,
             "get_app_metadata",
-            return_value=_meta(Lifecycle(), minimum_freeshard_version="0.41.0"),
+            return_value=_meta(Lifecycle(), minimum_freeshard_version=">=0.41.0"),
         ),
         patch.object(
             app_lifecycle.disk,
@@ -252,7 +252,7 @@ async def test_incompatible_freeshard_version_blocks_always_on_restart(docker_mo
             app_lifecycle,
             "get_app_metadata",
             return_value=_meta(
-                Lifecycle(always_on=True), minimum_freeshard_version="0.41.0"
+                Lifecycle(always_on=True), minimum_freeshard_version=">=0.41.0"
             ),
         ),
     ):

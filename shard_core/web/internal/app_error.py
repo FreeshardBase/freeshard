@@ -69,7 +69,7 @@ async def get_splash_behaviour(request: Request):
         behaviour.do_reload = False
     if not freeshard_version_is_compatible(app_meta.minimum_freeshard_version):
         behaviour.display_status = (
-            f"Shard too old, need at least v{app_meta.minimum_freeshard_version}"
+            f"Shard too old, need freeshard version {app_meta.minimum_freeshard_version}"
         )
         behaviour.do_reload = False
     if status_code == 401:

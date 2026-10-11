@@ -85,10 +85,10 @@ def test_minimum_freeshard_version_defaults_to_none_when_absent():
 def test_minimum_freeshard_version_is_read_when_present():
     values = _base_app_meta_json("1.3", None)
     values["pretty_name"] = "Test"
-    values["minimum_freeshard_version"] = "0.41.0"
+    values["minimum_freeshard_version"] = ">=0.41.0"
 
     app_meta = AppMeta.model_validate(values)
-    assert app_meta.minimum_freeshard_version == "0.41.0"
+    assert app_meta.minimum_freeshard_version == ">=0.41.0"
 
 
 def test_all_mock_app_store_metas_migrate():

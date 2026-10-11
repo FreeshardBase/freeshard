@@ -145,9 +145,11 @@ class AppMeta(BaseModel):
     paths: Dict[str, Path]
     lifecycle: Lifecycle = Lifecycle()
     minimum_portal_size: VMSize = VMSize.XS
-    # Minimum shard version this app needs (see freeshard_version_is_compatible).
-    # None means "no requirement". Kept out of the `v` migration chain: it is
-    # additive and optional, so an old core can still read the file and ignore it.
+    # A PEP 440 specifier set this app needs the shard version to satisfy, e.g.
+    # ">=0.41.0" (see freeshard_version_is_compatible). None means "no
+    # requirement". Kept out of the `v` migration chain: it is additive and
+    # optional, so an old core can still read the file and ignore it. Not
+    # validated here on purpose, see freeshard_version_is_compatible.
     minimum_freeshard_version: str | None = None
     store_info: Optional[StoreInfo] = None
     oidc: Optional[OidcMeta] = None
