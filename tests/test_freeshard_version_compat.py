@@ -2,6 +2,8 @@ from importlib.metadata import PackageNotFoundError
 from unittest.mock import Mock
 
 import pytest
+from packaging.specifiers import SpecifierSet
+from packaging.version import Version
 
 from shard_core.service import app_tools
 
@@ -30,15 +32,9 @@ from shard_core.service import app_tools
     ],
 )
 def test_freeshard_version_is_compatible(monkeypatch, current, minimum, expected):
-    monkeypatch.setattr(app_tools, "get_freeshard_version", lambda: current)
-    assert app_tools.freeshard_version_is_compatible(minimum) is expected
-
-
-def test_unparseable_requirement_is_incompatible(monkeypatch):
-    # A requirement we cannot parse means we cannot confirm the shard is new
-    # enough, so we fail safe and treat the app as incompatible.
-    monkeypatch.setattr(app_tools, "get_freeshard_version", lambda: "0.40.6")
-    assert app_tools.freeshard_version_is_compatible("not-a-version") is False
+    monkeypatch.setattr(app_tools, "get_freeshard_version", lambda: Version(current))
+    requirement = SpecifierSet(minimum) if minimum is not None else None
+    assert app_tools.freeshard_version_is_compatible(requirement) is expected
 
 
 def test_unreadable_running_version_is_incompatible(monkeypatch):
@@ -50,7 +46,7 @@ def test_unreadable_running_version_is_incompatible(monkeypatch):
         "get_freeshard_version",
         Mock(side_effect=PackageNotFoundError("shard_core")),
     )
-    assert app_tools.freeshard_version_is_compatible(">=0.41.0") is False
+    assert app_tools.freeshard_version_is_compatible(SpecifierSet(">=0.41.0")) is False
 
 
 def test_no_requirement_short_circuits_before_version_lookup(monkeypatch):
@@ -65,8 +61,5 @@ def test_no_requirement_short_circuits_before_version_lookup(monkeypatch):
 
 
 def test_get_freeshard_version_matches_package_metadata():
-    # Reads the installed shard_core version; must be a parseable semver string.
-    from packaging.version import Version
-
     version = app_tools.get_freeshard_version()
-    assert Version(version) >= Version("0.0.0")
+    assert version >= Version("0.0.0")

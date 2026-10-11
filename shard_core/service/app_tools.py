@@ -7,8 +7,8 @@ from importlib.metadata import PackageNotFoundError
 from pathlib import Path
 from typing import Literal
 
-from packaging.specifiers import InvalidSpecifier, SpecifierSet
-from packaging.version import InvalidVersion, Version
+from packaging.specifiers import SpecifierSet
+from packaging.version import InvalidVersion
 
 import shard_core.data_model.profile
 from shard_core.database.connection import db_conn
@@ -290,26 +290,24 @@ def get_app_metadata(app_name: str) -> AppMeta:
         raise MetadataNotFound(app_name)
 
 
-def freeshard_version_is_compatible(minimum_freeshard_version: str | None) -> bool:
+def freeshard_version_is_compatible(
+    minimum_freeshard_version: SpecifierSet | None,
+) -> bool:
     """Whether the running shard satisfies an app's minimum_freeshard_version.
 
     The requirement is a PEP 440 specifier set (e.g. ">=0.41.0"), so an app can
     in principle express more than a floor. None (no declared requirement) is
-    always compatible. Anything we cannot resolve or parse — an unreadable
-    running version, an unparseable requirement — is treated as incompatible:
-    we cannot confirm the shard satisfies it, so we fail safe rather than run
-    an app that may be broken. Deliberately not validated any earlier than
-    this (e.g. on AppMeta itself): app_meta.json ships from the app store, so
-    a malformed requirement is external input we must degrade on, not raise
-    on, inside the request/lifecycle paths that call this.
+    always compatible. AppMeta already guarantees the specifier itself is
+    valid (validated at install time, see validate_app_zip), so the only
+    remaining failure mode is an unreadable running version, which we treat as
+    incompatible: we cannot confirm the shard satisfies the requirement, so we
+    fail safe rather than run an app that may be broken.
     """
     if not minimum_freeshard_version:
         return True
     try:
-        return Version(get_freeshard_version()) in SpecifierSet(
-            minimum_freeshard_version
-        )
-    except (InvalidVersion, InvalidSpecifier, PackageNotFoundError) as e:
+        return get_freeshard_version() in minimum_freeshard_version
+    except (InvalidVersion, PackageNotFoundError) as e:
         log.warning(
             "cannot compare freeshard version against requirement %r (%s); "
             "treating app as incompatible",
