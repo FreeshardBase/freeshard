@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from shard_core.data_model.auth import AuthState
 from shard_core.data_model.identity import OutputIdentity
 from shard_core.service import pairing, identity, avatar
-from shard_core.service.app_tools import get_freeshard_version
+from shard_core.util.misc import get_freeshard_version
 
 log = logging.getLogger(__name__)
 
