@@ -5,6 +5,8 @@ import shutil
 import zipfile
 from pathlib import Path
 
+from packaging.specifiers import InvalidSpecifier, SpecifierSet
+
 from shard_core.data_model.app_meta import AppMeta
 from .exceptions import InvalidAppZip
 
@@ -31,6 +33,14 @@ def validate_app_zip(zip_file: Path) -> AppMeta:
         raise InvalidAppZip(
             f"app name {app_meta.name!r} in app_meta.json is not a valid app name"
         )
+    if app_meta.minimum_freeshard_version is not None:
+        try:
+            SpecifierSet(app_meta.minimum_freeshard_version)
+        except InvalidSpecifier as e:
+            raise InvalidAppZip(
+                f"minimum_freeshard_version {app_meta.minimum_freeshard_version!r} "
+                f"in app_meta.json is not a valid version specifier: {e}"
+            )
     return app_meta
 
 
