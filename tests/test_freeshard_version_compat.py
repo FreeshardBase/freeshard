@@ -13,17 +13,20 @@ from shard_core.service import app_tools
         ("0.40.6", None, True),
         ("0.40.6", "", True),
         # equal and newer satisfy the requirement
-        ("0.41.0", "0.41.0", True),
-        ("0.41.1", "0.41.0", True),
-        ("1.0.0", "0.41.0", True),
-        ("0.41.0", "0.40.0", True),
+        ("0.41.0", ">=0.41.0", True),
+        ("0.41.1", ">=0.41.0", True),
+        ("1.0.0", ">=0.41.0", True),
+        ("0.41.0", ">=0.40.0", True),
         # older shard than required is incompatible
-        ("0.40.6", "0.41.0", False),
-        ("0.40.6", "0.40.7", False),
-        ("0.9.0", "0.10.0", False),  # semver, not lexical: 9 < 10
+        ("0.40.6", ">=0.41.0", False),
+        ("0.40.6", ">=0.40.7", False),
+        ("0.9.0", ">=0.10.0", False),  # semver, not lexical: 9 < 10
         # pre-releases order below the final release (PEP 440)
-        ("0.41.0rc1", "0.41.0", False),
-        ("0.41.0", "0.41.0rc1", True),
+        ("0.41.0rc1", ">=0.41.0", False),
+        ("0.41.0", ">=0.41.0rc1", True),
+        # a specifier set can express more than a floor
+        ("0.41.0", ">=0.40.0,<0.42.0", True),
+        ("0.42.0", ">=0.40.0,<0.42.0", False),
     ],
 )
 def test_freeshard_version_is_compatible(monkeypatch, current, minimum, expected):
@@ -47,7 +50,7 @@ def test_unreadable_running_version_is_incompatible(monkeypatch):
         "get_freeshard_version",
         Mock(side_effect=PackageNotFoundError("shard_core")),
     )
-    assert app_tools.freeshard_version_is_compatible("0.41.0") is False
+    assert app_tools.freeshard_version_is_compatible(">=0.41.0") is False
 
 
 def test_no_requirement_short_circuits_before_version_lookup(monkeypatch):

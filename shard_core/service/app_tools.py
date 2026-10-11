@@ -7,6 +7,7 @@ from importlib.metadata import PackageNotFoundError
 from pathlib import Path
 from typing import Literal
 
+from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 
 import shard_core.data_model.profile
@@ -292,17 +293,23 @@ def get_app_metadata(app_name: str) -> AppMeta:
 def freeshard_version_is_compatible(minimum_freeshard_version: str | None) -> bool:
     """Whether the running shard satisfies an app's minimum_freeshard_version.
 
-    The requirement is a version string compared with PEP 440 / semver ordering.
-    None (no declared requirement) is always compatible. Anything we cannot
-    resolve or parse — an unreadable running version, an unparseable requirement
-    — is treated as incompatible: we cannot confirm the shard is new enough, so
-    we fail safe rather than run an app that may be broken.
+    The requirement is a PEP 440 specifier set (e.g. ">=0.41.0"), so an app can
+    in principle express more than a floor. None (no declared requirement) is
+    always compatible. Anything we cannot resolve or parse — an unreadable
+    running version, an unparseable requirement — is treated as incompatible:
+    we cannot confirm the shard satisfies it, so we fail safe rather than run
+    an app that may be broken. Deliberately not validated any earlier than
+    this (e.g. on AppMeta itself): app_meta.json ships from the app store, so
+    a malformed requirement is external input we must degrade on, not raise
+    on, inside the request/lifecycle paths that call this.
     """
     if not minimum_freeshard_version:
         return True
     try:
-        return Version(get_freeshard_version()) >= Version(minimum_freeshard_version)
-    except (InvalidVersion, PackageNotFoundError) as e:
+        return Version(get_freeshard_version()) in SpecifierSet(
+            minimum_freeshard_version
+        )
+    except (InvalidVersion, InvalidSpecifier, PackageNotFoundError) as e:
         log.warning(
             "cannot compare freeshard version against requirement %r (%s); "
             "treating app as incompatible",

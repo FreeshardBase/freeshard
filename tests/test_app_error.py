@@ -51,15 +51,15 @@ async def _splash_for(mocker, *, running_version: str, minimum: str, status_code
 
 async def test_splash_reports_shard_too_old(mocker):
     behaviour = await _splash_for(
-        mocker, running_version="0.40.6", minimum="0.41.0", status_code="502"
+        mocker, running_version="0.40.6", minimum=">=0.41.0", status_code="502"
     )
-    assert behaviour.display_status == "Shard too old, need at least v0.41.0"
+    assert behaviour.display_status == "Shard too old, need freeshard version >=0.41.0"
     assert behaviour.do_reload is False
 
 
 async def test_splash_ok_when_version_compatible(mocker):
     behaviour = await _splash_for(
-        mocker, running_version="0.41.0", minimum="0.41.0", status_code="502"
+        mocker, running_version="0.41.0", minimum=">=0.41.0", status_code="502"
     )
     assert behaviour.display_status == "Unknown Status..."
     assert behaviour.do_reload is True
@@ -70,7 +70,7 @@ async def test_splash_error_status_overrides_version_message(mocker):
     # on the display text (same precedence the portal-size branch has). Pin it
     # so a change to the ordering is noticed.
     behaviour = await _splash_for(
-        mocker, running_version="0.40.6", minimum="0.41.0", status_code="500"
+        mocker, running_version="0.40.6", minimum=">=0.41.0", status_code="500"
     )
     assert behaviour.display_status == "Error"
     assert behaviour.do_reload is False
