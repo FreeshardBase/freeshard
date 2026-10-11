@@ -22,7 +22,7 @@ from shard_core.service.app_tools import (
 from shard_core.settings import settings
 from shard_core.util import signals
 from shard_core.util.subprocess import ComposeFileNotFound
-from .app_zip import extract_app_zip
+from .app_zip import extract_app_zip, validate_app_zip
 from .exceptions import AppDoesNotExist, AppTeardownFailed
 from .util import (
     update_app_status,
@@ -193,6 +193,12 @@ async def _reinstall_app(app_name: str):
 
 
 async def _install_app_from_zip(installed_app, zip_file):
+    # Every install path funnels through here, so this is the one place that
+    # guarantees the gate runs for a store app too, not just a custom upload
+    # (the upload endpoint already calls validate_app_zip once, earlier, to
+    # fail the HTTP request fast — this is belt-and-suspenders for that path,
+    # and the only gate at all for store installs and reinstalls).
+    validate_app_zip(zip_file)
     extract_app_zip(zip_file, zip_file.parent)
     await signals.on_apps_update.send_async()
     zip_file.unlink()

@@ -208,7 +208,8 @@ Scopes for this repo: `web` `service` `data_model` `database` `migrations` `test
 ## Important Notes
 
 - The `Status` enum in `app_meta.py` covers the full app lifecycle: UNKNOWN, INSTALLATION_QUEUED, INSTALLING, STOPPED, RUNNING, DOWN, etc.
-- `VMSize` enum (XS, S, M, L, XL) has comparison operators — used to check if a shard is large enough for an app.
+- `VMSize` enum (XS, S, M, L, XL) has comparison operators — used to check if a shard is large enough for an app (`minimum_portal_size` in `app_meta.json`, gated by `size_is_compatible`).
+- Apps can also declare `minimum_freeshard_version` (a semver string) in `app_meta.json`. It is compared against the running shard_core version (`freeshard_version_is_compatible` in `app_tools.py`), mirroring the portal-size gate: an installed app on too-old a shard is left inactive and shown a "Shard too old" splash, rather than started. The field is additive and optional (not tied to the `app_meta` format version `v`). The shard exposes its own version at `GET /public/meta/version` so the store can hide ineligible, not-yet-installed apps.
 - Docker socket is mounted read-write (`/var/run/docker.sock`) — shard_core manages containers directly.
 - Traefik routes app traffic via subdomains: `<app-name>.<shard-domain>`.
 - The project was formerly called "Portal" — some references may still use the old name.

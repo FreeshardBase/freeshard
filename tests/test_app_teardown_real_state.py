@@ -254,6 +254,7 @@ def _reinstall_mocks():
 
     with (
         patch.object(worker, "_download_app_zip", new=fake_download),
+        patch.object(worker, "validate_app_zip", new=Mock()),
         patch.object(worker, "extract_app_zip", new=Mock()),
         patch.object(worker, "render_docker_compose_template", new=AsyncMock()),
         patch.object(worker, "write_traefik_dyn_config", new=AsyncMock()),

@@ -1,6 +1,19 @@
 import inspect
 import time
 from collections import deque
+from importlib.metadata import version as _distribution_version
+
+from packaging.version import Version
+
+
+def get_freeshard_version() -> Version:
+    """The running shard_core (freeshard) version, from the installed package
+    metadata (tracks pyproject only after a (re)install, same source FastAPI's
+    OpenAPI version uses in app_factory). Can raise importlib.metadata's
+    PackageNotFoundError or packaging's InvalidVersion; callers that need to
+    fail safe on an unreadable running version (see
+    freeshard_version_is_compatible) catch both."""
+    return Version(_distribution_version("shard_core"))
 
 
 def throttle(min_duration: float):

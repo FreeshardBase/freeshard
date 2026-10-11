@@ -2,15 +2,27 @@ import datetime
 import json
 from enum import Enum
 from pathlib import Path as FilePath
-from typing import Optional, List, Dict, Union
+from typing import Annotated, Optional, List, Dict, Union
 
-from pydantic import BaseModel, model_validator
+from packaging.specifiers import SpecifierSet
+from pydantic import BaseModel, BeforeValidator, PlainSerializer, model_validator
 
 from shard_core.data_model import app_meta_migration
 from shard_core.settings import settings
 from shard_core.util import signals
 
 CURRENT_VERSION = "1.3"
+
+# A bare SpecifierSet isn't a type pydantic knows how to validate on its own;
+# BeforeValidator does the actual parsing (packaging's InvalidSpecifier is a
+# ValueError subclass, so pydantic turns it into a normal ValidationError).
+# PlainSerializer keeps model_dump()/model_dump_json() emitting the string
+# form, in case AppMeta is ever serialized rather than only read from disk.
+VersionSpecifier = Annotated[
+    SpecifierSet,
+    BeforeValidator(lambda v: v if isinstance(v, SpecifierSet) else SpecifierSet(v)),
+    PlainSerializer(str, return_type=str),
+]
 
 
 class InstallationReason(str, Enum):
@@ -134,6 +146,11 @@ class Lifecycle(BaseModel):
 
 
 class AppMeta(BaseModel):
+    # Needed for minimum_freeshard_version: packaging.specifiers.SpecifierSet
+    # has no native pydantic support, so this just allows pydantic to hold the
+    # already-validated instance VersionSpecifier's BeforeValidator produces.
+    model_config = {"arbitrary_types_allowed": True}
+
     v: str
     app_version: str
     upstream_repo: str | None = None
@@ -145,6 +162,15 @@ class AppMeta(BaseModel):
     paths: Dict[str, Path]
     lifecycle: Lifecycle = Lifecycle()
     minimum_portal_size: VMSize = VMSize.XS
+    # A PEP 440 specifier set this app needs the shard version to satisfy, e.g.
+    # ">=0.41.0" (see freeshard_version_is_compatible). None means "no
+    # requirement". Validated eagerly: every installed app's app_meta.json
+    # already passed through validate_app_zip at install time, so by the time
+    # this is read back the value is guaranteed parseable, and hand-editing it
+    # on disk is not a supported workflow.  Kept out of the `v` migration
+    # chain: it is additive and optional, so an old core can still read the
+    # file and ignore it.
+    minimum_freeshard_version: VersionSpecifier | None = None
     store_info: Optional[StoreInfo] = None
     oidc: Optional[OidcMeta] = None
 

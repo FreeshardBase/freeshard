@@ -15,6 +15,7 @@ from shard_core.service.app_tools import (
     get_app_metadata,
     MetadataNotFound,
     get_installed_apps_path,
+    freeshard_version_is_compatible,
     size_is_compatible,
 )
 
@@ -43,6 +44,9 @@ class SplashBehaviour(BaseModel):
 
 async def get_splash_behaviour(request: Request):
     # todo: add special splash screen for app that is not size compatible
+    # Later branches below intentionally overwrite earlier ones: an explicit
+    # 401/500 status wins over both compatibility messages, and version wins
+    # over size when an app happens to fail both gates.
     status_code = int(request.path_params["status"])
     app_name = get_app_name(request)
     app_meta = get_app_metadata(app_name)
@@ -62,6 +66,11 @@ async def get_splash_behaviour(request: Request):
     if not await size_is_compatible(app_meta.minimum_portal_size):
         display_size = app_meta.minimum_portal_size.value.upper()
         behaviour.display_status = f"VM too small, need at least {display_size}"
+        behaviour.do_reload = False
+    if not freeshard_version_is_compatible(app_meta.minimum_freeshard_version):
+        behaviour.display_status = (
+            f"Shard too old, need freeshard version {app_meta.minimum_freeshard_version}"
+        )
         behaviour.do_reload = False
     if status_code == 401:
         behaviour.display_status = "Access Denied"
