@@ -29,7 +29,7 @@ async def get_version():
     # it to decide which apps are eligible: an app whose minimum_freeshard_version
     # exceeds this is hidden while not installed. The shard is the authoritative
     # source for the version it actually runs (the controller's record can lag).
-    return OutputVersion(version=get_freeshard_version())
+    return OutputVersion(version=str(get_freeshard_version()))
 
 
 @router.get("/whoareyou", response_model=OutputIdentity)

@@ -10,6 +10,7 @@ import time
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from packaging.version import Version
 
 from shard_core.data_model.app_meta import (
     AppMeta,
@@ -205,7 +206,7 @@ async def test_incompatible_freeshard_version_blocks_wake(docker_mocks):
     app = _app("a", Status.STOPPED, idle=0)
     with (
         settings_override(PAUSE_ON),
-        patch.object(app_tools, "get_freeshard_version", return_value="0.40.6"),
+        patch.object(app_tools, "get_freeshard_version", return_value=Version("0.40.6")),
         patch.object(
             app_lifecycle,
             "get_app_metadata",
@@ -226,7 +227,7 @@ async def test_compatible_freeshard_version_allows_wake(docker_mocks):
     app = _app("a", Status.STOPPED, idle=0)
     with (
         settings_override(PAUSE_ON),
-        patch.object(app_tools, "get_freeshard_version", return_value="0.41.0"),
+        patch.object(app_tools, "get_freeshard_version", return_value=Version("0.41.0")),
         patch.object(
             app_lifecycle,
             "get_app_metadata",
@@ -247,7 +248,7 @@ async def test_incompatible_freeshard_version_blocks_always_on_restart(docker_mo
     app = _app("a", Status.STOPPED, idle=9999)
     with (
         settings_override(PAUSE_ON),
-        patch.object(app_tools, "get_freeshard_version", return_value="0.40.6"),
+        patch.object(app_tools, "get_freeshard_version", return_value=Version("0.40.6")),
         patch.object(
             app_lifecycle,
             "get_app_metadata",

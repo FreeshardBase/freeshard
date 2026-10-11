@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
+from packaging.version import Version
 from starlette import status
 
 from shard_core.data_model.app_meta import AppMeta
@@ -38,7 +39,7 @@ async def _splash_for(mocker, *, running_version: str, minimum: str, status_code
     # indirectly through freeshard_version_is_compatible, so patching it on
     # app_error would not take effect.
     mocker.patch.object(
-        app_tools, "get_freeshard_version", return_value=running_version
+        app_tools, "get_freeshard_version", return_value=Version(running_version)
     )
     mocker.patch.object(
         app_error.disk,

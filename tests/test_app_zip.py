@@ -150,11 +150,14 @@ def test_validate_rejects_unsafe_app_name(tmp_path, app_name):
 
 
 def test_validate_rejects_unparseable_minimum_freeshard_version(tmp_path):
+    # AppMeta itself validates this (it's a VersionSpecifier field), so this
+    # comes back as the same generic "app_meta.json is invalid" _parse_app_meta
+    # raises for any other broken field, not a dedicated message.
     members = _valid_members() | {
         "app_meta.json": _app_meta(minimum_freeshard_version="0.41.0")
     }
     zip_file = _make_zip(tmp_path / "upload.zip", members)
-    with pytest.raises(InvalidAppZip, match="not a valid version specifier"):
+    with pytest.raises(InvalidAppZip, match="app_meta.json is invalid"):
         validate_app_zip(zip_file)
 
 
@@ -163,7 +166,9 @@ def test_validate_accepts_valid_minimum_freeshard_version(tmp_path):
         "app_meta.json": _app_meta(minimum_freeshard_version=">=0.41.0")
     }
     zip_file = _make_zip(tmp_path / "upload.zip", members)
-    assert validate_app_zip(zip_file).name == "some_app"
+    app_meta = validate_app_zip(zip_file)
+    assert app_meta.name == "some_app"
+    assert app_meta.minimum_freeshard_version == ">=0.41.0"
 
 
 @pytest.mark.parametrize(
@@ -247,7 +252,7 @@ async def test_install_from_zip_rejects_bad_minimum_freeshard_version(tmp_path):
         status=Status.INSTALLING,
     )
 
-    with pytest.raises(InvalidAppZip, match="not a valid version specifier"):
+    with pytest.raises(InvalidAppZip, match="app_meta.json is invalid"):
         await _install_app_from_zip(installed_app, zip_file)
 
     assert zip_file.exists()  # rejected before extraction ever touched it

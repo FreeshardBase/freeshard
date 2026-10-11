@@ -29,6 +29,6 @@ async def test_get_version(app_client: AsyncClient):
     response = await app_client.get("public/meta/version")
     response.raise_for_status()
     body = response.json()
-    assert body["version"] == get_freeshard_version()
+    assert Version(body["version"]) == get_freeshard_version()
     # it is a usable semver string, not an empty placeholder
     assert Version(body["version"]) >= Version("0.0.0")
