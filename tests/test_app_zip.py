@@ -4,11 +4,13 @@ from pathlib import Path
 
 import pytest
 
+from shard_core.data_model.app_meta import InstallationReason, InstalledApp, Status
 from shard_core.service.app_installation.app_zip import (
     extract_app_zip,
     validate_app_zip,
 )
 from shard_core.service.app_installation.exceptions import InvalidAppZip
+from shard_core.service.app_installation.worker import _install_app_from_zip
 
 
 def _app_meta(**overrides) -> str:
@@ -147,6 +149,23 @@ def test_validate_rejects_unsafe_app_name(tmp_path, app_name):
         validate_app_zip(zip_file)
 
 
+def test_validate_rejects_unparseable_minimum_freeshard_version(tmp_path):
+    members = _valid_members() | {
+        "app_meta.json": _app_meta(minimum_freeshard_version="0.41.0")
+    }
+    zip_file = _make_zip(tmp_path / "upload.zip", members)
+    with pytest.raises(InvalidAppZip, match="not a valid version specifier"):
+        validate_app_zip(zip_file)
+
+
+def test_validate_accepts_valid_minimum_freeshard_version(tmp_path):
+    members = _valid_members() | {
+        "app_meta.json": _app_meta(minimum_freeshard_version=">=0.41.0")
+    }
+    zip_file = _make_zip(tmp_path / "upload.zip", members)
+    assert validate_app_zip(zip_file).name == "some_app"
+
+
 @pytest.mark.parametrize(
     "member", ["../escaped.txt", "some_app/../../escaped.txt", "/tmp/escaped.txt"]
 )
@@ -211,3 +230,24 @@ def test_extract_mock_app_store_zip(tmp_path, mock_app_store_zips):
 
     assert (target_dir / "app_meta.json").exists()
     assert (target_dir / "docker-compose.yml.template").exists()
+
+
+async def test_install_from_zip_rejects_bad_minimum_freeshard_version(tmp_path):
+    # validate_app_zip is also called standalone, earlier, by the custom-upload
+    # HTTP endpoint to fail that request fast — this proves it is enforced here
+    # too, inside the one function every install path (store, custom, reinstall)
+    # funnels through, so a store app with a broken value cannot install either.
+    members = _valid_members() | {
+        "app_meta.json": _app_meta(minimum_freeshard_version="0.41.0")
+    }
+    zip_file = _make_zip(tmp_path / "upload.zip", members)
+    installed_app = InstalledApp(
+        name="some_app",
+        installation_reason=InstallationReason.STORE,
+        status=Status.INSTALLING,
+    )
+
+    with pytest.raises(InvalidAppZip, match="not a valid version specifier"):
+        await _install_app_from_zip(installed_app, zip_file)
+
+    assert zip_file.exists()  # rejected before extraction ever touched it
