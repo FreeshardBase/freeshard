@@ -73,6 +73,9 @@ enabled = false
 enabled = false
 send_interval_seconds = 300
 
+[metrics]
+sample_interval_seconds = 5
+
 [oidc]
 enabled = false
 
