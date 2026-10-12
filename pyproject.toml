@@ -37,7 +37,7 @@ dependencies = [
     "aiozipstream",
     "email_validator",
     "croniter",
-    "bitstring",
+    "bitstring<5",  # 5.0.0 removed BitArray(bytes=...); shard_core/service/human_encoding.py:48 still uses it
     "azure-storage-blob",
     "asgi-lifespan==2.*",
     "python-multipart",
@@ -49,7 +49,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "setuptools",
-    "ruff",
+    "ruff<0.16",
     "pytest",
     "pytest-docker",
     "pytest-mock",
