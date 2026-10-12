@@ -41,7 +41,7 @@ async def reclaim_compose_stack(app_name: str):
 
 
 def _reclaim_container(container_id: str):
-    cgroup = _find_cgroup(container_id)
+    cgroup = find_cgroup(container_id)
     if cgroup is None:
         log.warning(f"no cgroup found for container {container_id}, skipping reclaim")
         return
@@ -65,7 +65,9 @@ def _reclaim_container(container_id: str):
             log.warning(f"memory.reclaim failed for container {container_id}: {e}")
 
 
-def _find_cgroup(container_id: str) -> Path | None:
+def find_cgroup(container_id: str) -> Path | None:
+    """Resolve a container's cgroup v2 directory, handling both the systemd and
+    cgroupfs docker drivers. Shared by reclaim and the metrics sampler."""
     candidates = [
         CGROUP_ROOT / "system.slice" / f"docker-{container_id}.scope",  # systemd driver
         CGROUP_ROOT / "docker" / container_id,  # cgroupfs driver
