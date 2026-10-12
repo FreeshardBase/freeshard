@@ -8,6 +8,7 @@ from shard_core.database import installed_apps as db_installed_apps
 from shard_core.database.connection import db_conn
 from shard_core.service import metrics
 from shard_core.service.metrics import AppStats, ShardStats, _MemInfo
+from shard_core.util.subprocess import SubprocessError
 
 
 @pytest.fixture(autouse=True)
@@ -89,6 +90,11 @@ def test_parse_meminfo_falls_back_to_memfree():
     assert mi.swap_used_bytes == 0
 
 
+def test_meminfo_used_bytes_clamps_when_available_exceeds_total():
+    # MemAvailable is a kernel estimate and can briefly exceed MemTotal.
+    assert _MemInfo(total_bytes=100, available_bytes=150, swap_total_bytes=0, swap_free_bytes=0).used_bytes == 0
+
+
 # --- CPU percentage ----------------------------------------------------------
 
 
@@ -102,7 +108,9 @@ def test_cpu_pct_can_exceed_100_on_multiple_cores():
 
 def test_cpu_pct_guards_against_zero_interval_and_negative_delta():
     assert metrics._cpu_pct(1000, 0.0) == 0.0
-    assert metrics._cpu_pct(-5, 1.0) == 0.0
+    # A container restart resets its cumulative usage_usec, yielding a large negative
+    # delta; without the guard this would be -100.0, not 0.0.
+    assert metrics._cpu_pct(-1_000_000, 1.0) == 0.0
 
 
 def test_cpu_pct_from_jiffies():
@@ -112,6 +120,12 @@ def test_cpu_pct_from_jiffies():
 
 def test_cpu_pct_from_jiffies_zero_total():
     assert metrics._cpu_pct_from_jiffies(0, 0) == 0.0
+
+
+def test_cpu_pct_from_jiffies_clamps_negative_busy():
+    # Per-CPU rounding on the aggregate line can make idle_delta exceed total_delta;
+    # the result must clamp to 0, not go negative.
+    assert metrics._cpu_pct_from_jiffies(100, 150) == 0.0
 
 
 # --- cgroup reads ------------------------------------------------------------
@@ -209,6 +223,10 @@ async def test_shard_stats_endpoint(app_client):
         "memory_limit_bytes": 4000,
         "memory_swap_bytes": 50,
     }
+    # The new empty-path route must not shadow the sibling /stats/disk route.
+    disk_resp = await app_client.get("protected/stats/disk")
+    assert disk_resp.status_code == status.HTTP_200_OK
+    assert "disk_space_low" in disk_resp.json()
 
 
 async def test_app_stats_endpoint_unknown_app_is_404(app_client):
@@ -310,3 +328,33 @@ async def test_update_stats_populates_snapshot(app_client, tmp_path, monkeypatch
 
     resp = await app_client.get("protected/apps/app_z/stats")
     assert resp.json()["memory_bytes"] == 4096
+
+    # First sample has no previous reading, so CPU is 0; a second sample with a higher
+    # cumulative usage_usec carries the bookkeeping forward and reports non-zero CPU.
+    assert metrics.current_app_stats["app_z"].cpu_pct == 0.0
+    _write_cgroup(cgroup, cpu_usec=3_000_000)
+    await metrics.update_stats()
+    assert metrics.current_app_stats["app_z"].cpu_pct > 0.0
+
+
+async def test_update_stats_survives_docker_failure_and_logs_once(app_client, monkeypatch):
+    await _insert_app("app_f", Status.RUNNING)
+
+    async def failing_list():
+        raise SubprocessError("docker ps boom")
+
+    monkeypatch.setattr(metrics, "_list_app_containers", failing_list)
+    metrics._container_list_failed = False
+
+    await metrics.update_stats()
+    # Apps are still enumerated (from the DB); they just have no container metrics.
+    assert metrics._container_list_failed is True
+    assert metrics.current_app_stats["app_f"].memory_bytes == 0
+
+    # Recovery clears the warn-once flag.
+    async def empty_list():
+        return {}
+
+    monkeypatch.setattr(metrics, "_list_app_containers", empty_list)
+    await metrics.update_stats()
+    assert metrics._container_list_failed is False
