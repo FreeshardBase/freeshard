@@ -8,9 +8,10 @@ endpoints serve the latest snapshot without doing any docker/cgroup work per req
 Memory uses cgroup v2 `memory.current` — the same metric `memory.reclaim` operates on —
 which counts in-memory pages (anon + page cache + kernel) but NOT pages swapped out of a
 paused app: those move to `memory.swap.current` and are reported separately as
-`memory_swap_bytes`. That exclusion is what Max asked for ("only what is really in
-memory, not what is swapped out"). CPU is the `cpu.stat` `usage_usec` delta between two
-samples over the elapsed wall-clock interval.
+`memory_swap_bytes`. Reporting only what is resident (not what is swapped out) is
+deliberate — it is the signal the resource monitor and pause-tier soak care about. CPU
+is the `cpu.stat` `usage_usec` delta between two samples over the elapsed wall-clock
+interval.
 """
 
 import logging
@@ -89,7 +90,8 @@ class _MemInfo:
 
 
 def _read_int_file(path: Path) -> int:
-    """Read a single-integer cgroup file; 0 if absent/unreadable (e.g. `max`)."""
+    """Read a single-integer cgroup file; 0 if absent/unreadable (e.g. the cgroup dir
+    is already gone because the container exited between listing and reading)."""
     try:
         return int(path.read_text().strip())
     except (OSError, ValueError):
@@ -223,12 +225,10 @@ def _collect_app_stats(
             swap += container_swap
             cpu_usec += _read_cgroup_cpu_usec(cgroup)
         cur_app_cpu_usec[name] = cpu_usec
+        # First time we see an app there is nothing to diff against; _cpu_pct owns the
+        # elapsed-interval guard.
         prev = prev_app_cpu_usec.get(name)
-        cpu_pct = (
-            _cpu_pct(cpu_usec - prev, elapsed_s)
-            if prev is not None and elapsed_s > 0
-            else 0.0
-        )
+        cpu_pct = _cpu_pct(cpu_usec - prev, elapsed_s) if prev is not None else 0.0
         new_app_stats[name] = AppStats(
             name=name,
             status=app["status"],
@@ -302,7 +302,7 @@ async def update_stats() -> None:
         _prev_cpu_total, _prev_cpu_idle = cpu
 
 
-def get_app_stats(name: str, status: str) -> AppStats:
+def app_stats_snapshot(name: str, status: str) -> AppStats:
     """Latest snapshot for one app, or zeros (with the current status) when the app has
     no running containers or the sampler has not reached it yet."""
     stats = current_app_stats.get(name)

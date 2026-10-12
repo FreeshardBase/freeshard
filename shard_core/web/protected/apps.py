@@ -58,7 +58,7 @@ async def get_app_stats(name: str):
         installed_app = await db_installed_apps.get_by_name(conn, name)
     if not installed_app:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    return metrics.get_app_stats(name, status=installed_app["status"])
+    return metrics.app_stats_snapshot(name, status=installed_app["status"])
 
 
 @router.get("/{name}/icon")

@@ -11,29 +11,30 @@ from shard_core.service.metrics import AppStats, ShardStats, _MemInfo
 from shard_core.util.subprocess import SubprocessError
 
 
+# Module globals the sampler mutates; saved/restored by name so adding one here can
+# never silently desync a save/restore pair.
+_METRICS_GLOBALS = (
+    "current_shard_stats",
+    "current_app_stats",
+    "_prev_time",
+    "_prev_app_cpu_usec",
+    "_prev_cpu_total",
+    "_prev_cpu_idle",
+    "_container_list_failed",
+)
+
+
 @pytest.fixture(autouse=True)
 def _reset_metrics_state():
     """The snapshot and CPU-delta bookkeeping are module globals; restore them after
     each test so a direct `update_stats` call (or a set snapshot) does not leak."""
-    saved = (
-        metrics.current_shard_stats,
-        dict(metrics.current_app_stats),
-        metrics._prev_time,
-        dict(metrics._prev_app_cpu_usec),
-        metrics._prev_cpu_total,
-        metrics._prev_cpu_idle,
-        metrics._container_list_failed,
-    )
+    saved = {name: getattr(metrics, name) for name in _METRICS_GLOBALS}
+    # Copy the mutable dicts so in-test mutation cannot corrupt the saved snapshot.
+    saved["current_app_stats"] = dict(saved["current_app_stats"])
+    saved["_prev_app_cpu_usec"] = dict(saved["_prev_app_cpu_usec"])
     yield
-    (
-        metrics.current_shard_stats,
-        metrics.current_app_stats,
-        metrics._prev_time,
-        metrics._prev_app_cpu_usec,
-        metrics._prev_cpu_total,
-        metrics._prev_cpu_idle,
-        metrics._container_list_failed,
-    ) = saved
+    for name, value in saved.items():
+        setattr(metrics, name, value)
 
 
 def _write_cgroup(
