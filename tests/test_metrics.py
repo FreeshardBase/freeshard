@@ -21,6 +21,7 @@ def _reset_metrics_state():
         dict(metrics._prev_app_cpu_usec),
         metrics._prev_cpu_total,
         metrics._prev_cpu_idle,
+        metrics._container_list_failed,
     )
     yield
     (
@@ -30,6 +31,7 @@ def _reset_metrics_state():
         metrics._prev_app_cpu_usec,
         metrics._prev_cpu_total,
         metrics._prev_cpu_idle,
+        metrics._container_list_failed,
     ) = saved
 
 
@@ -244,6 +246,24 @@ async def test_app_stats_endpoint_serves_snapshot(app_client):
     assert data["memory_bytes"] == 2048
     assert data["memory_swap_bytes"] == 16
     assert data["cpu_pct"] == 5.0
+
+
+async def test_app_stats_endpoint_overlays_fresh_db_status_on_snapshot(app_client):
+    # DB says stopped, but the (up to one interval old) snapshot still says running.
+    await _insert_app("app_s", Status.STOPPED)
+    metrics.current_app_stats = {
+        "app_s": AppStats(
+            name="app_s",
+            status="running",
+            memory_bytes=512,
+            memory_swap_bytes=0,
+            cpu_pct=1.0,
+        )
+    }
+    resp = await app_client.get("protected/apps/app_s/stats")
+    data = resp.json()
+    assert data["status"] == "stopped"  # DB-fresh, not the stale snapshot value
+    assert data["memory_bytes"] == 512  # sampled memory still served
 
 
 async def test_app_stats_endpoint_installed_but_not_sampled_returns_zeros(app_client):

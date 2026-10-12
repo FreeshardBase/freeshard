@@ -6,9 +6,11 @@ in-memory snapshot every few seconds, mirroring the `disk.py` pattern. The prote
 endpoints serve the latest snapshot without doing any docker/cgroup work per request.
 
 Memory uses cgroup v2 `memory.current` — the same metric `memory.reclaim` operates on —
-which counts resident memory only; pages swapped out of a paused app move to
-`memory.swap.current` and are reported separately as `memory_swap_bytes`. CPU is the
-`cpu.stat` `usage_usec` delta between two samples over the elapsed wall-clock interval.
+which counts in-memory pages (anon + page cache + kernel) but NOT pages swapped out of a
+paused app: those move to `memory.swap.current` and are reported separately as
+`memory_swap_bytes`. That exclusion is what Max asked for ("only what is really in
+memory, not what is swapped out"). CPU is the `cpu.stat` `usage_usec` delta between two
+samples over the elapsed wall-clock interval.
 """
 
 import logging
@@ -66,6 +68,9 @@ _prev_app_cpu_usec: dict[str, int] = {}
 _prev_cpu_total: int | None = None
 _prev_cpu_idle: int | None = None
 
+# Log a persistent `docker ps` failure once, not every sample interval (default 5s).
+_container_list_failed: bool = False
+
 
 @dataclass
 class _MemInfo:
@@ -92,7 +97,7 @@ def _read_int_file(path: Path) -> int:
 
 
 def _read_cgroup_memory(cgroup: Path) -> tuple[int, int]:
-    """Return (resident bytes, swapped bytes) for one container's cgroup."""
+    """Return (in-memory bytes, swapped bytes) for one container's cgroup."""
     return (
         _read_int_file(cgroup / "memory.current"),
         _read_int_file(cgroup / "memory.swap.current"),
@@ -256,18 +261,29 @@ async def update_stats() -> None:
     """Sample all apps and the host once and publish a fresh snapshot."""
     global current_shard_stats, current_app_stats
     global _prev_time, _prev_app_cpu_usec, _prev_cpu_total, _prev_cpu_idle
-
-    now = time.monotonic()
-    elapsed = now - _prev_time if _prev_time is not None else 0.0
+    global _container_list_failed
 
     async with db_conn() as conn:
         apps = await db_installed_apps.get_all(conn)
 
     try:
         containers_by_project = await _list_app_containers()
+        if _container_list_failed:
+            log.info("container listing for metrics recovered")
+            _container_list_failed = False
     except SubprocessError as e:
-        log.warning(f"could not list containers for metrics: {e}")
+        # This is the most frequent background task, so a persistent docker outage
+        # would otherwise spam the log every interval; warn once, then stay quiet.
+        if not _container_list_failed:
+            log.warning(f"could not list containers for metrics (quiet until recovery): {e}")
+            _container_list_failed = True
         containers_by_project = {}
+
+    # Timestamp the sample next to the cgroup/proc reads below, not before the db and
+    # docker awaits, so `elapsed` measures the read-to-read interval the CPU deltas are
+    # divided by rather than including call latency.
+    now = time.monotonic()
+    elapsed = now - _prev_time if _prev_time is not None else 0.0
 
     new_app_stats, cur_app_cpu_usec = _collect_app_stats(
         apps, containers_by_project, _prev_app_cpu_usec, elapsed
@@ -291,7 +307,9 @@ def get_app_stats(name: str, status: str) -> AppStats:
     no running containers or the sampler has not reached it yet."""
     stats = current_app_stats.get(name)
     if stats is not None:
-        return stats
+        # Overlay the caller's fresh DB status: the snapshot's status can lag a
+        # status transition by up to one sample interval.
+        return stats.model_copy(update={"status": status})
     return AppStats(
         name=name,
         status=status,
