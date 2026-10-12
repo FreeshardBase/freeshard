@@ -12,7 +12,7 @@ from fastapi.responses import Response, StreamingResponse
 from shard_core.database.connection import db_conn
 from shard_core.database import installed_apps as db_installed_apps
 from shard_core.data_model.app_meta import InstalledAppWithMeta, InstalledApp
-from shard_core.service import app_installation
+from shard_core.service import app_installation, metrics
 from shard_core.service.app_installation.app_zip import validate_app_zip
 from shard_core.service.app_installation.exceptions import (
     AppAlreadyInstalled,
@@ -50,6 +50,15 @@ async def get_app(name: str):
             InstalledApp.model_validate(installed_app)
         )
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+
+@router.get("/{name}/stats", response_model=metrics.AppStats)
+async def get_app_stats(name: str):
+    async with db_conn() as conn:
+        installed_app = await db_installed_apps.get_by_name(conn, name)
+    if not installed_app:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return metrics.get_app_stats(name, status=installed_app["status"])
 
 
 @router.get("/{name}/icon")
