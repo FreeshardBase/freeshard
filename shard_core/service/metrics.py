@@ -48,6 +48,17 @@ class AppStats(BaseModel):
     cpu_pct: float
 
 
+@dataclass
+class _AppSample:
+    """What the sampler actually measures for one app. No `status`: that comes from
+    the DB, which the sampler reads at most once per interval, so it's never fresh
+    enough to cache — callers always supply their own fresh read instead."""
+
+    memory_bytes: int
+    memory_swap_bytes: int
+    cpu_pct: float
+
+
 class ShardStats(BaseModel):
     cpu_pct: float
     memory_bytes: int
@@ -60,7 +71,7 @@ class ShardStats(BaseModel):
 current_shard_stats = ShardStats(
     cpu_pct=0.0, memory_bytes=0, memory_limit_bytes=0, memory_swap_bytes=0
 )
-current_app_stats: dict[str, AppStats] = {}
+current_app_stats: dict[str, _AppSample] = {}
 
 # Previous-sample bookkeeping for CPU deltas. CPU is a rate, so the first sample after
 # startup has nothing to diff against and reports 0.0.
@@ -204,13 +215,13 @@ def _collect_app_stats(
     containers_by_project: dict[str, list[str]],
     prev_app_cpu_usec: dict[str, int],
     elapsed_s: float,
-) -> tuple[dict[str, AppStats], dict[str, int]]:
+) -> tuple[dict[str, _AppSample], dict[str, int]]:
     """Sum each app's containers' cgroup memory/CPU and compute the CPU rate.
 
     Returns the per-app snapshot and the raw cumulative CPU-usec per app, which the
     next sample diffs against.
     """
-    new_app_stats: dict[str, AppStats] = {}
+    new_app_stats: dict[str, _AppSample] = {}
     cur_app_cpu_usec: dict[str, int] = {}
     for app in apps:
         name = app["name"]
@@ -229,9 +240,7 @@ def _collect_app_stats(
         # elapsed-interval guard.
         prev = prev_app_cpu_usec.get(name)
         cpu_pct = _cpu_pct(cpu_usec - prev, elapsed_s) if prev is not None else 0.0
-        new_app_stats[name] = AppStats(
-            name=name,
-            status=app["status"],
+        new_app_stats[name] = _AppSample(
             memory_bytes=memory,
             memory_swap_bytes=swap,
             cpu_pct=cpu_pct,
@@ -303,17 +312,19 @@ async def update_stats() -> None:
 
 
 def app_stats_snapshot(name: str, status: str) -> AppStats:
-    """Latest snapshot for one app, or zeros (with the current status) when the app has
-    no running containers or the sampler has not reached it yet."""
-    stats = current_app_stats.get(name)
-    if stats is not None:
-        # Overlay the caller's fresh DB status: the snapshot's status can lag a
-        # status transition by up to one sample interval.
-        return stats.model_copy(update={"status": status})
+    """Latest snapshot for one app, or zeros when the app has no running containers or
+    the sampler has not reached it yet. `status` is always the caller's own fresh DB
+    read, never the sampler's: the sampler only runs every few seconds, so anything it
+    cached would lag a status transition by up to one interval."""
+    sample = current_app_stats.get(name)
+    if sample is None:
+        return AppStats(
+            name=name, status=status, memory_bytes=0, memory_swap_bytes=0, cpu_pct=0.0
+        )
     return AppStats(
         name=name,
         status=status,
-        memory_bytes=0,
-        memory_swap_bytes=0,
-        cpu_pct=0.0,
+        memory_bytes=sample.memory_bytes,
+        memory_swap_bytes=sample.memory_swap_bytes,
+        cpu_pct=sample.cpu_pct,
     )

@@ -7,7 +7,7 @@ from shard_core.data_model.app_meta import InstallationReason, InstalledApp, Sta
 from shard_core.database import installed_apps as db_installed_apps
 from shard_core.database.connection import db_conn
 from shard_core.service import metrics
-from shard_core.service.metrics import AppStats, ShardStats, _MemInfo
+from shard_core.service.metrics import ShardStats, _AppSample, _MemInfo
 from shard_core.util.subprocess import SubprocessError
 
 
@@ -250,13 +250,7 @@ async def _insert_app(name: str, app_status: Status):
 async def test_app_stats_endpoint_serves_snapshot(app_client):
     await _insert_app("app_x", Status.RUNNING)
     metrics.current_app_stats = {
-        "app_x": AppStats(
-            name="app_x",
-            status="running",
-            memory_bytes=2048,
-            memory_swap_bytes=16,
-            cpu_pct=5.0,
-        )
+        "app_x": _AppSample(memory_bytes=2048, memory_swap_bytes=16, cpu_pct=5.0)
     }
     resp = await app_client.get("protected/apps/app_x/stats")
     assert resp.status_code == status.HTTP_200_OK
@@ -267,21 +261,17 @@ async def test_app_stats_endpoint_serves_snapshot(app_client):
     assert data["cpu_pct"] == 5.0
 
 
-async def test_app_stats_endpoint_overlays_fresh_db_status_on_snapshot(app_client):
-    # DB says stopped, but the (up to one interval old) snapshot still says running.
+async def test_app_stats_endpoint_status_always_comes_from_db(app_client):
+    # The cached sample carries no status at all; the endpoint's status is always
+    # this fresh DB read, so a cached memory/cpu reading pairs with the current status
+    # even though the sample itself may be up to one interval old.
     await _insert_app("app_s", Status.STOPPED)
     metrics.current_app_stats = {
-        "app_s": AppStats(
-            name="app_s",
-            status="running",
-            memory_bytes=512,
-            memory_swap_bytes=0,
-            cpu_pct=1.0,
-        )
+        "app_s": _AppSample(memory_bytes=512, memory_swap_bytes=0, cpu_pct=1.0)
     }
     resp = await app_client.get("protected/apps/app_s/stats")
     data = resp.json()
-    assert data["status"] == "stopped"  # DB-fresh, not the stale snapshot value
+    assert data["status"] == "stopped"
     assert data["memory_bytes"] == 512  # sampled memory still served
 
 
