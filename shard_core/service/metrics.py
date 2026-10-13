@@ -50,9 +50,9 @@ class AppStats(BaseModel):
 
 @dataclass
 class _AppSample:
-    """What the sampler actually measures for one app. No `status`: that comes from
-    the DB, which the sampler reads at most once per interval, so it's never fresh
-    enough to cache — callers always supply their own fresh read instead."""
+    """Per-app memory/CPU reading from the periodic sampler. Deliberately has no
+    status: every caller already has a DB read of its own that's fresher than
+    anything this sampler could cache."""
 
     memory_bytes: int
     memory_swap_bytes: int
@@ -311,20 +311,9 @@ async def update_stats() -> None:
         _prev_cpu_total, _prev_cpu_idle = cpu
 
 
-def app_stats_snapshot(name: str, status: str) -> AppStats:
-    """Latest snapshot for one app, or zeros when the app has no running containers or
-    the sampler has not reached it yet. `status` is always the caller's own fresh DB
-    read, never the sampler's: the sampler only runs every few seconds, so anything it
-    cached would lag a status transition by up to one interval."""
-    sample = current_app_stats.get(name)
-    if sample is None:
-        return AppStats(
-            name=name, status=status, memory_bytes=0, memory_swap_bytes=0, cpu_pct=0.0
-        )
-    return AppStats(
-        name=name,
-        status=status,
-        memory_bytes=sample.memory_bytes,
-        memory_swap_bytes=sample.memory_swap_bytes,
-        cpu_pct=sample.cpu_pct,
+def app_sample(name: str) -> _AppSample:
+    """Latest cached sample for one app, or zeros when the app has no running
+    containers or the sampler has not reached it yet."""
+    return current_app_stats.get(name) or _AppSample(
+        memory_bytes=0, memory_swap_bytes=0, cpu_pct=0.0
     )
