@@ -82,6 +82,13 @@ class TelemetrySettings(BaseModel):
     send_interval_seconds: int = 300
 
 
+class MetricsSettings(BaseModel):
+    # How often the resource-monitor sampler refreshes per-app and shard CPU/memory.
+    # CPU is a delta between consecutive samples, so this is also the CPU averaging
+    # window.
+    sample_interval_seconds: int = 5
+
+
 class SundialSettings(BaseModel):
     enabled: bool = False  # swaps the root UI from web-terminal to Sundial
 
@@ -125,6 +132,7 @@ class Settings(BaseSettings):
     traefik: TraefikSettings
     apps: AppsSettings
     telemetry: TelemetrySettings = TelemetrySettings()
+    metrics: MetricsSettings = MetricsSettings()
     sundial: SundialSettings = SundialSettings()
     management: ManagementSettings
     freeshard_controller: FreeshardControllerSettings

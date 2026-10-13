@@ -2,7 +2,7 @@ import logging
 
 from fastapi import APIRouter, status
 
-from shard_core.service import disk
+from shard_core.service import disk, metrics
 from shard_core.service.app_installation.worker import installation_worker
 
 log = logging.getLogger(__name__)
@@ -10,6 +10,12 @@ log = logging.getLogger(__name__)
 router = APIRouter(
     prefix="/stats",
 )
+
+
+@router.get("", status_code=status.HTTP_200_OK, response_model=metrics.ShardStats)
+async def shard_stats():
+    """Shard-level CPU + memory rollup for the Home resource monitor."""
+    return metrics.current_shard_stats
 
 
 @router.get("/disk", status_code=status.HTTP_200_OK, response_model=disk.DiskUsage)

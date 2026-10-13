@@ -36,6 +36,7 @@ shard_core/
     freeshard_controller.py  API calls to controller
     telemetry.py        Usage metrics reporting
     disk.py             Disk space monitoring
+    metrics.py          Per-app + shard CPU/memory sampler (cgroup v2 + /proc) for the resource-monitor API
     migration.py        Database schema migrations
     websocket.py        WebSocket connection lifecycle
   database/           → PostgreSQL access layer (per-entity modules, conn-first-arg pattern)
@@ -86,6 +87,7 @@ Started at app lifespan startup, stopped at shutdown:
 - `InstallationWorker` — async task queue for app install/uninstall
 - `PeriodicTask(control_apps, 30s)` — app idle lifecycle. With `apps.lifecycle.pause_enabled` (default off): RUNNING pauses after `idle_for_pause` (cgroup freeze + page-out to swap), PAUSED stops after `idle_for_stop`, and high memory PSI demotes the LRU app one tier per cycle. Flag off: legacy stop-only
 - `PeriodicTask(update_disk_space, 30s)` — disk monitoring
+- `PeriodicTask(update_stats, metrics.sample_interval_seconds=5s)` — samples per-app + shard CPU/memory into a snapshot served by `GET /protected/stats` and `GET /protected/apps/{name}/stats`
 - `CronTask(start_backup, "0 3 * * *")` — daily backup with random delay
 - `CronTask(docker_prune_images, daily)` — image cleanup
 - Various telemetry and peer key refresh tasks
