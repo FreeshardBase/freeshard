@@ -82,6 +82,13 @@ class TelemetrySettings(BaseModel):
     send_interval_seconds: int = 300
 
 
+class MetricsSettings(BaseModel):
+    # How often the resource-monitor sampler refreshes per-app and shard CPU/memory.
+    # CPU is a delta between consecutive samples, so this is also the CPU averaging
+    # window.
+    sample_interval_seconds: int = 5
+
+
 class OidcSettings(BaseModel):
     enabled: bool = False  # rollout kill-switch for the embedded OIDC provider
 
@@ -137,6 +144,7 @@ class Settings(BaseSettings):
     traefik: TraefikSettings
     apps: AppsSettings
     telemetry: TelemetrySettings = TelemetrySettings()
+    metrics: MetricsSettings = MetricsSettings()
     oidc: OidcSettings = OidcSettings()
     sundial: SundialSettings = SundialSettings()
     email: EmailSettings = EmailSettings()
