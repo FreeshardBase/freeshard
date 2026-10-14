@@ -249,6 +249,12 @@ class ConfigOverrideKey(StrEnum):
     SUNDIAL_ENABLED = "SUNDIAL_ENABLED"
 
 
+def _reject_newline(v: str | None) -> str | None:
+    if v is not None and ("\n" in v or "\r" in v):
+        raise ValueError("value must not contain newlines")
+    return v
+
+
 class ConfigOverrideRequest(BaseModel):
     key: ConfigOverrideKey
     value: str
@@ -256,9 +262,41 @@ class ConfigOverrideRequest(BaseModel):
     @field_validator("value")
     @classmethod
     def _value_has_no_newline(cls, v: str) -> str:
-        if "\n" in v or "\r" in v:
-            raise ValueError("value must not contain newlines")
-        return v
+        return _reject_newline(v)
+
+
+class DefaultConfigOverrideRequest(ConfigOverrideRequest):
+    cloud: Cloud
+
+
+class DefaultConfigOverride(BaseModel):
+    cloud: Cloud
+    key: str
+    value: str
+    updated_at: datetime
+
+
+class BulkConfigOverrideRequest(BaseModel):
+    shard_ids: list[int]
+    key: ConfigOverrideKey
+    value: str | None = None  # None clears the key on every selected shard
+    apply: bool = True  # also start an apply_config on each shard whose override was written
+
+    @field_validator("value")
+    @classmethod
+    def _value_has_no_newline(cls, v: str | None) -> str | None:
+        return _reject_newline(v)
+
+
+class BulkConfigOverrideResult(BaseModel):
+    shard_id: int
+    override_written: bool
+    apply_started: bool
+    error: str | None = None
+
+
+class BulkConfigOverrideResponse(BaseModel):
+    results: list[BulkConfigOverrideResult]
 
 
 class CoreUpdateRequest(BaseModel):
