@@ -210,20 +210,20 @@ PostgreSQL via pytest-docker; "hard to test" is rarely true here. How to write t
 ## 5. Release discipline: merged is NOT shipped
 
 A fix that is merged to main does **not** run on any shard. Shipping requires all
-three steps, in order:
+two steps, in order:
 
-1. **Version bump commit** on main: `just set-version X.Y.Z` — rewrites
-   `pyproject.toml` and the image tag in `docker-compose.yml`, and commits
-   "set version to X.Y.Z" (see `justfile`).
-2. **GitHub Release** with tag exactly `X.Y.Z`. `release.yml` first runs a
-   `version-check` job that fails if tag ≠ pyproject version, then full tests, then
-   builds and pushes `ghcr.io/freeshardbase/freeshard:X.Y.Z`.
-3. **Controller-side rollout**: a controller core-version compose bump pins the new
+1. **Version bump commit and GitHub Release**: `just release-patch` (or
+   `release-minor` / `release-major`, optional branch argument, `--dry-run` to
+   preview). It runs `just set-version X.Y.Z`, pushes, and creates the release with
+   tag exactly `X.Y.Z`. `release.yml` first runs a `version-check` job that fails if
+   tag ≠ pyproject version, then full tests, then builds and pushes
+   `ghcr.io/freeshardbase/freeshard:X.Y.Z`. Mechanics: **freeshard-run-and-operate**.
+2. **Controller-side rollout**: a controller core-version compose bump pins the new
    image tag for the fleet. This lives in the private freeshard-controller repo and
    is Max's/controller-side work — flag it in your PR's follow-up section; you cannot
    do it from this repo.
 
-Steps 2 and 3 are manual maintainer actions. **Evidence this gap is real:** issue
+Both steps are maintainer decisions; an agent releases only when a maintainer asks for it. **Evidence this gap is real:** issue
 #111 (https://github.com/FreeshardBase/freeshard/issues/111) — the fd-leak fix
 (PR #108) was merged 2026-06-21 but sat in no released tag until 0.39.4 on
 2026-06-24; no shard ran it in between. As of 2026-07-03 the gap is live again:
