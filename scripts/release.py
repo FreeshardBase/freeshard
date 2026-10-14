@@ -46,6 +46,7 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true", help="show the preview and stop")
     parser.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
     args = parser.parse_args()
+    sys.stdout.reconfigure(line_buffering=True)  # keep the preview ahead of git/gh output when piped
     branch = args.branch
 
     if run("git", "status", "--porcelain"):
@@ -64,7 +65,7 @@ def main() -> None:
         sys.exit(f"release: branch {branch} exists neither locally nor on origin")
     base_sha = run("git", "rev-parse", base_ref)
 
-    changes = run("git", "log", "--oneline", f"{previous}..{base_sha}")
+    changes = run("git", "log", "--oneline", "--first-parent", f"{previous}..{base_sha}")
     print(f"Branch:  {branch} ({base_sha[:9]}){'' if on_origin else ' [local only]'}")
     print(f"Version: {previous} -> {new}")
     print(f"Changes since {previous}:")
