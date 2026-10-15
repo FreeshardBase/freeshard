@@ -79,11 +79,9 @@ async def _control_app_time(app: InstalledApp, pause_enabled: bool):
         return
 
     if app_meta.lifecycle.always_on:
-        if (
-            app.status != Status.RUNNING
-            and await size_is_compatible(app_meta.minimum_portal_size)
-            and freeshard_version_is_compatible(app_meta.minimum_freeshard_version)
-        ):
+        if await size_is_compatible(
+            app_meta.minimum_portal_size
+        ) and freeshard_version_is_compatible(app_meta.minimum_freeshard_version):
             await start_app(app.name)
         return
 
