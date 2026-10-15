@@ -2,7 +2,6 @@ import asyncio
 import datetime
 import json
 import logging
-import subprocess
 import traceback
 from pathlib import Path
 from typing import List
@@ -30,23 +29,54 @@ STORE_KEY_BACKUP_PASSPHRASE = "backup_passphrase"
 STORE_KEY_BACKUP_PASSPHRASE_LAST_ACCESS = "backup_passphrase_last_access"
 BACKUP_IN_PROGESS_LOCK = asyncio.Lock()
 
-COMMAND_TEMPLATE = """
-rclone
---azureblob-sas-url {sas_token}
---crypt-password {obscured_password}
---crypt-remote :azureblob:{container_name}
-sync {directory} :crypt:{container_name}/{directory}
---create-empty-src-dirs --stats-log-level NOTICE --stats 1000m --use-json-log
---fast-list
-"""
+# Strong references to fire-and-forget tasks. asyncio only holds tasks weakly, so
+# without this a long-running backup could be garbage-collected mid-run. Mirrors
+# app_lifecycle.background_tasks.
+background_tasks = set()
 
-CLEARTEXT_COMMAND_TEMPLATE = """
-rclone
---azureblob-sas-url {sas_token}
-sync {directory} :azureblob:{container_name}/{directory}
---create-empty-src-dirs --stats-log-level NOTICE --stats 1000m --use-json-log
---fast-list
-"""
+
+def _build_backup_command(
+    sas_token: str, obscured_password: str, container_name: str, directory: Path
+) -> List[str]:
+    return [
+        "rclone",
+        "--azureblob-sas-url",
+        sas_token,
+        "--crypt-password",
+        obscured_password,
+        "--crypt-remote",
+        f":azureblob:{container_name}",
+        "sync",
+        str(directory),
+        f":crypt:{container_name}/{directory}",
+        "--create-empty-src-dirs",
+        "--stats-log-level",
+        "NOTICE",
+        "--stats",
+        "1000m",
+        "--use-json-log",
+        "--fast-list",
+    ]
+
+
+def _build_cleartext_backup_command(
+    sas_token: str, container_name: str, directory: Path
+) -> List[str]:
+    return [
+        "rclone",
+        "--azureblob-sas-url",
+        sas_token,
+        "sync",
+        str(directory),
+        f":azureblob:{container_name}/{directory}",
+        "--create-empty-src-dirs",
+        "--stats-log-level",
+        "NOTICE",
+        "--stats",
+        "1000m",
+        "--use-json-log",
+        "--fast-list",
+    ]
 
 
 async def start_backup():
@@ -67,6 +97,7 @@ async def start_backup():
             directories, sas_url_response.container_name, sas_url_response.sas_url
         )
     )
+    _register_background_task(task)
 
     async def on_task_done(task: asyncio.Task):
         if task.exception():
@@ -78,7 +109,16 @@ async def start_backup():
         else:
             signals.on_backup_update.send()
 
-    task.add_done_callback(lambda task: asyncio.create_task(on_task_done(task)))
+    task.add_done_callback(
+        lambda completed: _register_background_task(
+            asyncio.create_task(on_task_done(completed))
+        )
+    )
+
+
+def _register_background_task(task: asyncio.Task):
+    background_tasks.add(task)
+    task.add_done_callback(background_tasks.discard)
 
 
 async def backup_directories(
@@ -130,11 +170,11 @@ async def backup_directories(
         )
         async with db_conn() as conn:
             await db_backups.insert(conn, report)
-        _write_marker_blob(container_name, sas_token)
+        await _write_marker_blob(container_name, sas_token)
         log.info("Backup done")
 
 
-def _write_marker_blob(container_name: str, sas_token: str):
+async def _write_marker_blob(container_name: str, sas_token: str):
     """Write a marker blob to the backup container to record the time of the last backup.
 
     The blob's Last-Modified timestamp on Azure is updated on every call, giving the
@@ -149,7 +189,7 @@ def _write_marker_blob(container_name: str, sas_token: str):
         blob_url = urlunparse(parsed._replace(path=f"/{container_name}/_last_backup"))
         blob_client = BlobClient.from_blob_url(blob_url)
         timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        blob_client.upload_blob(timestamp, overwrite=True)
+        await asyncio.to_thread(blob_client.upload_blob, timestamp, overwrite=True)
         log.debug("Wrote _last_backup marker blob")
     except Exception:
         log.warning("Failed to write _last_backup marker blob", exc_info=True)
@@ -162,7 +202,7 @@ def is_backup_in_progress():
 async def _backup_directory(
     container_name, rel_directory, obscured_passphrase, sas_token
 ):
-    command = COMMAND_TEMPLATE.format(
+    command = _build_backup_command(
         sas_token=sas_token,
         obscured_password=obscured_passphrase,
         container_name=container_name,
@@ -170,7 +210,7 @@ async def _backup_directory(
     )
     path_root = Path(settings().path_root)
     process = await asyncio.create_subprocess_exec(
-        *command.split(),
+        *command,
         cwd=path_root,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
@@ -191,10 +231,19 @@ async def _backup_directory(
 
 async def _get_obscured_passphrase():
     passphrase = await database.get_value(STORE_KEY_BACKUP_PASSPHRASE)
-    obscured_passphrase = subprocess.run(
-        ["rclone", "obscure", passphrase], capture_output=True, text=True
-    ).stdout.strip()
-    return obscured_passphrase
+    process = await asyncio.create_subprocess_exec(
+        "rclone",
+        "obscure",
+        passphrase,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await process.communicate()
+    if process.returncode != 0:
+        message = stderr.decode().strip()
+        log.error(f"rclone obscure exited with {process.returncode}: {message}")
+        raise BackupFailedError(message)
+    return stdout.decode().strip()
 
 
 def _get_relative_directory(directory: Path) -> Path:
