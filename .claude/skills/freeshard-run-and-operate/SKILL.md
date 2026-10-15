@@ -169,14 +169,10 @@ just run-dev                      # dev server now runs against the restored fil
 
 Versioning is a linear X.Y.Z sequence today; migration to real semver is decided in principle but not implemented (https://github.com/FreeshardBase/freeshard/issues/118, open as of 2026-07-03).
 
-1. **Sync first — never version-bump from a stale checkout**:
-   ```bash
-   git fetch origin && git checkout main && git pull
-   grep '^version' pyproject.toml   # confirm current version before choosing the next
-   ```
-2. `just set-version X.Y.Z` — rewrites `version` in pyproject.toml **and** the `ghcr.io/freeshardbase/freeshard:` tag in docker-compose.yml, then commits "set version to X.Y.Z" (justfile:25-45; needs `.venv`).
-3. `git push`
-4. Create a GitHub Release whose **tag is exactly `X.Y.Z`** (e.g. `gh release create X.Y.Z --title X.Y.Z --generate-notes`). The Release event drives `.github/workflows/release.yml`: a version-check job fails the build if tag != pyproject version ("Run 'just set-version' and commit first"), then the full test workflow, then buildx pushes `ghcr.io/freeshardbase/freeshard:X.Y.Z`.
+1. **Preview**: `just release-patch --dry-run` (or `release-minor` / `release-major`; append a branch name, e.g. `just release-patch release/0.41.1 --dry-run`, to release from a branch other than main). It fetches origin, takes the previous version from the latest GitHub release (local tags can be stale), and prints the branch, `old -> new` version, and the first-parent commits since the last release. It changes nothing.
+2. **Release**: the same command without `--dry-run`. It asks for confirmation; pass `--yes` when running without a terminal (agents show the dry-run to the maintainer who asked and wait for their go). It then switches to the branch, fast-forwards it to origin, runs `just set-version X.Y.Z` (needs `.venv`), pushes, and runs `gh release create X.Y.Z --target <version-commit sha> --generate-notes`. Needs a clean working tree. The script is `scripts/release.py`.
+3. The Release event drives `.github/workflows/release.yml`: a version-check job fails the build if tag != pyproject version, then the full test workflow, then buildx pushes `ghcr.io/freeshardbase/freeshard:X.Y.Z`.
+4. **Branch releases** (cherry-picks onto a `release/X.Y.Z` branch to ship around unfinished work on main, as for 0.40.7 and 0.41.0): the generated notes only contain the changelog link, because cherry-picked commits are not merged PRs. Add a line saying what the release carries with `gh release edit X.Y.Z --notes ...`.
 5. **Fleet rollout is a separate, controller-side step.** Hosted shards run the pinned tag from their compose file; rolling the fleet means a core-version/compose bump in the freeshard-controller repo (see freeshard-ecosystem-contracts). Nothing in this repo deploys anything.
 
 **MERGED IS NOT SHIPPED.** Every push already publishes a snapshot image tagged with the branch slug (`.github/workflows/snapshot.yml`, e.g. `ghcr.io/freeshardbase/freeshard:main`), but production shards only ever run **release tags**. Incident: the fd-leak fix (PR https://github.com/FreeshardBase/freeshard/pull/108) was merged while shards kept failing, because no release tag contained it — tracked as https://github.com/FreeshardBase/freeshard/issues/111, resolved by releasing 0.39.4 (2026-06-24). When asked "is fix X live?", the answer requires: (a) merged to main, (b) contained in a release tag (`git tag --contains <sha>`), AND (c) that tag rolled out by the controller.
