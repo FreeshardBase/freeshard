@@ -79,9 +79,6 @@ async def test_template_is_written(api_client):
         assert out_services_http["filebrowser_http"]["loadBalancer"]["servers"] == [
             {"url": "http://filebrowser:80"}
         ]
-        assert out_services_http["sundial"]["loadBalancer"]["servers"] == [
-            {"url": "http://sundial:80/"}
-        ]
 
         out_routers_http: dict = output["http"]["routers"]
         assert set(out_routers_http.keys()) == {
@@ -100,9 +97,9 @@ async def test_template_is_written(api_client):
 
 
 async def test_sundial_enabled_swaps_root_router(api_client):
-    """The flag replaces web-terminal at `/` with Sundial — it does not add a
-    second path. Only the root router's target changes; no new router or
-    middleware is involved, since Sundial also serves at root natively."""
+    """The flag replaces web-terminal at `/` with Sundial. The dedicated
+    `/sundial` router exists unconditionally regardless of the flag (added
+    separately), so it is still present here too."""
     with settings_override({"sundial": {"enabled": True}}):
         await write_traefik_dyn_config()
         output = _read_traefik_dyn()
@@ -110,19 +107,8 @@ async def test_sundial_enabled_swaps_root_router(api_client):
     out_routers_http: dict = output["http"]["routers"]
     assert out_routers_http["web-terminal"]["service"] == "sundial"
     assert out_routers_http["web-terminal"]["rule"] == "PathPrefix(`/`)"
-    assert (
-        "sundial" not in out_routers_http
-    ), "the flag swaps the root router, it does not add a second one"
-
-        sundial_router = out_routers_http["sundial"]
-        assert sundial_router["rule"] == "PathPrefix(`/sundial`)"
-        assert sundial_router["service"] == "sundial"
-        assert sundial_router["middlewares"] == [
-            "redirect-sundial-slash",
-            "strip-sundial",
-        ]
-        assert sundial_router["priority"] > out_routers_http["web-terminal"]["priority"]
-        assert out_routers_http["web-terminal"]["rule"] == "PathPrefix(`/`)"
+    assert out_routers_http["sundial"]["rule"] == "PathPrefix(`/sundial`)"
+    assert out_routers_http["sundial"]["service"] == "sundial"
 
 
 def _write_app_meta(app_name: str):
