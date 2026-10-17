@@ -91,6 +91,17 @@ async def test_put_normalizes_case(app_client: AsyncClient):
     assert (await get_owner()).language == "de"
 
 
+async def test_put_trims_surrounding_whitespace(app_client: AsyncClient):
+    """A padded tag is the same preference as the trimmed one; store the
+    trimmed form so a later read matches an unpadded detection."""
+    await pair_new_terminal(app_client)
+
+    response = await app_client.put(PREFERENCES, json={"language": " de "})
+
+    assert response.json() == {"language": "de"}
+    assert (await get_owner()).language == "de"
+
+
 async def test_put_accepts_a_region_subtag(app_client: AsyncClient):
     """The shard is not the authority on which languages the web-terminal
     offers, so a well-formed tag it does not itself enumerate is still stored."""
@@ -124,12 +135,37 @@ async def test_put_rejects_an_empty_language(app_client: AsyncClient):
     assert response.status_code == 422
 
 
-async def test_put_rejects_an_overlong_language(app_client: AsyncClient):
+# A tag that is well-formed (so the shape regex passes) but over the length cap:
+# the regex alone allows arbitrarily many subtags, so the cap is the only thing
+# keeping an unbounded tag out of the column. These must exercise the cap, not
+# the regex — hence valid-shape strings on both sides of the 35-char boundary.
+_VALID_TAG_AT_LIMIT = "en-aaaaaaaa-aaaaaaaa-aaaaaaaa-aaaaa"  # 35 chars
+_VALID_TAG_OVER_LIMIT = "en-aaaaaaaa-aaaaaaaa-aaaaaaaa-aaaaaa"  # 36 chars
+
+
+async def test_put_accepts_a_tag_at_the_length_limit(app_client: AsyncClient):
     await pair_new_terminal(app_client)
 
-    response = await app_client.put(PREFERENCES, json={"language": "de" * 40})
+    response = await app_client.put(
+        PREFERENCES, json={"language": _VALID_TAG_AT_LIMIT}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"language": _VALID_TAG_AT_LIMIT}
+
+
+async def test_put_rejects_a_well_formed_but_overlong_language(app_client: AsyncClient):
+    """One char past the limit, still a valid shape, must be refused — otherwise
+    the regex's unbounded subtag repetition would write an arbitrarily long tag
+    straight to the TEXT column."""
+    await pair_new_terminal(app_client)
+
+    response = await app_client.put(
+        PREFERENCES, json={"language": _VALID_TAG_OVER_LIMIT}
+    )
 
     assert response.status_code == 422
+    assert (await get_owner()).language is None
 
 
 async def test_put_requires_the_language_field(app_client: AsyncClient):
@@ -138,5 +174,15 @@ async def test_put_requires_the_language_field(app_client: AsyncClient):
     await pair_new_terminal(app_client)
 
     response = await app_client.put(PREFERENCES, json={})
+
+    assert response.status_code == 422
+
+
+async def test_put_rejects_an_explicit_null_language(app_client: AsyncClient):
+    """Distinct from the absent case: a present-but-null language must 422 too,
+    so the field cannot quietly become clearable without a deliberate change."""
+    await pair_new_terminal(app_client)
+
+    response = await app_client.put(PREFERENCES, json={"language": None})
 
     assert response.status_code == 422
