@@ -1,7 +1,7 @@
 import re
 from typing import Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 # A BCP-47-ish language tag: a 2-3 letter primary subtag, optionally followed by
 # region/script subtags ("en", "de", "en-us", "pt-br", "zh-hans"). The shard
@@ -10,18 +10,20 @@ from pydantic import BaseModel, field_validator
 # So this validates the *shape* of a language tag — enough to keep junk and
 # injection out of the column — without gatekeeping the specific set, which
 # would turn every new UI language into a shard migration.
-_LANGUAGE_TAG = re.compile(r"^[a-z]{2,3}(-[a-z0-9]{2,8})*$")
+_LANGUAGE_TAG_RE = re.compile(r"^[a-z]{2,3}(-[a-z0-9]{2,8})*$")
+# Comfortably bounds a BCP-47-ish tag with a handful of subtags; the regex alone
+# allows unboundedly many, so this is the only thing keeping the column finite.
 _MAX_LANGUAGE_LENGTH = 35
 
 
 def _normalize_language(value: str) -> str:
-    """Lowercase and validate a language tag, or raise ValueError.
+    """Lowercase and validate a language tag's shape, or raise ValueError.
 
     Tags are case-insensitive, so we store one canonical casing; a client that
     sends "EN" and one that sends "en" must read back the same value.
     """
     normalized = value.strip().lower()
-    if not _LANGUAGE_TAG.fullmatch(normalized):
+    if not _LANGUAGE_TAG_RE.fullmatch(normalized):
         raise ValueError(f"not a valid language tag: {value!r}")
     return normalized
 
@@ -48,11 +50,11 @@ class InputPreferences(BaseModel):
     simply demands a language.
     """
 
-    language: str
+    language: str = Field(max_length=_MAX_LANGUAGE_LENGTH)
 
     @field_validator("language")
     @classmethod
     def validate_language(cls, v: str) -> str:
-        if len(v) > _MAX_LANGUAGE_LENGTH:
-            raise ValueError("language tag is too long")
+        # Field(max_length) has already rejected an over-long raw value; this
+        # only has to settle the shape and canonical casing.
         return _normalize_language(v)

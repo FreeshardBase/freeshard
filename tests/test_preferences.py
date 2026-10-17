@@ -17,6 +17,8 @@ PREFERENCES = "protected/preferences"
 
 
 async def get_owner():
+    # the paired terminal binds to the owner today, so a write through the
+    # session lands on the owner row — that is what these tests read back
     async with db_conn() as conn:
         return await db_users.get_owner(conn)
 
