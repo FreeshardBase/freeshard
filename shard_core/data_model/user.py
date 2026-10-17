@@ -22,6 +22,7 @@ class User(BaseModel):
     email_token_expires: Optional[datetime] = None
     role: Role = Role.MEMBER
     disabled: bool = False
+    language: Optional[str] = None
     created: Optional[datetime] = None
 
     def __str__(self):
