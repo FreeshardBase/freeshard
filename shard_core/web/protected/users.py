@@ -6,7 +6,8 @@ from fastapi.responses import Response
 from shard_core.data_model.user import InputUser, OutputUser, Role, User
 from shard_core.database import users as db_users
 from shard_core.database.connection import db_conn
-from shard_core.service import owner_email, pairing
+from shard_core.service import owner_email
+from shard_core.web.protected.session import session_user
 
 log = logging.getLogger(__name__)
 
@@ -27,29 +28,6 @@ _DELIVERY_FAILED = (
 )
 
 
-async def _session_user(authorization: str | None) -> User:
-    """The user behind the terminal session this request carries.
-
-    Traefik has already established that the cookie is valid before the request
-    reaches /protected; reading it again here is what resolves *which* user is
-    asking, which is the part forwardAuth cannot answer.
-    """
-    if not authorization:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED)
-    try:
-        terminal = await pairing.verify_terminal_jwt(authorization)
-    except pairing.InvalidJwt:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED)
-    async with db_conn() as conn:
-        user = await db_users.get_by_id(conn, terminal.user_id)
-    if user is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED)
-    if user.disabled:
-        # authenticated, but not allowed — re-authenticating would not help
-        raise HTTPException(status.HTTP_403_FORBIDDEN)
-    return user
-
-
 def _owner_or_403(user: User):
     if user.role is not Role.OWNER:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail=_OWNER_ONLY)
@@ -59,12 +37,12 @@ def _owner_or_403(user: User):
 # or it swallows /me.
 @router.get("/me", response_model=OutputUser)
 async def get_me(authorization: str = Cookie(None)):
-    return OutputUser.from_user(await _session_user(authorization))
+    return OutputUser.from_user(await session_user(authorization))
 
 
 @router.patch("/me", response_model=OutputUser)
 async def patch_me(update: InputUser, authorization: str = Cookie(None)):
-    user = await _session_user(authorization)
+    user = await session_user(authorization)
     # an omitted field is untouched, an explicit null clears it — which the
     # Optional annotation alone cannot tell apart
     fields = update.model_dump(exclude_unset=True)
@@ -104,7 +82,7 @@ async def _apply_email(user: User, address: str | None) -> User:
     response_class=Response,
 )
 async def resend_confirmation(authorization: str = Cookie(None)):
-    user = await _session_user(authorization)
+    user = await session_user(authorization)
     _owner_or_403(user)
     try:
         await owner_email.resend_verification(user)
@@ -132,6 +110,6 @@ async def resend_confirmation(authorization: str = Cookie(None)):
     response_class=Response,
 )
 async def delete_pending_email(authorization: str = Cookie(None)):
-    user = await _session_user(authorization)
+    user = await session_user(authorization)
     _owner_or_403(user)
     await owner_email.discard_pending(user)

@@ -103,6 +103,13 @@ Started at app lifespan startup, stopped at shutdown:
 - `POST /public/users/confirm-email` is unauthenticated by design and the token is its only credential. There is no `GET`: mail scanners and link prefetchers would burn a single-use token.
 - `email.enabled` (default `true`) says whether the shard can send mail at all, and is the explicit self-hosted signal — no controller means no mail, so the address is set directly. Never infer it from a failed delivery; a controller outage would silently downgrade a security control.
 
+### The Owner's UI Preferences
+`GET`/`PUT /protected/preferences` is the web-terminal's home for the session user's UI preferences — today just the preferred language (`users.language`, nullable TEXT, migration 0007). It is per-user on purpose (it lives on the user row, not as one global blob) so it grows into a fuller per-user profile once multi-user lands, and the response is an object so fields can be added without breaking clients.
+
+- `GET` always answers `200` with `{"language": ...}` for a valid session; an unset language is `null`. The web-terminal treats that `null` exactly like the `404` an older shard (without this endpoint) returns — fall back to its own detection (`navigator.language`/English). `PUT {"language": "de"}` validates the tag and persists it.
+- The column is plain TEXT, not a PG enum: which UI languages exist is the web-terminal's concern. The shard validates only the *shape* of a BCP-47-ish tag (lowercased) so junk stays out of the column, without gatekeeping the set.
+- Cookie-to-user resolution for `/protected` routes that need the acting user lives in `web/protected/session.py` (`session_user`), shared by the preferences and users routes so the 401/403 failure modes do not drift between copies.
+
 ### Signals (Event System)
 Blinker-based async signals defined in `util/signals.py`. DB-writing handlers are async and called via `await signal.send_async()`:
 - `on_apps_update` — app state changed
