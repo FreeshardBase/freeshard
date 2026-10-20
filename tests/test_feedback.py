@@ -15,8 +15,10 @@ async def test_post_quick_feedback(requests_mock, app_client):
     # The handler must NOT return the raw requests.Response it gets back from the
     # controller: FastAPI cannot JSON-encode a live streamed Response, which is the
     # 500 this test guards against (issue #245). A clean handler returns no body, so
-    # the decoded payload is null; a regression that returns the Response serializes
-    # its guts into a dict here and trips this assertion.
+    # the decoded payload is null. A regression that returns the Response instead
+    # serializes it to a (non-null) dict under this test's mock, tripping this
+    # assertion. (The mock yields an encodable fake Response, so it can't reproduce
+    # the production 500 itself -- it catches the regression by its body, not status.)
     assert response.json() is None
 
     # Find the backend call to /api/feedback
@@ -44,7 +46,7 @@ async def test_post_quick_feedback_surfaces_controller_error(requests_mock, app_
     # turning it into the 500 response a real server returns, so a surfaced
     # controller failure appears here as the raised HTTPError. Either way the shard
     # does not answer 201 — drop the raise_for_status and this stops raising.
-    with pytest.raises(requests.exceptions.HTTPError):
+    with pytest.raises(requests.exceptions.HTTPError, match="500"):
         await app_client.post(
             "protected/feedback/quick",
             json={"text": "this should fail upstream"},
