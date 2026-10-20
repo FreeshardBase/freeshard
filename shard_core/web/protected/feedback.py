@@ -21,6 +21,9 @@ class QuickFeedbackInput(BaseModel):
 async def post_quick_feedback(feedback: QuickFeedbackInput):
     log.debug(f"Posting quick feedback: {feedback.text}")
     controller_url = settings().freeshard_controller.base_url
-    return await signed_request(
+    response = await signed_request(
         "POST", f"{controller_url}/api/feedback", json=feedback.model_dump()
     )
+    # Consume the response instead of returning it: returning the raw
+    # requests.Response 500s, because FastAPI cannot JSON-encode it (issue #245).
+    response.raise_for_status()
