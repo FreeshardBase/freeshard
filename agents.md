@@ -134,11 +134,9 @@ runs inside the lifespan — an unfiltered status whose metadata is missing rais
 `MetadataNotFound` and takes down the boot.
 
 ### App compose template context
-`render_docker_compose_template` (`app_installation/util.py`) exposes four things to an
+`render_docker_compose_template` (`app_installation/util.py`) exposes three things to an
 app's `docker-compose.yml.template`: `fs.*` (host data paths), `portal` (the shard
-identity), `oidc` (client credentials, `None` unless the app declares an `oidc` block in
-its `app_meta.json` and the provider is enabled on the shard), and `secret('<name>')`.
-The secret helper returns an app-scoped secret,
+identity), and `secret('<name>')`. The secret helper returns an app-scoped secret,
 generating one (32 chars, `[A-Za-z0-9]`) on first reference and persisting it in the
 `app_secrets` table (`database/app_secrets.py`); the name is arbitrary and declared
 purely by referencing it. The resolver mints missing secrets synchronously during the
