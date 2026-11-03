@@ -1,6 +1,9 @@
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from httpx import AsyncClient
 
+from shard_core.service import app_tools
 from shard_core.service.app_tools import scheduled_docker_prune_images
 from tests.conftest import settings_override
 from tests.util import retry_async
@@ -8,8 +11,18 @@ from tests.util import retry_async
 function_config_override = {"apps": {"pruning": {"schedule": "* * * * * *"}}}
 
 
+@pytest.fixture
+def subprocess_mock():
+    with patch.object(
+        app_tools, "subprocess", new=AsyncMock(return_value="Total reclaimed space: 0B")
+    ) as mock:
+        yield mock
+
+
 @pytest.mark.config_override(function_config_override)
-async def test_docker_prune(requests_mock, api_client: AsyncClient, memory_logger):
+async def test_docker_prune(
+    requests_mock, api_client: AsyncClient, memory_logger, subprocess_mock
+):
     async def assert_docker_prune():
         assert any(["docker images pruned" in r.msg for r in memory_logger.records])
 
@@ -17,7 +30,7 @@ async def test_docker_prune(requests_mock, api_client: AsyncClient, memory_logge
 
 
 async def test_docker_prune_manually(
-    requests_mock, api_client: AsyncClient, memory_logger
+    requests_mock, api_client: AsyncClient, memory_logger, subprocess_mock
 ):
     response = await api_client.post("/protected/settings/prune-images")
     assert response.status_code == 200
