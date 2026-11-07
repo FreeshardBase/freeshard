@@ -164,7 +164,7 @@ async def _session_user(authorization: str | None) -> ShardUser | None:
     if not authorization:
         return None
     try:
-        terminal = await pairing.verify_terminal_jwt(authorization)
+        terminal, auth_time = await pairing.verify_terminal_session(authorization)
     except pairing.InvalidJwt:
         return None
     if terminal.user_id is None:
@@ -175,6 +175,9 @@ async def _session_user(authorization: str | None) -> ShardUser | None:
         # carried into the code and token rows, so un-pairing this device
         # revokes what it authorized
         user.terminal_id = terminal.id
+        # when this device was paired = when the user authenticated; becomes
+        # the id_token `auth_time` claim rather than the /authorize moment
+        user.auth_time = auth_time
     return user
 
 

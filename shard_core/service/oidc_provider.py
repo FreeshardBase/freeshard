@@ -111,6 +111,11 @@ class ShardUser:
     # set only on the /authorize path, where the terminal cookie is in hand;
     # None when the user is reconstructed from a stored grant
     terminal_id: str | None = None
+    # the terminal's pairing time (seconds since the epoch) = when the user
+    # actually authenticated on this device. Carried into the code row and
+    # minted into the id_token `auth_time` claim. Set only on the /authorize
+    # path, alongside terminal_id.
+    auth_time: int | None = None
 
     @classmethod
     def from_user(cls, user: User | None):
@@ -282,7 +287,11 @@ class ShardAuthCodeGrant(grants.AuthorizationCodeGrant):
                     "nonce": data.get("nonce"),
                     "code_challenge": data.get("code_challenge"),
                     "code_challenge_method": data.get("code_challenge_method"),
-                    "auth_time": int(time.time()),
+                    # when the user authenticated on this device (terminal
+                    # pairing time), NOT now: the id_token `auth_time` claim
+                    # must describe the authentication event, which under the
+                    # terminal cookie happened at pairing, possibly long ago.
+                    "auth_time": request.user.auth_time,
                     "expires_at": datetime.now(timezone.utc)
                     + timedelta(seconds=CODE_EXPIRES_IN),
                 },
