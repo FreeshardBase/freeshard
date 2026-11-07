@@ -112,9 +112,8 @@ class ShardUser:
     # None when the user is reconstructed from a stored grant
     terminal_id: str | None = None
     # the terminal's pairing time (seconds since the epoch) = when the user
-    # actually authenticated on this device. Carried into the code row and
-    # minted into the id_token `auth_time` claim. Set only on the /authorize
-    # path, alongside terminal_id.
+    # authenticated; becomes the id_token `auth_time` claim. Set only on the
+    # /authorize path, alongside terminal_id.
     auth_time: int | None = None
 
     @classmethod

@@ -164,9 +164,10 @@ async def _session_user(authorization: str | None) -> ShardUser | None:
     if not authorization:
         return None
     try:
-        terminal, auth_time = await pairing.verify_terminal_session(authorization)
+        session = await pairing.verify_terminal_session(authorization)
     except pairing.InvalidJwt:
         return None
+    terminal = session.terminal
     if terminal.user_id is None:
         return None
     async with db_conn() as conn:
@@ -175,9 +176,9 @@ async def _session_user(authorization: str | None) -> ShardUser | None:
         # carried into the code and token rows, so un-pairing this device
         # revokes what it authorized
         user.terminal_id = terminal.id
-        # when this device was paired = when the user authenticated; becomes
-        # the id_token `auth_time` claim rather than the /authorize moment
-        user.auth_time = auth_time
+        # the pairing time becomes the id_token `auth_time` claim rather than
+        # the /authorize moment (see pairing.verify_terminal_session)
+        user.auth_time = session.paired_at
     return user
 
 

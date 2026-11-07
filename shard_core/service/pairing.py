@@ -3,6 +3,7 @@ import random
 import secrets
 import string
 from datetime import datetime, timedelta, timezone
+from typing import NamedTuple
 
 import jwt
 from pydantic import BaseModel
@@ -66,12 +67,22 @@ async def create_terminal_jwt(terminal_id, **kwargs) -> str:
     return jwt.encode(payload, jwt_secret, algorithm="HS256")
 
 
+class TerminalSession(NamedTuple):
+    terminal: Terminal
+    # the JWT's `iat`, seconds since the epoch: when this device was paired,
+    # which is when the user authenticated on it. See verify_terminal_session.
+    paired_at: int
+
+
 async def verify_terminal_jwt(token: str = None) -> Terminal:
-    terminal, _ = await verify_terminal_session(token)
-    return terminal
+    """Verify the terminal session cookie and return the terminal.
+
+    See verify_terminal_session for the variant that also exposes the pairing
+    time."""
+    return (await verify_terminal_session(token)).terminal
 
 
-async def verify_terminal_session(token: str = None) -> tuple[Terminal, int]:
+async def verify_terminal_session(token: str = None) -> TerminalSession:
     """Verify the terminal session cookie and return the terminal together with
     its pairing time (the JWT's `iat`, seconds since the epoch).
 
@@ -97,14 +108,14 @@ async def verify_terminal_session(token: str = None) -> tuple[Terminal, int]:
     except jwt.InvalidTokenError as e:
         raise InvalidJwt from e
 
-    auth_time = decoded_token.get("iat")
-    if auth_time is None:
+    paired_at = decoded_token.get("iat")
+    if paired_at is None:
         raise InvalidJwt
 
     async with db_conn() as conn:
         terminal = await db_terminals.get_by_id(conn, decoded_token["sub"])
         if terminal:
-            return Terminal(**terminal), int(auth_time)
+            return TerminalSession(Terminal(**terminal), int(paired_at))
         else:
             raise InvalidJwt
 
