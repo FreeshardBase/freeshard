@@ -66,7 +66,23 @@ async def create_terminal_jwt(terminal_id, **kwargs) -> str:
     return jwt.encode(payload, jwt_secret, algorithm="HS256")
 
 
-async def verify_terminal_jwt(token: str = None):
+async def verify_terminal_jwt(token: str = None) -> Terminal:
+    terminal, _ = await verify_terminal_session(token)
+    return terminal
+
+
+async def verify_terminal_session(token: str = None) -> tuple[Terminal, int]:
+    """Verify the terminal session cookie and return the terminal together with
+    its pairing time (the JWT's `iat`, seconds since the epoch).
+
+    The terminal JWT is minted once when the device is paired (see
+    `create_terminal_jwt`) and never re-issued, so its `iat` is the moment the
+    user authenticated on this device. The OIDC provider needs it for the
+    id_token `auth_time` claim, which must report the authentication event, not
+    the moment a token is minted. A session token that cannot prove its
+    authentication time (no `iat`) is treated as invalid rather than having one
+    fabricated for it.
+    """
     if not token:
         raise InvalidJwt("Missing JWT")
 
@@ -81,10 +97,14 @@ async def verify_terminal_jwt(token: str = None):
     except jwt.InvalidTokenError as e:
         raise InvalidJwt from e
 
+    auth_time = decoded_token.get("iat")
+    if auth_time is None:
+        raise InvalidJwt
+
     async with db_conn() as conn:
         terminal = await db_terminals.get_by_id(conn, decoded_token["sub"])
         if terminal:
-            return Terminal(**terminal)
+            return Terminal(**terminal), int(auth_time)
         else:
             raise InvalidJwt
 
