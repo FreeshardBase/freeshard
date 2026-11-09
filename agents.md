@@ -199,6 +199,28 @@ Host-side: `settings().path_root_host` (typically `/home/shard`).
 - Models in `data_model/backend/` are copied from freeshard-controller — do not edit directly, use `just get-types`
   - The CI `drift-check` job re-runs `get-types` against controller **`origin/main`** and fails if the diff is non-empty. To fix drift: check out the controller at `origin/main` (a local `main` may be many commits behind — `git fetch` first), then run `just SOURCE_DIR=<abs path to controller>/freeshard-controller-backend/freeshard_controller/data_model get-types` from this repo and commit only the regenerated files. Never hand-edit them.
 
+## Design changes start with the theory
+
+This repo records the theory it is built on in `CONCEPTS.md` at the root and in each module directory. The root file holds what the program is for, the invariants that span modules, and one line of responsibility per module. A module's file holds its responsibility, its elements, and its boundaries.
+
+**Before changing code, read the relevant `CONCEPTS.md`. If your change alters the theory, commit the theory change first, on its own, then adapt the code to the amended theory.** A separate commit keeps the theory diff out of the code diff, and the commit order is the evidence that the sequence actually happened.
+
+State which of these five cases your change is, in the pull request description. Without the declaration, "no theory change was needed" cannot be told apart from "never thought about the theory".
+
+| Case | Theory | Meaning |
+| --- | --- | --- |
+| Conforms | unchanged | Already accounted for by the theory. |
+| Extends | grows | New behaviour or concept the theory does not cover. |
+| Corrects | changes | The work revealed the theory was wrong. |
+| Shrinks | loses an element | A capability is removed, two concepts turn out to be one, or detail was never load-bearing. |
+| Reconciles | unchanged | Code brought back in line with a theory that was already right. |
+
+**Shrinks carries an extra requirement:** say what became of the behaviour the removed element described — deleted from the code, absorbed into a named surviving element, or moved to another module's theory. Shrinking is the only direction that can silently blind future audits: if an element disappears while the behaviour it described remains, that area stops being checked and an empty audit looks exactly like a clean one.
+
+An amendment should leave the theory **as elegant as possible, as specific as necessary**. Where your amendment makes it materially more complex, say so in the theory commit message. A theory that only ever grows has become a changelog.
+
+Every element in `CONCEPTS.md` must be an assertion the code can violate. "The worker handles jobs" is worthless; "exactly one notification is emitted per job, on every terminal path" is checkable. Write elements that way when you amend.
+
 ## Commits
 
 [Scoped Commits](https://scopedcommits.com/): `<scope>: <description>`. The scope is the area of the tree the change touches, never a change type — write `service: retry app install on transient docker errors`, not `fix(service): ...`. Body and trailers are optional; a change's reasoning belongs in the body, not in a code comment.
