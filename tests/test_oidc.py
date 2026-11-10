@@ -692,23 +692,103 @@ async def test_repeated_wrong_secret_attempts_share_one_global_budget(
     to any one client's bucket (see the previous test for why) — it falls to
     a shared bucket instead, preserving the brute-force resistance the
     single global counter gave before this change, just scoped to this one
-    unattributable failure class."""
-    await pair_new_terminal(app_client)
-    target = await make_client(app_name="target-app")
+    unattributable failure class.
 
-    statuses = []
-    for _ in range(oidc_provider.TOKEN_RATE_LIMIT + 5):
-        r = await app_client.post(
+    Split across TWO distinct client_ids, neither alone reaching the limit,
+    so a 429 appearing can only be explained by a genuinely shared budget —
+    hammering one client_id alone wouldn't distinguish "shared" from "a
+    per-client bucket keyed off the one name under attack" (caught in
+    review: a per-client-keyed design the attack used passed that weaker
+    version of this test too)."""
+    await pair_new_terminal(app_client)
+    first = await make_client(app_name="first-target-app")
+    second = await make_client(app_name="second-target-app")
+
+    async def wrong_secret_attempt(oidc_client: OidcClient):
+        return await app_client.post(
             TOKEN,
             data={
                 "grant_type": "authorization_code",
                 "code": "no-such-code",
                 "redirect_uri": REDIRECT_URI,
             },
-            auth=(target.client_id, "not-the-real-secret"),
+            auth=(oidc_client.client_id, "not-the-real-secret"),
         )
-        statuses.append(r.status_code)
-    assert 429 in statuses, "wrong-secret attempts must still be rate-limited somewhere"
+
+    half = oidc_provider.TOKEN_RATE_LIMIT // 2
+    for _ in range(half):
+        r = await wrong_secret_attempt(first)
+        assert r.status_code in (400, 401), r.text
+    for _ in range(half):
+        r = await wrong_secret_attempt(second)
+        assert r.status_code in (400, 401), r.text
+
+    # neither client_id alone reached the limit, but together they must
+    # have exhausted the one budget they share
+    statuses = [(await wrong_secret_attempt(first)).status_code for _ in range(10)]
+    assert 429 in statuses, "wrong-secret attempts across clients must share one budget"
+
+
+async def test_failed_refresh_charges_the_refreshing_clients_own_bucket(
+    app_client: AsyncClient,
+):
+    """A bad/expired/reused refresh token, presented with the client's real
+    secret, is exactly the safely-attributable case: client authentication
+    succeeded (the secret matched) before the refresh-token lookup failed,
+    so it must charge that client's own per-client bucket — the same
+    StampsAuthenticatedClientId path the authorization_code grant uses,
+    exercised here for ShardRefreshTokenGrant specifically."""
+    await pair_new_terminal(app_client)
+    oidc_client = await make_client(app_name="refresher-app")
+    tok, _ = await run_code_flow(app_client, oidc_client)
+    auth = (oidc_client.client_id, oidc_client.client_secret)
+
+    # rotate once for real, then replay the now-stale refresh token
+    r = await app_client.post(
+        TOKEN,
+        data={"grant_type": "refresh_token", "refresh_token": tok["refresh_token"]},
+        auth=auth,
+    )
+    assert r.status_code == 200, r.text
+
+    r = await app_client.post(
+        TOKEN,
+        data={"grant_type": "refresh_token", "refresh_token": tok["refresh_token"]},
+        auth=auth,
+    )
+    assert r.status_code in (400, 401), r.text
+
+    assert oidc_client.client_id in web_oidc._token_limits, (
+        "a correctly-authenticated client's own failed refresh must charge "
+        "its own per-client bucket"
+    )
+
+
+async def test_public_client_failed_grant_charges_its_own_bucket(
+    app_client: AsyncClient,
+):
+    """A public client has no secret to check, so Authlib's "none" method
+    authenticates it by existence alone — the accepted, weaker-than-secret
+    signal the issue's resolved intent explicitly carries forward for public
+    clients. A failed grant from a public client must still charge its OWN
+    bucket (not the shared one), the same as a confidential client."""
+    await pair_new_terminal(app_client)
+    public_client = await make_client(public_client=True, app_name="public-app")
+
+    r = await app_client.post(
+        TOKEN,
+        data={
+            "grant_type": "authorization_code",
+            "code": "no-such-code",
+            "redirect_uri": REDIRECT_URI,
+            "client_id": public_client.client_id,
+        },
+    )
+    assert r.status_code in (400, 401), r.text
+
+    assert public_client.client_id in web_oidc._token_limits, (
+        "a public client's own failed grant must charge its own bucket"
+    )
 
 
 @pytest.mark.config_override({"oidc": {"enabled": False}})
