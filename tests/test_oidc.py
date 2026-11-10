@@ -118,6 +118,25 @@ async def exchange_code(
     return await client.post(TOKEN, data=data, auth=auth)
 
 
+async def wrong_secret_attempt(
+    client: AsyncClient, oidc_client: OidcClient, source_ip: str | None = None
+):
+    """A /token call that never authenticates: a client_id paired with a
+    secret guess, not the real one. source_ip, when given, is forwarded as
+    X-Forwarded-For to simulate a distinct caller address."""
+    headers = {"X-Forwarded-For": source_ip} if source_ip else {}
+    return await client.post(
+        TOKEN,
+        data={
+            "grant_type": "authorization_code",
+            "code": "no-such-code",
+            "redirect_uri": REDIRECT_URI,
+        },
+        auth=(oidc_client.client_id, "not-the-real-secret"),
+        headers=headers,
+    )
+
+
 async def run_code_flow(
     client: AsyncClient, oidc_client: dict, scope: str = "openid profile email"
 ) -> tuple[dict, dict]:
@@ -564,19 +583,6 @@ async def test_no_plaintext_tokens_in_database(app_client: AsyncClient):
         assert not any(secret_value in v for v in all_values), "plaintext token stored"
 
 
-async def test_token_endpoint_rate_limited(app_client: AsyncClient):
-    await pair_new_terminal(app_client)
-    oidc_client = await make_client()
-
-    statuses = []
-    for _ in range(oidc_provider.TOKEN_RATE_LIMIT + 5):
-        r = await exchange_code(
-            app_client, oidc_client, "no-such-code", secrets.token_urlsafe(32)
-        )
-        statuses.append(r.status_code)
-    assert 429 in statuses, "token endpoint must rate-limit bursts"
-
-
 async def test_token_rate_limit_is_per_client(app_client: AsyncClient):
     """The core fairness fix (#215): one client's exhausted budget must not
     429 a different client's legitimate request."""
@@ -647,30 +653,17 @@ async def test_rate_limit_exceeded_returns_bare_429(app_client: AsyncClient):
 async def test_unauthenticated_client_id_claim_does_not_charge_that_client(
     app_client: AsyncClient,
 ):
-    """A caller that never proves it IS a client must not be able to charge
-    that client's own per-client bucket just by naming it in the form body —
-    client_id is not a secret (it's visible in every /authorize redirect),
-    so charging a bare, unauthenticated claim would let anyone grief an
-    arbitrary victim's budget for free, which is the exact fairness problem
-    per-client keying exists to fix, just aimed at one client instead of all
-    of them (caught in review of #215). Checked directly against the
-    per-client bucket dict — an end-to-end "does the victim's next request
-    still succeed" assertion would be confounded by the separate shared
-    bucket that unauthenticated failures *do* still charge (see the next
-    test), which a single request here does not exhaust."""
+    """A caller that never proves it IS a client must not create or charge
+    that client's own bucket just by naming it (see `_token_limits` in
+    web/public/oidc.py for why). Checked directly against the per-client
+    bucket dict — an end-to-end "does the victim's next request still
+    succeed" assertion would be confounded by the separate per-source
+    bucket unauthenticated failures *do* charge (see the next test), which
+    one request here doesn't exhaust."""
     await pair_new_terminal(app_client)
     victim = await make_client(app_name="victim-app")
 
-    r = await app_client.post(
-        TOKEN,
-        data={
-            "grant_type": "authorization_code",
-            "code": "no-such-code",
-            "redirect_uri": REDIRECT_URI,
-            "client_id": victim.client_id,
-            "client_secret": "not-the-real-secret",
-        },
-    )
+    r = await wrong_secret_attempt(app_client, victim)
     assert r.status_code in (400, 401), r.text
 
     assert victim.client_id not in web_oidc._token_limits, (
@@ -688,87 +681,54 @@ async def test_unauthenticated_client_id_claim_does_not_charge_that_client(
 async def test_repeated_wrong_secret_attempts_from_one_source_share_a_budget(
     app_client: AsyncClient,
 ):
-    """Failed client authentication (wrong/missing secret) isn't attributed
-    to any one client's bucket (see the previous test for why) — it falls to
-    a bucket keyed by source IP instead (see test_unauthenticated_failures_
-    are_rate_limited_per_source_ip_not_shard_wide below for why IP, not one
-    shard-wide bucket), preserving the brute-force resistance the single
-    global counter gave before this change, just scoped to one source and
-    to this one unattributable failure class.
-
-    Split across TWO distinct client_ids attacked from the SAME source,
-    neither alone reaching the limit, so a 429 appearing can only be
+    """Failed client authentication isn't attributed to any one client's
+    bucket (see the previous test), so it falls to a bucket shared by
+    source IP instead. Split across two distinct client_ids from the same
+    source, neither alone reaching the limit, so a 429 can only be
     explained by a genuinely shared-per-source budget — hammering one
-    client_id alone wouldn't distinguish "shared" from "a per-client bucket
-    keyed off the one name under attack" (caught in review: a
-    per-client-keyed design the attack used passed that weaker version of
-    this test too)."""
+    client_id alone wouldn't distinguish that from a per-client bucket keyed
+    off the one name under attack."""
     await pair_new_terminal(app_client)
     first = await make_client(app_name="first-target-app")
     second = await make_client(app_name="second-target-app")
 
-    async def wrong_secret_attempt(oidc_client: OidcClient):
-        return await app_client.post(
-            TOKEN,
-            data={
-                "grant_type": "authorization_code",
-                "code": "no-such-code",
-                "redirect_uri": REDIRECT_URI,
-            },
-            auth=(oidc_client.client_id, "not-the-real-secret"),
-        )
-
     half = oidc_provider.TOKEN_RATE_LIMIT // 2
     for _ in range(half):
-        r = await wrong_secret_attempt(first)
+        r = await wrong_secret_attempt(app_client, first)
         assert r.status_code in (400, 401), r.text
     for _ in range(half):
-        r = await wrong_secret_attempt(second)
+        r = await wrong_secret_attempt(app_client, second)
         assert r.status_code in (400, 401), r.text
 
     # neither client_id alone reached the limit, but together, from the
     # same source, they must have exhausted the one budget they share
-    statuses = [(await wrong_secret_attempt(first)).status_code for _ in range(10)]
+    statuses = [
+        (await wrong_secret_attempt(app_client, first)).status_code for _ in range(10)
+    ]
     assert 429 in statuses, "wrong-secret attempts across clients must share a budget"
 
 
 async def test_unauthenticated_failures_are_rate_limited_per_source_ip_not_shard_wide(
     app_client: AsyncClient,
 ):
-    """A single anonymous, zero-credential flood must not be able to 429
-    the whole /token endpoint for every other caller — that is issue #215's
-    own core complaint, and a single *shared* bucket for unattributable
-    failures (the first attempt at this fix) reproduced it exactly for this
-    one failure class: nothing in that design even looked at who was
-    asking. Caught in review. Keying by source IP (via X-Forwarded-For, see
-    _source_ip) instead means a flood from one source exhausts only its own
-    bucket; a different source attempting the exact same thing must still
-    go through normally."""
+    """A single anonymous, zero-credential flood must not 429 the whole
+    /token endpoint for every other caller (see `_token_limits` in
+    web/public/oidc.py for why source IP, not one shard-wide bucket): a
+    flood from one source must exhaust only its own bucket, leaving a
+    different source's identical attempt unaffected."""
     await pair_new_terminal(app_client)
     target = await make_client(app_name="some-app")
 
-    async def wrong_secret_attempt(source_ip: str):
-        return await app_client.post(
-            TOKEN,
-            data={
-                "grant_type": "authorization_code",
-                "code": "no-such-code",
-                "redirect_uri": REDIRECT_URI,
-            },
-            auth=(target.client_id, "not-the-real-secret"),
-            headers={"X-Forwarded-For": source_ip},
-        )
-
     for _ in range(oidc_provider.TOKEN_RATE_LIMIT):
-        r = await wrong_secret_attempt("203.0.113.1")
+        r = await wrong_secret_attempt(app_client, target, source_ip="203.0.113.1")
         assert r.status_code in (400, 401), r.text
 
     # the attacker's own source is now blocked...
-    r = await wrong_secret_attempt("203.0.113.1")
+    r = await wrong_secret_attempt(app_client, target, source_ip="203.0.113.1")
     assert r.status_code == 429, "the flooding source's own budget must be exhausted"
 
     # ...but a different source doing the exact same thing is not
-    r = await wrong_secret_attempt("203.0.113.2")
+    r = await wrong_secret_attempt(app_client, target, source_ip="203.0.113.2")
     assert r.status_code in (
         400,
         401,
@@ -779,11 +739,9 @@ async def test_failed_refresh_charges_the_refreshing_clients_own_bucket(
     app_client: AsyncClient,
 ):
     """A bad/expired/reused refresh token, presented with the client's real
-    secret, is exactly the safely-attributable case: client authentication
-    succeeded (the secret matched) before the refresh-token lookup failed,
-    so it must charge that client's own per-client bucket — the same
-    StampsAuthenticatedClientId path the authorization_code grant uses,
-    exercised here for ShardRefreshTokenGrant specifically."""
+    secret, is the safely-attributable case: authentication succeeded
+    before the refresh-token lookup failed, so it charges that client's own
+    bucket — exercised here for ShardRefreshTokenGrant specifically."""
     await pair_new_terminal(app_client)
     oidc_client = await make_client(app_name="refresher-app")
     tok, _ = await run_code_flow(app_client, oidc_client)
@@ -832,9 +790,9 @@ async def test_public_client_failed_grant_charges_its_own_bucket(
     )
     assert r.status_code in (400, 401), r.text
 
-    assert public_client.client_id in web_oidc._token_limits, (
-        "a public client's own failed grant must charge its own bucket"
-    )
+    assert (
+        public_client.client_id in web_oidc._token_limits
+    ), "a public client's own failed grant must charge its own bucket"
 
 
 @pytest.mark.config_override({"oidc": {"enabled": False}})

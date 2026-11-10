@@ -266,17 +266,10 @@ class StampsAuthenticatedClientId:
     request has validated as correct — for AuthorizationCodeGrant that is
     after the authorization-code lookup has already succeeded (see
     `validate_token_request` in authlib's authorization_code.py, which sets
-    it as the very last step), which is too late for a caller that needs to
-    know "did this request prove it is this client" independent of whether
-    a later, grant-specific check (code/refresh-token validity) also
-    passed. web.public.oidc's rate limiter needs exactly that: a failure
-    that happens *after* successful client authentication is safely
-    chargeable to that client's own bucket (it had to know the real secret,
-    or be a registered public client, to get this far); a failure where
-    authentication itself never succeeded must not be, since client_id is
-    not a secret (see AuthlibClient.get_client_id / register_client) and an
-    unauthenticated caller could otherwise grief an arbitrary victim's
-    budget just by naming it.
+    it as the very last step). That's too late for web.public.oidc's rate
+    limiter, which needs to know "did this request prove it is this client"
+    independent of whether a later, grant-specific check also passed — see
+    `_token_limits` in web/public/oidc.py for why.
     """
 
     def authenticate_token_endpoint_client(self):
