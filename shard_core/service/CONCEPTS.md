@@ -489,3 +489,102 @@ From the written record, each with its source:
 - The confirm route is unauthenticated, and the token is its only credential (#220).
 - With mail off, an address is taken as typed (#220, README).
 - Naming the mail switch after the deployment was rejected (5101509, PR #221).
+
+## Peers
+
+Peers keeps the owner's list of other shards, each known by its shard ID and by the public key fetched from that shard; it admits a request to an app as a peer's when a stored key verifies its signature, and it relays an app's requests to the same app on another shard, signed as this shard.
+
+The module is dormant, and the word needs care. No app in the store declares a `peer` path or calls `/internal/call_peer`, and neither UI links its Peers page: web-terminal hides the navigation entry and Sundial keeps it hidden, while both still serve the page at its URL. The developer documentation calls the feature "deactivated currently" because no app uses it, "in order not to confuse users", and the README calls it disabled. Nothing in shard_core is switched off, and nothing ever was: `/protected/peers` and `/internal/call_peer` are mounted, the refresh runs every minute on every shard, and the peer branch of `/internal/auth` runs for every request to an app that carries no valid terminal JWT. Every element below describes live code.
+
+### Files
+
+`service/peer.py` fetches a peer's identity, refreshes each minute every peer whose key it knows, verifies a peer's signature for `/internal/auth`, and receives `async_on_peer_write`. `web/protected/peers.py` is the owner's list at `/protected/peers`, which the Peers page of both UIs uses. `web/internal/call_peer.py` is the relay that apps call. `data_model/peer.py` holds `Peer`, the stored row, whose validator checks the key against the ID, and `InputPeer`, the body of the PUT. The `peers` table and its gateway, `database/peers.py`, belong to Database; the peer branch of `/internal/auth` belongs to the HTTP surface; `async_on_peer_write` and `on_peer_auth` are declared in `util/signals.py`.
+
+### A peer is the ID its owner entered
+
+```mermaid
+flowchart LR
+  E["Owner enters an ID,<br/>at least 6 characters"] -->|"PUT"| R["peers row<br/>with the ID as entered, no key yet"]
+  R -->|"within the PUT"| G["unsigned GET of whoareyou at<br/>(first 6 characters).freeshard.cloud"]
+  G -->|"accepted if the answer's ID extends the row's ID<br/>and the answer's key hashes to the answer's ID"| U["the row takes the answer's<br/>full ID, name and key"]
+  U -->|"every minute, now that the row has a key"| G
+```
+
+The owner adds a peer by entering at least the first 6 characters of its ID, normally the short ID people exchange. The owner never enters a key: since e6ac66e the PUT body has no key field, and the shard fetches the key from the peer's public `whoareyou`. The fetch is a plain GET of `https://<first 6 characters>.freeshard.cloud/core/public/meta/whoareyou`, whatever this shard's `dns` settings say, so only a hosted shard can be a peer. For hosted shards the ID maps directly to the URL by design (#167); a self-hosted peer would have to hand out its URL, and the list has no field for one. An answer is accepted only if the ID it reports extends the ID the row holds and the public key it reports hashes to that reported ID (`Peer.public_bytes_must_match_id`). The ID is a self-certifying name (see Identity and signing), but the binding compares only the characters the row holds, which before the first accepted answer are the typed prefix.
+
+After the first accepted answer, the row holds the peer's full ID, which pins its key in the [trust on first use](https://en.wikipedia.org/wiki/Trust_on_first_use) shape: every later answer is checked against all 103 characters, so an answer with another key is rejected, and apps receive the full ID as `auth.client_id`. *(Confirmed 2026-11-10 — the code has kept the typed ID since 2980bfb, so it cannot show the pin.)* The pin costs nothing, since shard keys never change (see Identity and signing). The code has not met it since the move to Postgres (2980bfb): the refresh writes the name, the key and the reachability and never the ID, and the gateway's update allow-list has no `id` column. The row therefore keeps the typed ID, every refresh accepts an answer whose ID merely extends that prefix and stores its key, and apps receive the typed ID. Rows imported from a TinyDB-era shard keep the ID they held, which is the full one for every peer that had answered.
+
+The peer's name is the name the peer publishes. Each accepted answer writes the name from `whoareyou` over the row's, including a name the owner entered (0d1b3a0, "pull name from peers", whose test expects the peer's own name after the owner set another). The name is the peer's claim about itself and identifies nothing; the ID does. `InputPeer.name` therefore lasts only until the first accepted answer, and neither UI sends one.
+
+### The refresh
+
+`update_all_peer_pubkeys` runs as a periodic task, started with the other background tasks, 60 seconds after each pass, and fetches `whoareyou` concurrently for every peer that has a key. Since #131 one peer's failure does not cost the others their refresh: a connection error or an HTTP error status marks that peer unreachable and keeps its key, and any other error, such as an answer with another ID or a malformed answer, leaves the row untouched and is logged as a warning. A peer without a key, because its first fetch failed or was rejected, is fetched again only when its PUT is sent again, which is what the per-peer refresh button on both UIs' Peers page does.
+
+The PUT fetches inside the request. The route sends `async_on_peer_write` with `send_async`, its one receiver awaits the fetch, and the route answers only afterwards. An error the fetch does not catch escapes the PUT as a 500 after the row was written, so a peer whose answer names another ID stays in the list without a key, marked reachable. The fetch has no timeout. A fetch inside the PUT that never completes holds the PUT open and one thread of the default executor. A refresh fetch that never completes holds the refresh pass, which the periodic task awaits before it sleeps, so no peer is refreshed again until that fetch ends.
+
+`is_reachable` records the outcome of the last fetch. Nothing in shard_core reads it, and neither UI shows it.
+
+### Admitting a peer's request
+
+```mermaid
+sequenceDiagram
+  participant P as shard_core on the peer
+  participant T as Traefik on this shard
+  participant C as shard_core on this shard
+  participant A as the app
+  P->>T: request to the app, signed with the peer's key
+  T->>C: GET /internal/auth with every header<br/>and X-Forwarded-*, without the body
+  C->>C: without a valid terminal JWT, load every peer,<br/>rebuild the request, verify the signature
+  C-->>T: 200 with the path's X-Ptl-* headers
+  T->>A: the original request, body included,<br/>with those X-Ptl-* headers
+```
+
+For every request to an app that carries no valid terminal JWT, `/internal/auth` calls `verify_peer_auth`. It rebuilds the original request from the `X-Forwarded-Method`, `-Proto`, `-Host` and `-Uri` headers that Traefik's forwardAuth sets (b3610eb), together with every other header of the request, all of which Traefik copies because the `auth` middleware names no `authRequestHeaders`. It loads the whole `peers` table and validates every row into a `Peer`, which parses and hashes every stored key, before it looks for a signature; this is the per-request database work the root records against *The auth path does no per-request database work*. The signature's key ID must equal the first 6 characters of a stored ID exactly, which is the short ID that `signed_request` sends as key ID. The verifier requires the signature to cover the method, the authority and the target URI with its query, accepts it for a day after its `created` time, and remembers none it has seen (see Identity and signing). A request it verifies is a peer's: the client type becomes `peer`, with the row's ID and name as client ID and client name, and the app sees them only through the `X-Ptl-*` header templates its manifest declares for the path. A path declared `peer` admits only a peer, a `private` path only a terminal, and the terminal JWT is checked first, so a request carrying both is a terminal's.
+
+The body of a peer's request is not verified. forwardAuth sends the authentication server no body: Traefik v2.11, which hosted shards run, has no option for it, and under v3 the `forwardBody` option is off by default and shard_core does not set it. The rebuilt request therefore has no body, and the verifier skips the comparison of the signed `Content-Digest` header with the body; its `VerifyResult.body` stays `None`. At the app, a peer's signature vouches for the method, the authority, the target URI and, from a shard_core signer, the `Date` and the digest header. The body itself is vouched for by TLS from the peer to Traefik, and by nothing else. This adds no exposure beyond the `portal` network gap the root records (#126).
+
+After verifying, the branch reads the peer again by key ID through a prefix query and reports the first row the query returns, which is the row whose key verified as long as no two rows share their first 6 characters. It then sends `on_peer_auth` with `send()`. That signal has had no receiver since it was added (691379e, October 2022).
+
+### Relaying an app's request
+
+`/internal/call_peer/<id>/<path>` sends an app's request to the same app on another shard. Like every `/internal` route it is reachable only on the `portal` network (root, *Admission is decided at the proxy*). It identifies the calling app by the request's source address, which it maps to a container on `portal` through the Docker SDK, cached for the life of the process (#188). It takes that container's name for the app's name and sends the request, signed by `signed_request`, to `https://<app>.<id>.freeshard.cloud/<path>`. The developer documentation states the contract this serves: an app talks only to its namesake on a peer, and listens itself on every endpoint it calls there, so that the calls are symmetric. The relay does not consult the peers list. An app can address any shard, and only the receiving shard's list decides whether the request arrives as a peer's; the documentation's requirement that both shards add each other is what communication in both directions needs.
+
+The relay is one of the lenders of the shard's signature that the root names (*The controller is one signed counterparty*). It signs any method, path and body that any container on the `portal` network sends, toward the namesake app on any shard, whether or not the owner listed that shard.
+
+Three parts of the relay break the contract above. A container's name is its app's name only where the compose file names the calling container after the app, as the store does for every app's entrypoint container except immich's (`immich_server`). The signed request must reach the named peer's host, and nothing checks that the `<id>` segment the relay places in the host name is a shard ID. And the relay forwards the method, the path and the body, and nothing else: it drops the query string, every request header including `Content-Type`, and every response header, and passes the answer through one byte per chunk, the default of `iter_content`. The documentation presents the relay as a drop-in replacement for the peer's URL.
+
+A peer's answer carries no signature. The requesting shard trusts it, like the refresh's `whoareyou`, on TLS to the peer's domain, so the DNS of `freeshard.cloud` and the web PKI stand between the ID people exchanged and the shard that answers. The README's "All communication is encrypted and authenticated using the shard IDs as trust anchors" holds for answers only through that chain.
+
+### The owner's list
+
+`/protected/peers` addresses a peer by any prefix of its stored ID. `GET /{id}` returns the first row whose ID starts with `id`. `PUT` updates every row whose ID starts with the entered ID, or inserts one with no key, marked reachable, and then fetches. `DELETE /{id}` removes every row whose ID starts with `id` and logs at critical level when that was more than one. Only the PUT requires 6 characters, and the prefix queries pass the entered ID to `LIKE` unescaped. Prefix addressing lets the owner refer to a row, which holds the full ID once the peer has answered, by its short ID, and while the controller keeps short IDs unique (freeshard-controller#350), a short ID matches at most one such row. Because rows keep the typed ID today, entering a longer, correct ID for a peer already in the list inserts a second row under the same short ID, and the auth branch then picks one of the two by table order. The PUT answers with the values it was sent, so its answer has the entered name and no key. `GET` with `name` searches the names; neither UI uses it.
+
+Apps have no route of their own for the list. The developer documentation tells them to call `http://shard_core/protected/peers` directly, which works only because apps share the `portal` network with shard_core, a gap the root records as planned for hardening (#126). The README says apps list peers through the internal section of the API, which has no such route.
+
+### Residue
+
+Besides the design above, the module carries pieces that nothing in shard_core or either UI consumes: `on_peer_auth`, which never had a receiver; `is_reachable`, which nothing reads; `Peer.pubkey` and `database.peers.upsert`, which nothing calls; the name search; `InputPeer.name`, overwritten at the first accepted answer; the second lookup after verification, which the preload made redundant; and the critical log on a delete of more than one row.
+
+### Boundaries
+
+Peers owns the `peers` rows outside the boot-time paths, the fetch and refresh of peers' identities, the verification of peers' signatures, and the relay's choice of target.
+
+It relies on Database for the `peers` gateway, whose partial updates accept only `name`, `public_bytes_b64` and `is_reachable`. The TinyDB import and the snapshot restore write the table directly, and the snapshot carries the peers and their keys with the backup. It relies on Identity and signing for `signed_request`, which signs the relay's requests with the default identity and the short ID as key ID, and for the ID derivation it re-runs on every peer's key (`PublicKey.to_hash_id`); this shard's own `whoareyou` is what other shards fetch. It relies on the HTTP surface to call `verify_peer_auth` only after the terminal check, to treat `InvalidSignature` and `KeyError` as an anonymous client, and to apply the `peer` access level, and on Routing for the `auth` forwardAuth middleware on every app router, which passes every request header and Traefik's `X-Forwarded-*` headers to `/internal/auth` and the `X-Ptl-*` headers of its answer to the app. The composition root starts the refresh with the other background tasks. The relay needs the Docker SDK and the `portal` network to identify its caller, and the relay and the refresh both need DNS and TLS for `freeshard.cloud`.
+
+Of the root invariants it keeps true:
+
+- *The auth path does no per-request database work*: currently broken by the table load and the key hashing in `verify_peer_auth`.
+- *Admission is decided at the proxy*: the `peer` access level is decided at `/internal/auth`, from a signature Traefik delivers in the headers; the relay is one of the `/internal` routes apps reach directly on `portal`.
+- The rule, under *Every change to an installed app is announced*, that each signal is synchronous or asynchronous throughout: `async_on_peer_write` has one coroutine receiver and is sent with `send_async`; `on_peer_auth` is sent with `send` and has no receiver, so a coroutine connected to it would fail every admitted peer request.
+- *A backup restores the shard as it was*: `peers` is among the tables the snapshot dumps, so a restored shard keeps its peers and their keys.
+
+### Constraints
+
+From the maintainer's comment on #167 (2026-07-22) and the record named:
+
+- There is no controller-run directory of shard keys. People exchange IDs, which for hosted shards map directly to URLs.
+- Peers are addressed as `<short ID>.freeshard.cloud`. The owner of a self-hosted shard would have to hand out its URL.
+- An unknown shard gets no permissions on first contact.
+- Trust is never granted for recognizing a name, since owners would accept a familiar name without checking the ID. This one is tentative: the maintainer wrote that it needs deeper thought.
+- Mapping user identities across shards is deferred; one user per shard stays the norm.
+- Peering stays unoffered in the UIs until an app uses it (documentation 8628133, README ef3e9fe).
