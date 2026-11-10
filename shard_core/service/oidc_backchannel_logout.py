@@ -1,11 +1,9 @@
 """Delivery of OIDC Back-Channel Logout 1.0 notifications to installed apps.
 
-Follow-up to the terminal-binding work (issue #189): that revoked everything
-the shard itself issued on un-pair (oidc.revoke_for_terminal), but a relying
-party like Immich mints its own app-local session at the OAuth callback and
-never re-checks the IdP, so a revoked access token changes nothing for a
-browser or phone that is already logged in. This module closes that gap by
-pushing a logout_token to the app, per OIDC Back-Channel Logout 1.0.
+A relying party like Immich mints its own app-local session at the OAuth
+callback and never re-checks the IdP, so revoking the shard's own tokens on
+un-pair changes nothing for a browser or phone that is already logged in.
+This module closes that gap by pushing a logout_token to the app.
 
 Enqueue happens synchronously inside the un-pair transaction
 (web/protected/terminals.py, see enqueue_for_terminal): the terminal's live
@@ -15,18 +13,16 @@ marks those grants revoked and before the terminals row disappears (its FK is
 ON DELETE SET NULL — the linkage is gone afterwards).
 
 Delivery is out-of-band and durable: migration shard-core-0008 gives the
-outbox a table, not an in-memory queue — see the installation worker's
-analogous in-memory-queue hazard (service/app_installation/worker.py) and the
-reconcile_interrupted_* steps it needed to compensate. An outbox row needs no
-such reconciliation; the next drain just picks it up again.
+outbox a table, not an in-memory queue, so a row survives a restart and is
+simply picked up by the next drain.
 
 drain_due_outbox() attempts delivery of every outbox entry that is due and
 whose owning app is currently RUNNING (claim_due_outbox_entries bakes that
 filter in — a stopped app is never woken just to receive its own logout).
 Claiming is atomic (FOR UPDATE SKIP LOCKED, see database.oidc) because this
 module's two drain triggers are independent and uncoordinated, so overlapping
-drains are routine, not a theoretical edge case.
-It is driven by two triggers, both calling the same function:
+drains are routine, not a theoretical edge case. It is driven by two
+triggers, both calling the same function:
   * the on_apps_update signal (connected below), which fires on every app
     status write — draining then is a no-op unless some due row's app just
     became RUNNING;
@@ -34,13 +30,10 @@ It is driven by two triggers, both calling the same function:
     backoff elapses without any app status changing in between.
 
 The logout_token is minted fresh on every delivery attempt
-(oidc_provider.sign_logout_token), never cached from enqueue time: Immich
-validates it with maxTokenAge: '2m' (server/src/repositories/
-oauth.repository.ts), so a token signed at un-pair and retried minutes later
-would be rejected by the relying party even though delivery itself went
-through. This is the single most likely implementation bug in this feature —
-see tests/test_oidc_backchannel_logout.py for a regression test that retries
-after a simulated delay and asserts the second token is not the first.
+(oidc_provider.sign_logout_token), never cached from enqueue time: a relying
+party may reject a token whose age exceeds its own tolerance, so a token
+signed at un-pair and retried minutes later could be rejected even though
+delivery itself went through.
 """
 
 import logging
@@ -82,9 +75,8 @@ def _next_delay_seconds(attempts_made: int) -> int:
 
 
 async def _post_logout_token(url: str, token: str) -> None:
-    """The actual network call, factored out so tests can patch exactly this
-    (same pattern as app_installation.worker._download_app_zip) instead of
-    mocking the httpx client machinery."""
+    """The network call, factored out so tests can patch it directly instead
+    of mocking the httpx client machinery."""
     async with httpx.AsyncClient(timeout=DELIVERY_TIMEOUT) as client:
         response = await client.post(url, data={"logout_token": token})
     response.raise_for_status()
@@ -101,34 +93,28 @@ async def _attempt_delivery(entry: dict) -> None:
         async with db_conn() as conn:
             error = "client no longer declares a backchannel_logout_uri"
             log.error(
-                "backchannel logout delivery to app %s (client %s, sid %s) "
-                "failed permanently: %s",
+                "backchannel logout delivery to app %s (client %s, sid %s) failed permanently: %s",
                 entry["app_name"],
                 entry["client_id"],
                 entry["sid"],
                 error,
             )
-            await db_oidc.mark_outbox_failed(
-                conn, entry["id"], entry["attempts"] + 1, error
-            )
+            await db_oidc.mark_outbox_failed(conn, entry["id"], entry["attempts"] + 1, error)
         return
 
     await oidc_provider.ensure_configured()
-    token = oidc_provider.sign_logout_token(
-        client_id=entry["client_id"], user_sub=entry["user_sub"], sid=entry["sid"]
-    )
+    token = oidc_provider.sign_logout_token(client_id=entry["client_id"], user_sub=entry["user_sub"], sid=entry["sid"])
     error = None
     try:
         await _post_logout_token(entry["backchannel_logout_uri"], token)
     except Exception as e:
         # Deliberately not narrowed to httpx.HTTPError: ANY failure to
         # deliver must flow through the retry bookkeeping below. A narrower
-        # catch here lets an exception of a type we didn't anticipate (e.g.
-        # a TypeError from a malformed URL) escape to drain_due_outbox's
-        # batch-level catch-all, which only logs -- it cannot update
-        # next_attempt_at/status, so the row stays due and gets retried on
-        # every single drain forever: an uncapped retry storm that never
-        # reaches MAX_ATTEMPTS and is never marked failed (found in review).
+        # catch here lets an unanticipated exception type (e.g. a TypeError
+        # from a malformed URL) escape to drain_due_outbox's batch-level
+        # catch-all, which only logs -- it cannot update next_attempt_at/
+        # status, so the row would stay due and retry on every drain
+        # forever, uncapped.
         error = f"{type(e).__name__}: {e}"
 
     async with db_conn() as conn:
@@ -138,8 +124,7 @@ async def _attempt_delivery(entry: dict) -> None:
         attempts = entry["attempts"] + 1
         if attempts >= MAX_ATTEMPTS:
             log.error(
-                "backchannel logout delivery to app %s (client %s, sid %s) "
-                "failed permanently after %d attempts: %s",
+                "backchannel logout delivery to app %s (client %s, sid %s) failed permanently after %d attempts: %s",
                 entry["app_name"],
                 entry["client_id"],
                 entry["sid"],
@@ -151,8 +136,7 @@ async def _attempt_delivery(entry: dict) -> None:
             delay = _next_delay_seconds(attempts)
             next_attempt_at = datetime.now(timezone.utc) + timedelta(seconds=delay)
             log.warning(
-                "backchannel logout delivery to app %s (client %s, sid %s) "
-                "failed (attempt %d/%d), retrying in %ds: %s",
+                "backchannel logout delivery to app %s (client %s, sid %s) failed (attempt %d/%d), retrying in %ds: %s",
                 entry["app_name"],
                 entry["client_id"],
                 entry["sid"],
@@ -161,9 +145,7 @@ async def _attempt_delivery(entry: dict) -> None:
                 delay,
                 error,
             )
-            await db_oidc.mark_outbox_retry(
-                conn, entry["id"], attempts, next_attempt_at, error
-            )
+            await db_oidc.mark_outbox_retry(conn, entry["id"], attempts, next_attempt_at, error)
 
 
 async def drain_due_outbox() -> None:
@@ -181,8 +163,7 @@ async def drain_due_outbox() -> None:
             # Defense in depth: a bug in the bookkeeping above must not stop
             # other entries in this batch from being attempted.
             log.error(
-                "unexpected error delivering backchannel logout "
-                "(client %s, sid %s): %s",
+                "unexpected error delivering backchannel logout (client %s, sid %s): %s",
                 entry["client_id"],
                 entry["sid"],
                 e,

@@ -1,22 +1,20 @@
-"""Tests for OIDC Back-Channel Logout 1.0 delivery (issue #192).
+"""Tests for OIDC Back-Channel Logout 1.0 delivery.
 
 Follow-up to tests/test_oidc.py's terminal-binding/revocation-on-unpair
 coverage: those tests prove the shard's own tokens die on un-pair. These
 prove the separate, harder half — that a durable notification gets queued
 for the app to kill its own session.
 
-This slice covers enqueue (reading the terminal's live grants and writing
-one outbox row per (client_id, sid) BEFORE the un-pair transaction revokes
-them / deletes the terminal row), registering a client's logout URI, and
-delivery itself: minting a fresh logout_token on every attempt, retrying
-with backoff, and the bounded-retry-then-permanently-failed path. Discovery
-advertises backchannel_logout_supported unconditionally (covered by
-tests/test_oidc.py::test_discovery_document) since the whole /oidc router
-already 404s unless oidc.enabled is set — there is no separate flag.
+Covers enqueue (reading the terminal's live grants and writing one outbox
+row per (client_id, sid) BEFORE the un-pair transaction revokes them /
+deletes the terminal row), registering a client's logout URI, and delivery
+itself: minting a fresh logout_token on every attempt, retrying with
+backoff, and the bounded-retry-then-permanently-failed path. Discovery
+advertising is covered by tests/test_oidc.py::test_discovery_document
+instead, since it's unconditional.
 
-Real-Immich end-to-end verification is explicitly out of scope here (see the
-issue and the freeshard-oidc-identity-campaign skill). All tests use
-app_client: no Docker, no real app container, since nothing here needs one.
+All tests use app_client: no Docker, no real app container, since nothing
+here needs one.
 """
 
 import base64
@@ -74,16 +72,12 @@ async def ensure_app(name: str, status: str = "stopped"):
 
 async def make_client(app_name: str, backchannel_logout_uri: str | None = LOGOUT_URI):
     await ensure_app(app_name)
-    return await oidc_provider.register_client(
-        app_name, [REDIRECT_URI], backchannel_logout_uri=backchannel_logout_uri
-    )
+    return await oidc_provider.register_client(app_name, [REDIRECT_URI], backchannel_logout_uri=backchannel_logout_uri)
 
 
 async def set_app_status(name: str, status: str):
     async with db_conn() as conn:
-        await conn.execute(
-            "UPDATE installed_apps SET status = %s WHERE name = %s", (status, name)
-        )
+        await conn.execute("UPDATE installed_apps SET status = %s WHERE name = %s", (status, name))
 
 
 async def terminal_id(name: str) -> str:
@@ -146,8 +140,7 @@ async def jwks_keyset(client: AsyncClient) -> KeySet:
 
 async def force_due_now(id_: int):
     await rows(
-        "UPDATE oidc_backchannel_logout_outbox SET next_attempt_at = now() "
-        "WHERE id = %s RETURNING id",
+        "UPDATE oidc_backchannel_logout_outbox SET next_attempt_at = now() WHERE id = %s RETURNING id",
         id_,
     )
 
@@ -239,9 +232,7 @@ async def test_register_client_renders_and_stores_backchannel_logout_uri(
         redirect_uris=["https://templated_app.{{ portal.domain }}/callback"],
         backchannel_logout_uri="https://templated_app.{{ portal.domain }}/blco",
     )
-    ctx = await oidc_provider.ensure_app_client(
-        "templated_app", meta, FakePortal(domain="shard.example")
-    )
+    ctx = await oidc_provider.ensure_app_client("templated_app", meta, FakePortal(domain="shard.example"))
 
     async with db_conn() as conn:
         stored = await db_oidc.get_client(conn, ctx["client_id"])
@@ -251,11 +242,10 @@ async def test_register_client_renders_and_stores_backchannel_logout_uri(
 async def test_register_client_rejects_a_non_http_scheme_backchannel_logout_uri(
     app_client: AsyncClient,
 ):
-    """Defense-in-depth against SSRF (found in review): backchannel_logout_uri
-    is app-declared metadata that ends up as the target of an outbound
-    request shard_core itself makes at delivery time, unlike redirect_uris
-    (only ever string-compared, never dereferenced). A non-http(s) scheme
-    must never reach the database."""
+    """backchannel_logout_uri is app-declared metadata that ends up as the
+    target of an outbound request shard_core itself makes at delivery time,
+    unlike redirect_uris (only ever string-compared, never dereferenced). A
+    non-http(s) scheme must never reach the database."""
     await ensure_app("evil_app")
     client = await oidc_provider.register_client(
         "evil_app", [REDIRECT_URI], backchannel_logout_uri="javascript:alert(1)"
@@ -312,9 +302,7 @@ async def test_drain_delivers_once_the_app_is_running(app_client: AsyncClient, m
     assert entry["status"] == "delivered"
 
 
-async def test_on_apps_update_signal_drains_a_due_entry(
-    app_client: AsyncClient, mocker
-):
+async def test_on_apps_update_signal_drains_a_due_entry(app_client: AsyncClient, mocker):
     """The spec's actual hook: drain is triggered by on_apps_update, not by
     a test calling drain_due_outbox() directly."""
     post = mocker.patch(
@@ -335,9 +323,7 @@ async def test_on_apps_update_signal_drains_a_due_entry(
     assert entry["status"] == "delivered"
 
 
-async def test_logout_token_is_minted_fresh_on_each_delivery_attempt(
-    app_client: AsyncClient, mocker
-):
+async def test_logout_token_is_minted_fresh_on_each_delivery_attempt(app_client: AsyncClient, mocker):
     """The headline regression the issue calls out: Immich enforces
     maxTokenAge '2m', so a token minted once at un-pair and replayed on a
     later retry must never happen — each attempt mints its own."""
@@ -391,9 +377,7 @@ async def test_logout_token_is_minted_fresh_on_each_delivery_attempt(
     assert final["status"] == "delivered"
 
 
-async def test_bounded_retry_then_permanent_failure_is_queryable(
-    app_client: AsyncClient, mocker
-):
+async def test_bounded_retry_then_permanent_failure_is_queryable(app_client: AsyncClient, mocker):
     mocker.patch(
         "shard_core.service.oidc_backchannel_logout._post_logout_token",
         side_effect=httpx.ConnectError("always fails"),
@@ -427,14 +411,11 @@ async def test_bounded_retry_then_permanent_failure_is_queryable(
     assert due == []
 
 
-async def test_missing_backchannel_logout_uri_at_delivery_fails_fast(
-    app_client: AsyncClient, mocker
-):
+async def test_missing_backchannel_logout_uri_at_delivery_fails_fast(app_client: AsyncClient, mocker):
     """The claim query live-joins oidc_clients rather than snapshotting the
     uri at enqueue time, so a reinstall that drops backchannel_logout_uri
     can null it out from under an already-queued row. There is nowhere to
-    deliver to any more -- this must fail immediately, not retry forever
-    (found in review: an earlier version had no such guard)."""
+    deliver to any more -- this must fail immediately, not retry forever."""
     post = mocker.patch("shard_core.service.oidc_backchannel_logout._post_logout_token")
     await pair_new_terminal(app_client, name="phone")
     tid = await terminal_id("phone")
@@ -457,15 +438,12 @@ async def test_missing_backchannel_logout_uri_at_delivery_fails_fast(
     assert "backchannel_logout_uri" in final["last_error"]
 
 
-async def test_non_http_exception_during_post_is_retried_not_stuck(
-    app_client: AsyncClient, mocker
-):
-    """Regression for the bug class found in review: a prior version only
-    caught httpx.HTTPError around the POST, so any other exception (e.g. a
-    TypeError from a bad argument) escaped to drain_due_outbox's batch-level
-    catch-all, which cannot update next_attempt_at/status -- the row stayed
-    due and was retried on every single drain forever, uncapped. Any
-    exception from the POST must flow through the normal retry bookkeeping."""
+async def test_non_http_exception_during_post_is_retried_not_stuck(app_client: AsyncClient, mocker):
+    """Any exception from the POST, not just httpx.HTTPError, must flow
+    through the normal retry bookkeeping -- otherwise it escapes to
+    drain_due_outbox's batch-level catch-all, which cannot update
+    next_attempt_at/status, so the row would stay due and retry on every
+    drain forever, uncapped."""
     mocker.patch(
         "shard_core.service.oidc_backchannel_logout._post_logout_token",
         side_effect=TypeError("Request URL is missing an 'http://' scheme"),
@@ -480,9 +458,7 @@ async def test_non_http_exception_during_post_is_retried_not_stuck(
     await oidc_backchannel_logout.drain_due_outbox()
 
     entry = (await rows("SELECT * FROM oidc_backchannel_logout_outbox"))[0]
-    assert (
-        entry["status"] == "pending"
-    ), "must be released for retry, not stuck in_flight"
+    assert entry["status"] == "pending", "must be released for retry, not stuck in_flight"
     assert entry["attempts"] == 1
     assert "TypeError" in entry["last_error"]
     assert entry["next_attempt_at"] > entry["created"]
@@ -514,9 +490,7 @@ async def test_concurrent_claims_do_not_double_claim_a_row(app_client: AsyncClie
         # the same row while that lock stands.
         async with db_conn() as conn2:
             second_claim = await db_oidc.claim_due_outbox_entries(conn2)
-        assert (
-            second_claim == []
-        ), "SKIP LOCKED must exclude a row locked by another transaction"
+        assert second_claim == [], "SKIP LOCKED must exclude a row locked by another transaction"
 
     entry = (await rows("SELECT * FROM oidc_backchannel_logout_outbox"))[0]
     assert entry["status"] == "in_flight"
@@ -542,8 +516,7 @@ async def test_stuck_in_flight_row_is_reclaimed_after_a_crash(app_client: AsyncC
     # simulate the claim going stale (process died mid-delivery): backdate
     # `updated` past the stuck threshold instead of waiting it out for real.
     await rows(
-        "UPDATE oidc_backchannel_logout_outbox "
-        "SET updated = now() - interval '10 minutes' WHERE id = %s RETURNING id",
+        "UPDATE oidc_backchannel_logout_outbox SET updated = now() - interval '10 minutes' WHERE id = %s RETURNING id",
         entry_id,
     )
 
@@ -564,9 +537,9 @@ async def test_outcome_writes_are_guarded_against_a_stale_straggler(
     """A row reclaimed from a slow-but-not-crashed worker leaves two writers
     racing to record an outcome for the same id. mark_outbox_delivered/
     retry/failed must only take effect for the writer whose claim is still
-    the current one (status='in_flight') -- found in review: without the
-    guard, whichever writer runs last silently stomps the other's result,
-    including turning an already-'delivered' row back to 'pending'."""
+    the current one (status='in_flight') -- without the guard, whichever
+    writer runs last silently stomps the other's result, including turning
+    an already-'delivered' row back to 'pending'."""
     await pair_new_terminal(app_client, name="phone")
     tid = await terminal_id("phone")
     oidc_client = await make_client("bc_app")
@@ -589,9 +562,7 @@ async def test_outcome_writes_are_guarded_against_a_stale_straggler(
     assert delivered["status"] == "delivered"
 
     async with db_conn() as conn:
-        await db_oidc.mark_outbox_retry(
-            conn, entry_id, 1, delivered["next_attempt_at"], "stale straggler"
-        )
+        await db_oidc.mark_outbox_retry(conn, entry_id, 1, delivered["next_attempt_at"], "stale straggler")
     unchanged = (await rows("SELECT * FROM oidc_backchannel_logout_outbox"))[0]
     assert unchanged["status"] == "delivered", "stale write must not resurrect the row"
     assert unchanged["last_error"] is None

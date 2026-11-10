@@ -26,9 +26,7 @@ async def upsert_client(conn: AsyncConnection, client: dict) -> OidcClient:
             backchannel_logout_uri = EXCLUDED.backchannel_logout_uri
         RETURNING *"""
     async with conn.cursor(row_factory=class_row(OidcClient)) as cur:
-        await cur.execute(
-            sql, {**client, "redirect_uris": Jsonb(client["redirect_uris"])}
-        )
+        await cur.execute(sql, {**client, "redirect_uris": Jsonb(client["redirect_uris"])})
         return await cur.fetchone()
 
 
@@ -39,9 +37,7 @@ async def get_client(conn: AsyncConnection, client_id: str) -> OidcClient | None
         return await cur.fetchone()
 
 
-async def get_client_by_app_name(
-    conn: AsyncConnection, app_name: str
-) -> OidcClient | None:
+async def get_client_by_app_name(conn: AsyncConnection, app_name: str) -> OidcClient | None:
     sql: LiteralString = "SELECT * FROM oidc_clients WHERE app_name = %s"
     async with conn.cursor(row_factory=class_row(OidcClient)) as cur:
         await cur.execute(sql, (app_name,))
@@ -62,9 +58,7 @@ async def insert_code(conn: AsyncConnection, code: dict):
     await conn.execute(sql, code)
 
 
-async def redeem_code(
-    conn: AsyncConnection, code_hash: str, client_id: str
-) -> OidcCode | None:
+async def redeem_code(conn: AsyncConnection, code_hash: str, client_id: str) -> OidcCode | None:
     """Atomically consume the code — the single UPDATE makes concurrent
     redemptions of the same code impossible (only one caller gets the row)."""
     sql: LiteralString = """UPDATE oidc_codes SET redeemed = TRUE
@@ -75,12 +69,8 @@ async def redeem_code(
         return await cur.fetchone()
 
 
-async def get_code(
-    conn: AsyncConnection, code_hash: str, client_id: str
-) -> OidcCode | None:
-    sql: LiteralString = (
-        "SELECT * FROM oidc_codes WHERE code_hash = %s AND client_id = %s"
-    )
+async def get_code(conn: AsyncConnection, code_hash: str, client_id: str) -> OidcCode | None:
+    sql: LiteralString = "SELECT * FROM oidc_codes WHERE code_hash = %s AND client_id = %s"
     async with conn.cursor(row_factory=class_row(OidcCode)) as cur:
         await cur.execute(sql, (code_hash, client_id))
         return await cur.fetchone()
@@ -106,20 +96,14 @@ async def insert_token(conn: AsyncConnection, token: dict):
     await conn.execute(sql, token)
 
 
-async def get_token_by_access_hash(
-    conn: AsyncConnection, access_token_hash: str
-) -> OidcToken | None:
-    sql: LiteralString = (
-        "SELECT * FROM oidc_tokens WHERE access_token_hash = %s AND NOT revoked"
-    )
+async def get_token_by_access_hash(conn: AsyncConnection, access_token_hash: str) -> OidcToken | None:
+    sql: LiteralString = "SELECT * FROM oidc_tokens WHERE access_token_hash = %s AND NOT revoked"
     async with conn.cursor(row_factory=class_row(OidcToken)) as cur:
         await cur.execute(sql, (access_token_hash,))
         return await cur.fetchone()
 
 
-async def get_token_by_refresh_hash(
-    conn: AsyncConnection, refresh_token_hash: str
-) -> OidcToken | None:
+async def get_token_by_refresh_hash(conn: AsyncConnection, refresh_token_hash: str) -> OidcToken | None:
     # revoked rows included on purpose — rotated-token replay must be
     # distinguishable from an unknown token (reuse detection)
     sql: LiteralString = "SELECT * FROM oidc_tokens WHERE refresh_token_hash = %s"
@@ -129,16 +113,12 @@ async def get_token_by_refresh_hash(
 
 
 async def revoke_token(conn: AsyncConnection, access_token_hash: str):
-    sql: LiteralString = (
-        "UPDATE oidc_tokens SET revoked = TRUE WHERE access_token_hash = %s"
-    )
+    sql: LiteralString = "UPDATE oidc_tokens SET revoked = TRUE WHERE access_token_hash = %s"
     await conn.execute(sql, (access_token_hash,))
 
 
 async def revoke_all_for_grant(conn: AsyncConnection, client_id: str, user_sub: int):
-    sql: LiteralString = (
-        "UPDATE oidc_tokens SET revoked = TRUE WHERE client_id = %s AND user_sub = %s"
-    )
+    sql: LiteralString = "UPDATE oidc_tokens SET revoked = TRUE WHERE client_id = %s AND user_sub = %s"
     await conn.execute(sql, (client_id, user_sub))
 
 
@@ -148,12 +128,8 @@ async def revoke_for_terminal(conn: AsyncConnection, terminal_id: str):
     Must run before the terminals row is deleted — the FK is ON DELETE SET NULL,
     so afterwards nothing matches terminal_id any more.
     """
-    revoke_tokens: LiteralString = (
-        "UPDATE oidc_tokens SET revoked = TRUE WHERE terminal_id = %s"
-    )
-    burn_codes: LiteralString = (
-        "UPDATE oidc_codes SET redeemed = TRUE WHERE terminal_id = %s AND NOT redeemed"
-    )
+    revoke_tokens: LiteralString = "UPDATE oidc_tokens SET revoked = TRUE WHERE terminal_id = %s"
+    burn_codes: LiteralString = "UPDATE oidc_codes SET redeemed = TRUE WHERE terminal_id = %s AND NOT redeemed"
     await conn.execute(revoke_tokens, (terminal_id,))
     await conn.execute(burn_codes, (terminal_id,))
 
@@ -161,9 +137,7 @@ async def revoke_for_terminal(conn: AsyncConnection, terminal_id: str):
 # --- backchannel logout outbox ----------------------------------------------
 
 
-async def get_live_grants_for_terminal(
-    conn: AsyncConnection, terminal_id: str
-) -> list[dict]:
+async def get_live_grants_for_terminal(conn: AsyncConnection, terminal_id: str) -> list[dict]:
     """Distinct (client, sid, user) combinations with a live (unrevoked)
     token for this terminal — the app sessions a back-channel logout must
     notify. Must be called before revoke_for_terminal marks these tokens
@@ -176,9 +150,7 @@ async def get_live_grants_for_terminal(
         return await cur.fetchall()
 
 
-async def enqueue_backchannel_logout(
-    conn: AsyncConnection, terminal_id: str, grants: list[dict]
-) -> None:
+async def enqueue_backchannel_logout(conn: AsyncConnection, terminal_id: str, grants: list[dict]) -> None:
     """One outbox row per (client_id, sid) grant whose client declared a
     backchannel_logout_uri — nothing to deliver to otherwise. Idempotent: a
     (client_id, sid) pair already enqueued is left alone (ON CONFLICT DO
@@ -195,9 +167,7 @@ async def enqueue_backchannel_logout(
         await conn.execute(sql, {**grant, "terminal_id": terminal_id})
 
 
-async def claim_due_outbox_entries(
-    conn: AsyncConnection, stuck_after_seconds: int = 120
-) -> list[dict]:
+async def claim_due_outbox_entries(conn: AsyncConnection, stuck_after_seconds: int = 120) -> list[dict]:
     """Atomically claim pending outbox rows whose backoff has elapsed and
     whose app is currently RUNNING — flipping them to 'in_flight' in the same
     statement that selects them.
@@ -216,9 +186,8 @@ async def claim_due_outbox_entries(
 
     A row stuck 'in_flight' longer than stuck_after_seconds (the process
     crashed between claiming it and calling mark_outbox_delivered/retry/
-    failed) is reclaimed the same way — otherwise a single crash would strand
-    the row forever, no different in kind from the installation worker's own
-    in-memory-queue hazard this outbox exists to avoid.
+    failed) is reclaimed the same way — otherwise a single crash would
+    strand the row forever.
     """
     claim_sql: LiteralString = """UPDATE oidc_backchannel_logout_outbox
         SET status = 'in_flight', updated = now()
@@ -258,12 +227,8 @@ async def mark_outbox_delivered(conn: AsyncConnection, id_: int) -> None:
     can be re-claimed by a second worker while the first is still running.
     Without this guard, whichever of the two writes last would stomp the
     other's outcome -- a 'delivered' overwritten back to 'pending'/'failed',
-    or a lost-update on `attempts` (found in DB review; same race class as
-    the one the claim step itself was built to close, one layer further
-    in). The guard makes the second writer's UPDATE match zero rows instead
-    (found in review; low-probability given DELIVERY_TIMEOUT=10 vs
-    stuck_after_seconds=120, and OIDC Back-Channel Logout 1.0 tolerates a
-    duplicate logout_token delivery by spec -- but the fix costs nothing)."""
+    or a lost-update on `attempts`. The guard makes the second writer's
+    UPDATE match zero rows instead."""
     sql: LiteralString = """UPDATE oidc_backchannel_logout_outbox
         SET status = 'delivered', updated = now()
         WHERE id = %s AND status = 'in_flight'"""
@@ -287,9 +252,7 @@ async def mark_outbox_retry(
     await conn.execute(sql, (attempts, next_attempt_at, error, id_))
 
 
-async def mark_outbox_failed(
-    conn: AsyncConnection, id_: int, attempts: int, error: str
-) -> None:
+async def mark_outbox_failed(conn: AsyncConnection, id_: int, attempts: int, error: str) -> None:
     """Guarded by `AND status = 'in_flight'` -- see mark_outbox_delivered's
     docstring."""
     sql: LiteralString = """UPDATE oidc_backchannel_logout_outbox
@@ -298,13 +261,8 @@ async def mark_outbox_failed(
     await conn.execute(sql, (attempts, error, id_))
 
 
-async def get_outbox_entries_by_status(
-    conn: AsyncConnection, status: str
-) -> list[dict]:
-    """Queryable durable state for a future "delivery failed for this
-    terminal/client" UI marker — deliberately not built here (see issue #192:
-    that's a separate Sundial-repo follow-up). This is the backend half it
-    will read from."""
+async def get_outbox_entries_by_status(conn: AsyncConnection, status: str) -> list[dict]:
+    """Outbox rows filtered by delivery status."""
     sql: LiteralString = """SELECT o.*, c.app_name
         FROM oidc_backchannel_logout_outbox o
         JOIN oidc_clients c ON c.client_id = o.client_id

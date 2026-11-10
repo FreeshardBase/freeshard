@@ -106,9 +106,7 @@ def _run(coro):
     """
     loop = _state["loop"]
     if loop is None or loop.is_closed():
-        raise RuntimeError(
-            "OIDC provider has no running event loop — reach it through _get_server()"
-        )
+        raise RuntimeError("OIDC provider has no running event loop — reach it through _get_server()")
     future = asyncio.run_coroutine_threadsafe(coro, loop)
     try:
         return future.result(BRIDGE_TIMEOUT)
@@ -189,9 +187,7 @@ class AuthlibClient(OidcClient, ClientMixin):
         return redirect_uri in self.redirect_uris
 
     def check_client_secret(self, client_secret):
-        return self.client_secret is not None and secrets.compare_digest(
-            self.client_secret, client_secret
-        )
+        return self.client_secret is not None and secrets.compare_digest(self.client_secret, client_secret)
 
     def check_endpoint_auth_method(self, method, endpoint):
         if endpoint == "token":
@@ -282,20 +278,17 @@ def sign_logout_token(client_id: str, user_sub: int, sid: str) -> str:
     """Mint a fresh OIDC Back-Channel Logout 1.0 logout_token.
 
     Called by service.oidc_backchannel_logout at EVERY delivery attempt, and
-    never cached or reused across attempts: relying parties validate the
-    token's age (Immich: maxTokenAge '2m', server/src/repositories/
-    oauth.repository.ts), so a token signed once at enqueue/un-pair time and
-    replayed on a later retry would be rejected by the RP even though
-    delivery itself went through. Deliberately carries no "nonce" claim —
-    the spec forbids one on logout tokens.
+    never cached or reused across attempts: a relying party may reject a
+    token whose age exceeds its own tolerance (e.g. Immich's maxTokenAge),
+    so one signed at enqueue/un-pair time and replayed on a later retry
+    could be rejected even though delivery itself went through. Deliberately
+    carries no "nonce" claim — the spec forbids one on logout tokens.
 
     Caller contract: ensure_configured() must have run first (it sets the
     issuer/signing key this reads from _state).
     """
     if _state["jwk"] is None or _state["issuer"] is None:
-        raise RuntimeError(
-            "OIDC provider not configured — call ensure_configured() first"
-        )
+        raise RuntimeError("OIDC provider not configured — call ensure_configured() first")
     key = RSAKey.import_key(_state["jwk"])
     header = {"alg": "RS256", "kid": _state["jwk"].get("kid")}
     claims = {
@@ -342,8 +335,7 @@ class ShardAuthCodeGrant(grants.AuthorizationCodeGrant):
                     "code_challenge": data.get("code_challenge"),
                     "code_challenge_method": data.get("code_challenge_method"),
                     "auth_time": int(time.time()),
-                    "expires_at": datetime.now(timezone.utc)
-                    + timedelta(seconds=CODE_EXPIRES_IN),
+                    "expires_at": datetime.now(timezone.utc) + timedelta(seconds=CODE_EXPIRES_IN),
                 },
             )
         )
@@ -354,9 +346,7 @@ class ShardAuthCodeGrant(grants.AuthorizationCodeGrant):
         # both get it (RFC 9700 single-use)
         row = _run(with_conn(db_oidc.redeem_code, hash_secret(code), client.client_id))
         if row is None:
-            stale = _run(
-                with_conn(db_oidc.get_code, hash_secret(code), client.client_id)
-            )
+            stale = _run(with_conn(db_oidc.get_code, hash_secret(code), client.client_id))
             if stale and stale.redeemed:
                 # reuse of a redeemed code signals interception — kill every
                 # token issued to this (client, user) grant
@@ -383,9 +373,7 @@ class ShardRefreshTokenGrant(grants.RefreshTokenGrant):
     INCLUDE_NEW_REFRESH_TOKEN = True
 
     def authenticate_refresh_token(self, refresh_token):
-        row = _run(
-            with_conn(db_oidc.get_token_by_refresh_hash, hash_secret(refresh_token))
-        )
+        row = _run(with_conn(db_oidc.get_token_by_refresh_hash, hash_secret(refresh_token)))
         if row is None:
             return None
         if row.revoked:
@@ -483,19 +471,13 @@ def _save_token(token: dict, request):
     # request.user is rebuilt from the stored grant and has no terminal, so the
     # binding comes from the credential: the code on first issue, the previous
     # token on rotation.
-    credential = getattr(request, "authorization_code", None) or getattr(
-        request, "refresh_token", None
-    )
+    credential = getattr(request, "authorization_code", None) or getattr(request, "refresh_token", None)
     _run(
         with_conn(
             db_oidc.insert_token,
             {
                 "access_token_hash": hash_secret(token["access_token"]),
-                "refresh_token_hash": (
-                    hash_secret(token["refresh_token"])
-                    if token.get("refresh_token")
-                    else None
-                ),
+                "refresh_token_hash": (hash_secret(token["refresh_token"]) if token.get("refresh_token") else None),
                 "client_id": request.client.client_id,
                 "user_sub": request.user.id,
                 "terminal_id": credential.terminal_id,
@@ -555,8 +537,7 @@ def _validated_backchannel_logout_uri(app_name: str, uri: str | None) -> str | N
     check at delivery time, not registration time, and it would reject the
     legitimate case too eagerly in this repo's own test fixtures (mock app
     domains that never resolve at all) without a redesign of how those
-    fixtures declare their logout URI. Flagged as a follow-up candidate,
-    not implemented in this change -- see the PR description.
+    fixtures declare their logout URI.
     """
     if uri is None:
         return None
@@ -586,18 +567,14 @@ async def register_client(
     same disk anyway. Codes and tokens, by contrast, are stored hashed.
     """
     client_secret = None if public_client else secrets.token_urlsafe(32)
-    backchannel_logout_uri = _validated_backchannel_logout_uri(
-        app_name, backchannel_logout_uri
-    )
+    backchannel_logout_uri = _validated_backchannel_logout_uri(app_name, backchannel_logout_uri)
     row = {
         "client_id": f"{app_name}-{secrets.token_urlsafe(6)}",
         "client_secret": client_secret,
         "app_name": app_name,
         "redirect_uris": redirect_uris,
         "scope": scope,
-        "token_endpoint_auth_method": (
-            "none" if public_client else "client_secret_basic"
-        ),
+        "token_endpoint_auth_method": ("none" if public_client else "client_secret_basic"),
         "backchannel_logout_uri": backchannel_logout_uri,
     }
     async with db_conn() as conn:
@@ -615,9 +592,7 @@ def issuer_for_domain(domain: str, disable_ssl: bool = False) -> str:
 async def ensure_app_client(app_name: str, oidc_meta, portal) -> dict:
     """Register/refresh the app's OIDC client and return the docker-compose
     template context: client_id, client_secret, issuer."""
-    redirect_uris = [
-        jinja2.Template(uri).render(portal=portal) for uri in oidc_meta.redirect_uris
-    ]
+    redirect_uris = [jinja2.Template(uri).render(portal=portal) for uri in oidc_meta.redirect_uris]
     backchannel_logout_uri = (
         jinja2.Template(oidc_meta.backchannel_logout_uri).render(portal=portal)
         if oidc_meta.backchannel_logout_uri
@@ -633,9 +608,7 @@ async def ensure_app_client(app_name: str, oidc_meta, portal) -> dict:
     return {
         "client_id": client.client_id,
         "client_secret": client.client_secret,
-        "issuer": issuer_for_domain(
-            portal.domain, disable_ssl=settings().traefik.disable_ssl
-        ),
+        "issuer": issuer_for_domain(portal.domain, disable_ssl=settings().traefik.disable_ssl),
     }
 
 
@@ -647,9 +620,7 @@ async def userinfo_for_access_token(access_token: str) -> dict | None:
         user = ShardUser.from_user(await db_users.get_by_id(conn, row.user_sub))
     if user is None:
         return None
-    return dict(
-        ShardOpenIDCode(require_nonce=False).generate_user_info(user, row.scope or "")
-    )
+    return dict(ShardOpenIDCode(require_nonce=False).generate_user_info(user, row.scope or ""))
 
 
 def discovery_document() -> dict:
