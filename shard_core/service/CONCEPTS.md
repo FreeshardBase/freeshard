@@ -340,3 +340,152 @@ From the written record:
 
 - Shard keys are never rotated, so a shard's key and ID are fixed for its life, and its domain follows from the ID and the zone setting (the maintainer ruling recorded in freeshard-controller#345, 2026-07-04).
 - No personal address goes on an identity, because `whoareyou` publishes it (migration 0005, #220).
+
+## People and owner email
+
+People and owner email owns the people on the shard, today only its owner, and the owner's address as it moves from unverified candidate to verified address. It is also the only shard code that writes the controller's copy of that address, `shards.owner_email`, on its own behalf, and that copy is the one the controller mails. Two other writers touch the shard's copy: `identity.enrich_identity_from_profile` seeds the candidate from the controller's profile, and the boot-time database paths seed or demote it.
+
+### Files
+
+`service/user.py` holds `ensure_owner_user`, the lifespan step that creates the owner on a fresh shard. `service/owner_email.py` holds every runtime transition of the address but one, the first-pairing seed in `identity.py`. It also holds the confirmation token, the send budget, and the module's three calls into `freeshard_controller.py`: `send_verification_email`, `relay_email_to_owner` and `set_owner_email`. `data_model/user.py` holds `User`, the row; `OutputUser`, which carries the candidate and never the token; `InputUser`, the validation of what a client may write; and `Role`.
+
+Two of the module's guarantees live in the SQL of `database/users.py`: `claim_email_token` spends a token in one conditional `UPDATE`, and `promote_pending_email` promotes only the candidate the token was spent on. The routes, `/protected/users/me` with its two sub-routes and `/public/users/confirm-email`, belong to the HTTP surface; this section records what the module needs from them.
+
+### The people on the shard
+
+The `users` table holds the shard's people. Today it holds exactly one, the owner, with role `owner` and username `owner`. Members are planned for the later phases of #141, and no code creates one. At most one owner can exist, because every path that creates one inserts the username `owner`, which is `UNIQUE`; `db_users.get_owner` selects by role.
+
+The owner exists before any terminal can be paired, because pairing binds the new terminal to it and `web/public/pair.py` uses the owner row without checking for it. Each boot path creates it at a different point. On a fresh shard it is `ensure_owner_user`, which the lifespan runs right after the default identity (root, *The lifespan order is load-bearing*, step 2). On a shard upgraded to 0.42 it is migration 0002, which creates it from the default identity and binds every existing terminal to it. On a shard still holding its pre-Postgres data it is the TinyDB import's `_ensure_owner_user`, which #225 judges unreachable. On a restored shard it is the snapshot's own row; a snapshot written by 0.40.1 to 0.41.3 carries none, and one that holds a terminal fails to restore before anything could create one (see *Seeding from outside the module*).
+
+Every terminal belongs to a user (`terminals.user_id` is `NOT NULL`), and the person behind a request is resolved through its terminal: `/protected/users/me` and the OIDC provider both read the terminal's `user_id`. Every pairing binds to the owner, so every terminal is the owner's.
+
+A user's `id` is its OIDC subject: `sub` is the id as a string. It is a database counter and deliberately not derived from the shard's identity hash, because the shard and its owner are separate things (the maintainer's review of #147). Apps link their accounts to that `sub`, so the id must survive a restore, and it does: the snapshot restore inserts users with their ids and advances the sequence past them.
+
+The owner's `display_name` is copied from the default identity's name when the row is created and is changed afterwards only through `PATCH /protected/users/me`; nothing keeps it in step with the identity. The OIDC provider emits it as the `name` claim. On a shard upgraded to 0.42 the copy is the name the identity held at the upgrade, set from the controller's profile at its first pairing or edited since on the public page. On a fresh shard the row is created before any pairing, so the copy is the identity's placeholder, `Shard Owner`, and the first pairing renames the identity but not the user. That placeholder is needed, because the controller usually does not know the owner's name at that point. A name the owner sets reaches every app automatically, and no app keeps the placeholder. *(Confirmed 2026-11-10 — the code cannot show whether the placeholder is meant to reach apps.)* How an app receives the name is the OIDC provider's design. Today nothing carries a rename to apps: the provider reports the current name only in the tokens and userinfo answers it issues afterwards, so an app that took the placeholder at its first login keeps it unless it asks again, and web-terminal has no control to rename the owner at all. Sundial edits the name and tells the owner it is separate from the public page's.
+
+`disabled` and `password_hash` have no writer. They are scaffolding for the login page and the members of #141's later phases, and `password_hash` is not on the model at all. `disabled` is read in two places: every `/protected/users/me` route refuses a disabled user with 403, and the OIDC provider treats one as absent. Terminal admission does not consult it, so a disabled user's terminal would still pass every other `/protected` route. `Role` mirrors the Postgres enum `user_role` by hand, as the comments on both sides say.
+
+### The owner's address
+
+The address lives in two columns of the owner's row. `users.email` is the verified address. It holds only an address that somebody proved they can read by opening a link delivered to it, with one exception: with `email.enabled` off, the address the owner types is stored as typed. `users.pending_email` is the unverified candidate, at most one per user, and a new candidate replaces the old one. There is no verified flag; the column an address sits in is its state.
+
+That invariant is what makes the OIDC provider's claim true. The provider emits `email` with `email_verified: true` for whatever `users.email` holds, and with nothing there it emits neither claim; there is no synthetic fallback. With mail off it therefore asserts verification for an address nobody confirmed, which #220 accepts because the owner controls the machine.
+
+The owner always has a verified address. A new address replaces it only once the new one is verified, and only then is the old one cleared, on the shard and in the controller's copy. A verified address is never removed outright, and an unverified one never stands in for it. With mail off an address is taken as typed (see *Constraints*), so there a new address replaces the old one at once. *(Confirmed 2026-11-09 — the code implements the clear that #220 permitted, so it cannot vouch for the rule that supersedes it.)*
+
+The code does not meet this rule yet. `ensure_owner_user` creates the owner of a fresh shard without an address, and the TinyDB import creates it with at most a candidate. Migration 0005 and the first pairing leave a hosted shard with no verified address and only a candidate: 0005 emptied `users.email` and moved the identity's unconfirmed address into the candidate, and the first pairing seeds the controller's address as one. And `clear_email`, the clear row below, removes a verified address outright, which #220 permitted and the rule supersedes. With only a candidate on file it also nulls the controller's copy, after one warning, and every mail about the shard stops (see *The controller's copy*).
+
+Every write to the address, by operation:
+
+| Operation | Code | `users.email` | Candidate | Token | Controller calls |
+| --- | --- | --- | --- | --- | --- |
+| Set, mail on | `set_email` | kept | the address | new | verification mail to the address |
+| Set, mail off | `set_email` | the address | cleared | cleared | mirror of the address |
+| Resend | `resend_verification` | kept | kept | new | verification mail to the candidate |
+| Discard | `discard_pending` | kept | cleared | cleared | none |
+| Clear | `clear_email` | cleared | cleared | cleared | warning relay with mail on, then mirror of null; no call and no write when neither address is on file |
+| Confirm | `confirm_email` | the candidate | cleared | spent | warning relay, mirror, and a confirmation relay if the mirror was accepted |
+| Pairing that leaves one terminal, no verified address | `identity.enrich_identity_from_profile` | kept | the profile's address | cleared | profile refresh |
+| Upgrade to 0.42 | migrations 0002 and 0005 | emptied | the identity's address | none | none |
+| Restore of a pre-0005 snapshot | `db_snapshot._demote_unverified_owner_email` | emptied | the default identity's address | untouched | none |
+| TinyDB import | `tinydb_migration._ensure_owner_user` | empty | the TinyDB identity's address | none | none |
+
+Outside `owner_email.py`, only the boot-time paths write `users.email`. Migration 0002 copied the identity's unverified address into it, and 0005 empties it again in the same upgrade, since both first shipped in 0.42.0. A restore writes back what a snapshot written by 0.42.0 or later holds. Every other path leaves it empty.
+
+### The confirmation token
+
+The shard mints the token with `secrets.token_urlsafe(32)`, 256 random bits, and stores only its SHA-256 digest, with an expiry one hour out. The two token columns are written together, and a `CHECK` constraint enforces that. The controller is asked only to deliver the token. It builds the link from the shard domain it already knows, `https://<shard domain>/?confirm_email=<token>`, so no URL the shard supplies is ever rendered into a mail. Where Sundial is the shard's UI, the link opens its confirmation view, which posts the token to `POST /public/users/confirm-email` when the owner clicks. There is no `GET`, because mail scanners and link prefetchers follow links and would spend a single-use token before the owner does. The route is unauthenticated on purpose: the token proves possession of the mailbox, which is the fact being verified.
+
+`_claim_token` compares the digest with every stored one using `secrets.compare_digest`, then spends the match in one conditional `UPDATE` that also requires an unexpired token and a candidate on file, and returns the row. The spend comes before anything else, so a double-clicked link promotes once and the mails and controller calls that follow cannot be replayed. The route answers 204 to every well-formed token, matched or not, so it cannot be used to learn whether a candidate is pending. It counts only misses toward its limit of 20 a minute, so a flood of guesses earns a 429 but can never stop the owner's own link from working.
+
+A confirmation promotes the address its own link was mailed to, or nothing. A token is bound to whatever candidate is on file when its link is opened: the claim returns the current candidate and the promotion takes that one. Every writer of `pending_email` retires the token whenever it replaces the candidate, which agents.md states as a rule. `set_email` writes candidate and token together. `discard_pending`, `clear_email` and the mail-off `set_email` clear both. The first-pairing seed clears the token (75bad37). The boot-time paths act only on data shapes that carry no token. The resend path does not keep the guarantee today.
+
+### Confirmation
+
+```mermaid
+sequenceDiagram
+    participant UI as Sundial
+    participant S as owner_email
+    participant DB as users row
+    participant C as Controller
+    UI->>S: POST /public/users/confirm-email with the token
+    S->>DB: spend the token and read the candidate, in one conditional UPDATE
+    S->>C: relay the change warning, which reaches the controller's copy
+    S->>DB: promote the candidate if it is still the one the token was spent on
+    S->>C: mirror the promoted address
+    opt the mirror was accepted
+        S->>C: relay the confirmation, which now reaches the new address
+    end
+    S-->>UI: 204, whether or not anything was promoted
+```
+
+The old address is warned before the switch is mirrored, because the controller's relay only ever mails the address the controller holds; sent after the mirror, the warning would reach the new address. The promotion is guarded on the candidate the token was spent on, so a candidate set while the link was in flight survives. The confirmation then promotes nothing, after the warning has already gone out. When the mirror is refused or fails, the confirmation stands and the confirmation mail is skipped, since the relay would deliver it to the abandoned address.
+
+Delivery to the controller is owed. When a mirror or a change notice fails, the shard retries it, or reconciles with the controller's copy when it next refreshes the profile. A retried or reconciled mirror goes out within the window in which the controller still accepts the address, and after that window only once the shard has verified the address again (freeshard-controller#435). *(Confirmed 2026-11-10 — the code's best-effort calls cannot tell a loss accepted by design from a missing retry.)* Today both are logged and dropped. After a failed mirror the controller keeps mailing the old address, which the warning has just told it receives its last message, and Sundial treats saving the address already on file as a no-op, so the owner cannot send it again. Because the warning must precede the mirror, a warning dropped before a mirror that succeeds can no longer reach the old address at all.
+
+### The controller's copy
+
+The controller keeps its own copy of the owner's address, `shards.owner_email`, and every mail about the shard goes to that copy, except the verification link: each relay the shard requests, and the storage warnings, billing notices and wind-down mail that #220 lists. When the copy is empty, the relay refuses and those mails stop.
+
+The shard writes that copy on three events and no others. A confirmation mirrors the promoted address, a set with mail off mirrors the typed address, and a clear mirrors null. A set with mail on does not touch it, and neither do the boot-time paths, migration 0005 included. The controller refuses an address it has not itself sent a verification link to for this shard (freeshard-controller#435), so a set with mail off, which sends no link, cannot change the controller's copy. A self-hosted shard is unknown to the controller, so there every mirror fails and is logged as an error.
+
+The rules in *The owner's address* and *Confirmation* make the controller's copy follow the verified address: the shard replaces it when a new address is verified, never clears it outright, and owes the controller every change. The code diverges from this on every hosted shard that migration 0005 or the first pairing left with only a candidate: the shard holds no verified address, while the controller still holds the address the owner signed up with and keeps mailing it. `clear_email` does nothing when the shard holds neither a verified address nor a candidate, so that a redundant clear cannot mirror a null over the signup address and silence every mail to a paying customer (75bad37).
+
+### The mail switch
+
+`email.enabled`, on by default, declares whether the shard can send mail at all. It is named for that capability and deliberately not for the deployment, because a hosted shard may switch mail off and a self-hosted one may gain its own (5101509). It is never inferred from a failed delivery, which during a controller outage would silently downgrade a security control (#220). `set_email`, `resend_verification` and the warning in `clear_email` read it, and `GET /protected/settings` publishes it as `email_enabled` so that a UI offers a resend only where a link can be sent (#223).
+
+With mail off, `set_email` stores the address as typed and drops any candidate, `resend_verification` refuses, and a clear sends no warning. A candidate written by one of the seeding paths can then never be confirmed, and Sundial tells the owner to discard it and type the address again. This repository's `docker-compose.yml` maps no variable for the switch and mounts no `local_config.toml`, which the image excludes, so a shard started from it runs with mail on, where every send fails, unless the operator adds the variable by hand.
+
+### Sending limits
+
+Every verification mail costs the controller a real send, so `owner_email` rations them with one budget shared by both routes and the whole process, five per rolling hour (`_send_limit`); a shard has one owner, so a budget per client would only hand an attacker a fresh one per source address. The budget is charged before anything is written, so that a refused request cannot replace the token of a link already in the owner's inbox, and only where a send is attempted, so a shard with mail off is not rationed.
+
+The controller may refuse a send the shard's budget admits (freeshard-controller#435). By then the shard has already replaced the token, so the owner's earlier link stops working, and both routes report the refusal as a failed delivery, with a 502. The warning and confirmation relays are not rationed by the shard. Both shard-side counters, this budget and the confirm route's miss counter, live in the process and start empty after a restart (root, *Work that must survive a restart is a row*).
+
+### What a client may write
+
+`InputUser` takes `display_name`, at most 200 characters and never null, and `email`, at most 254. An explicit `null` takes the clearing path, which the rule in *The owner's address* does not allow, and an omitted field leaves the address alone; the route tells the two apart with `exclude_unset`. An empty string is rejected, so a form that blanks its field cannot take the clearing path by accident. An address is checked with `email_validator`, without a deliverability lookup, which would block the event loop on DNS and prove less than the confirmation mail does, and without SMTPUTF8. The normalized form is what is stored, because it is what the OIDC provider asserts to third parties.
+
+### Only the owner's address
+
+Everything `owner_email` does is owner-global: the relay mails the controller's owner address and the mirror rewrites it. The address routes therefore refuse any user whose role is not `owner` with 403, and the service relies on that check and acts on whatever user it is handed. `_claim_token` matches tokens across all users, which is safe only because no one but the owner can obtain one. Giving members an address (#141) first needs the owner-global calls separated from the per-user columns, and #220 records that a self-hosted shard has no way to verify a member's address at all.
+
+### Seeding from outside the module
+
+`identity.enrich_identity_from_profile` receives `async_on_first_terminal_add`, which pairing sends whenever a pairing leaves exactly one terminal, and the pairing request awaits it. It refreshes the profile from the controller and, while the owner has no verified address, writes the profile's address as the candidate and retires any token, which leaves the shard with only a candidate (see *The owner's address*). It replaces whatever candidate is on file, the owner's own included; 75bad37 made it retire the token together with the candidate it replaces. A controller that cannot be reached fails that pairing (root, *Deployment mode is explicit*, and #194).
+
+The snapshot restore applies the rule of migration 0005 to a snapshot whose identity rows still carry an address, in `_demote_unverified_owner_email`, which #224 means to retire. That rule can act only on a snapshot that carries a `users` table, and no release before 0.42.0 wrote one. A snapshot written by 0.40.1 to 0.41.3 has terminal rows without `user_id`, which 0002 made `NOT NULL`, and the restore inserts them as they are. On any such snapshot that holds a terminal, the whole restore rolls back and the boot fails, and it fails again on every restart, because the database stays empty. The TinyDB import seeds the candidate the same way and binds the terminals it imports to the owner it creates (0beeb89).
+
+These paths leave in `users.email` only what a snapshot written by 0.42.0 or later already held there, never leave a token beside a candidate it was not minted for, and never write the controller's copy.
+
+### Boundaries
+
+People and owner email owns the users table's meaning, the two address columns and their transitions, the confirmation token and the send budget, and it is the only shard code that writes the controller's copy of the address on its own behalf. It hosts `ensure_owner_user` for the lifespan.
+
+It relies on the pairing route, `web/public/pair.py`, to bind every new terminal to the owner and to send `async_on_first_terminal_add` when a pairing leaves one terminal, and on Terminals and pairing to resolve a request's terminal from its cookie. It relies on the HTTP surface to refuse a non-owner on the address routes, to answer the confirm route identically whether or not a token matched, to count only misses there, to offer no `GET` confirmation, and to publish `email_enabled`; the address routes inherit the shard-wide exposure of `/protected` writes to cross-subdomain requests (#247). It relies on Controller integration for three signed calls that declare their JSON bodies, and on the controller to deliver the link, to relay only to its own copy, and to accept a mirrored address only after mailing it (freeshard-controller#435). It relies on Identity for the default identity's name at owner creation and for the first-pairing seed, which lives in `identity.py`. It relies on the Database for the conditional `UPDATE`s that make a token single-use and a promotion guarded, for the `CHECK` constraint that pairs the token columns, and for migrations 0002 and 0005, and on Backup for a restore that keeps every user's id. From the composition root it needs the owner created after the default identity and before the first request, and `email.enabled` set where no mail can be sent. Only Sundial drives the flow; web-terminal shows the controller's copy from the stored profile as the owner's email.
+
+The OIDC provider reads the people and the verified address: `display_name` as `name`, `username` as `preferred_username`, and `users.email` as `email` with `email_verified: true`, and it treats a disabled user as absent. This module is responsible for the column holding only a verified address and for the owner's current name; the provider trusts both, and how a rename reaches apps is its design.
+
+Of the root invariants it keeps true:
+
+- *The lifespan order is load-bearing*: the owner row is created after the default identity, whose name it copies, and before the first pairing, which binds to it.
+- *Deployment mode is explicit*: whether the module may send mail is read from `email.enabled` and never inferred from how the controller answers.
+- *The controller is one signed counterparty*: its three calls go through `post_json`, which signs them and declares JSON.
+- *Work that must survive a restart is a row*: the candidate and the token are columns, so a link mailed before a restart still confirms after it; the two counters are accumulators that start empty.
+- *A backup restores the shard as it was*: the people and their ids come back with a restore, which keeps every app's `sub` stable. Currently broken for snapshots written by 0.40.1 to 0.41.3 that hold a terminal.
+
+### Constraints
+
+From the written record, each with its source:
+
+- There is no `GET` confirmation route, because mail scanners and link prefetchers would spend the single-use token before the owner does (#220).
+- Whether the shard can send mail is never inferred from a failed delivery (the comment on `EmailSettings` in `settings.py`, #220).
+- There is no synthetic `owner@<domain>` fallback: with no verified address the provider emits no email claim (#220).
+- The identity carries no personal address, because `GET /public/meta/whoareyou` publishes it unauthenticated (migration 0005, #220).
+- The confirm route answers identically whether or not the token matched (#220).
+- Every writer of `pending_email` retires the token when it replaces the candidate (agents.md).
+- User ids are plain database ids, not derived from the shard's identity (the maintainer on PR #147).
+- The confirm route is unauthenticated, and the token is its only credential (#220).
+- With mail off, an address is taken as typed (#220, README).
+- Naming the mail switch after the deployment was rejected (5101509, PR #221).
