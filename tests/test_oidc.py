@@ -685,21 +685,24 @@ async def test_unauthenticated_client_id_claim_does_not_charge_that_client(
     assert r.status_code == 200, r.text
 
 
-async def test_repeated_wrong_secret_attempts_share_one_global_budget(
+async def test_repeated_wrong_secret_attempts_from_one_source_share_a_budget(
     app_client: AsyncClient,
 ):
     """Failed client authentication (wrong/missing secret) isn't attributed
     to any one client's bucket (see the previous test for why) — it falls to
-    a shared bucket instead, preserving the brute-force resistance the
-    single global counter gave before this change, just scoped to this one
-    unattributable failure class.
+    a bucket keyed by source IP instead (see test_unauthenticated_failures_
+    are_rate_limited_per_source_ip_not_shard_wide below for why IP, not one
+    shard-wide bucket), preserving the brute-force resistance the single
+    global counter gave before this change, just scoped to one source and
+    to this one unattributable failure class.
 
-    Split across TWO distinct client_ids, neither alone reaching the limit,
-    so a 429 appearing can only be explained by a genuinely shared budget —
-    hammering one client_id alone wouldn't distinguish "shared" from "a
-    per-client bucket keyed off the one name under attack" (caught in
-    review: a per-client-keyed design the attack used passed that weaker
-    version of this test too)."""
+    Split across TWO distinct client_ids attacked from the SAME source,
+    neither alone reaching the limit, so a 429 appearing can only be
+    explained by a genuinely shared-per-source budget — hammering one
+    client_id alone wouldn't distinguish "shared" from "a per-client bucket
+    keyed off the one name under attack" (caught in review: a
+    per-client-keyed design the attack used passed that weaker version of
+    this test too)."""
     await pair_new_terminal(app_client)
     first = await make_client(app_name="first-target-app")
     second = await make_client(app_name="second-target-app")
@@ -723,10 +726,53 @@ async def test_repeated_wrong_secret_attempts_share_one_global_budget(
         r = await wrong_secret_attempt(second)
         assert r.status_code in (400, 401), r.text
 
-    # neither client_id alone reached the limit, but together they must
-    # have exhausted the one budget they share
+    # neither client_id alone reached the limit, but together, from the
+    # same source, they must have exhausted the one budget they share
     statuses = [(await wrong_secret_attempt(first)).status_code for _ in range(10)]
-    assert 429 in statuses, "wrong-secret attempts across clients must share one budget"
+    assert 429 in statuses, "wrong-secret attempts across clients must share a budget"
+
+
+async def test_unauthenticated_failures_are_rate_limited_per_source_ip_not_shard_wide(
+    app_client: AsyncClient,
+):
+    """A single anonymous, zero-credential flood must not be able to 429
+    the whole /token endpoint for every other caller — that is issue #215's
+    own core complaint, and a single *shared* bucket for unattributable
+    failures (the first attempt at this fix) reproduced it exactly for this
+    one failure class: nothing in that design even looked at who was
+    asking. Caught in review. Keying by source IP (via X-Forwarded-For, see
+    _source_ip) instead means a flood from one source exhausts only its own
+    bucket; a different source attempting the exact same thing must still
+    go through normally."""
+    await pair_new_terminal(app_client)
+    target = await make_client(app_name="some-app")
+
+    async def wrong_secret_attempt(source_ip: str):
+        return await app_client.post(
+            TOKEN,
+            data={
+                "grant_type": "authorization_code",
+                "code": "no-such-code",
+                "redirect_uri": REDIRECT_URI,
+            },
+            auth=(target.client_id, "not-the-real-secret"),
+            headers={"X-Forwarded-For": source_ip},
+        )
+
+    for _ in range(oidc_provider.TOKEN_RATE_LIMIT):
+        r = await wrong_secret_attempt("203.0.113.1")
+        assert r.status_code in (400, 401), r.text
+
+    # the attacker's own source is now blocked...
+    r = await wrong_secret_attempt("203.0.113.1")
+    assert r.status_code == 429, "the flooding source's own budget must be exhausted"
+
+    # ...but a different source doing the exact same thing is not
+    r = await wrong_secret_attempt("203.0.113.2")
+    assert r.status_code in (
+        400,
+        401,
+    ), "a flood from one source must not rate-limit a different source"
 
 
 async def test_failed_refresh_charges_the_refreshing_clients_own_bucket(

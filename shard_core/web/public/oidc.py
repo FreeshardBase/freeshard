@@ -152,8 +152,8 @@ async def _get_server(request: Request) -> StarletteAuthorizationServer:
                 issuer = f"{app.state.oidc_public_base}/public/oidc"
                 jwk = await ensure_jwk()
                 configure(issuer, jwk, asyncio.get_running_loop())
-                _token_limit.reset()
                 _token_limits.clear()
+                _unauthenticated_limits.clear()
                 app.state.oidc_server = build_authorization_server(
                     StarletteAuthorizationServer
                 )
@@ -200,46 +200,62 @@ async def _session_user(authorization: str | None) -> ShardUser | None:
 #   see StampsAuthenticatedClientId.authenticate_token_endpoint_client in
 #   oidc_provider.py) and the request *then* failed — bad/expired/reused
 #   code, bad/expired/reused refresh token — charge that client's own
-#   per-client bucket. Safe: nobody can reach this without first proving
-#   they are that client.
-# - If client authentication itself failed (wrong or missing secret), charge
-#   the shared _token_limit below instead, same as the single counter this
-#   replaced. This is NOT safe to attribute per-client: client_id is not a
-#   secret (register_client stamps it as "{app_name}-{token}", visible in
-#   every /authorize redirect and discoverable from the installed app list),
-#   and a *wrong* secret costs an attacker nothing to supply — charging the
-#   named client_id here would let any unauthenticated caller grief one
-#   victim app's logins for free by simply naming it, which is the exact
-#   fairness problem per-client keying exists to fix, just aimed at one
-#   client instead of all of them (caught in review of this change, #215).
-#   Brute-force resistance against guessing a specific client's secret stays
-#   shared-fate across clients, as it already was before this change.
+#   bucket in _token_limits. Safe: nobody can reach this without first
+#   proving they are that client.
+# - If client authentication itself failed (wrong or missing secret), the
+#   client_id is NOT a safe charge key: it's not a secret (register_client
+#   stamps it as "{app_name}-{token}", visible in every /authorize redirect
+#   and discoverable from the installed app list), and a *wrong* secret
+#   costs an attacker nothing to supply — charging the named client_id here
+#   would let any unauthenticated caller grief one victim app's logins for
+#   free by simply naming it, which is the exact fairness problem per-client
+#   keying exists to fix, just aimed at one client instead of all of them
+#   (caught in review of this change, #215).
+#
+#   This failure class is keyed by SOURCE IP instead, in _unauthenticated_limits
+#   — NOT a single shared bucket, which was tried first and caught in the
+#   same review round: a single shared bucket for this class still lets one
+#   anonymous, zero-credential caller 429 the whole endpoint for everyone,
+#   reproducing issue #215's own core complaint for exactly this slice of
+#   traffic. Source IP is a safe key here specifically because Traefik is
+#   the sole ingress for this public endpoint and, with this repo's actual
+#   deployed config (data/traefik.yml sets no `forwardedHeaders.trustedIPs`
+#   on either entrypoint), its default behavior is to REPLACE any inbound
+#   X-Forwarded-For with its own observed connection peer rather than trust
+#   or append to it — verified empirically against the real traefik:v3.6
+#   image this repo deploys (sent a spoofed X-Forwarded-For through a
+#   throwaway Traefik+echo-backend stack; the backend only ever saw
+#   Traefik's own observed peer address, never the spoofed value). So a
+#   caller cannot forge this key to land in another source's bucket, the
+#   way it could with client_id. See _source_ip.
 #
 # In-process and single-worker, like SlidingWindow itself: resets on restart,
 # and a second uvicorn worker would keep its own independent set of buckets,
 # doubling the effective budget. Fine while shard_core runs one worker;
 # nothing here changes that pre-existing assumption.
-_token_limit = SlidingWindow(limit=TOKEN_RATE_LIMIT, window=60)
 _token_limits: dict[str, SlidingWindow] = {}
+_unauthenticated_limits: dict[str, SlidingWindow] = {}
 
 
-def _token_limit_for(client_id: str) -> SlidingWindow:
+def _bucket_for(limits: dict[str, SlidingWindow], key: str) -> SlidingWindow:
     """Get-or-create. Only call this right before recording an actual charge
-    (try_acquire) — the dict must not gain an entry for a client_id that was
+    (try_acquire) — a dict here must never gain an entry for a key that was
     merely peeked at. _token_limits is only ever populated with client_ids
-    Authlib has itself authenticated (see the charge logic in `token`
-    below), which bounds it to the shard's real, registered clients; letting
-    a peek create entries would let anyone grow it forever with arbitrary
-    strings typed into the form body (caught in review, #215).
+    Authlib has itself authenticated, which bounds it to the shard's real,
+    registered clients; _unauthenticated_limits is keyed by source IP, which
+    Traefik's own observation bounds to real distinct callers (see the big
+    comment above). Letting a peek create entries in either would let
+    anyone grow the dict forever with arbitrary unverified input (caught in
+    review, #215).
     """
-    if client_id not in _token_limits:
-        _token_limits[client_id] = SlidingWindow(limit=TOKEN_RATE_LIMIT, window=60)
-    return _token_limits[client_id]
+    if key not in limits:
+        limits[key] = SlidingWindow(limit=TOKEN_RATE_LIMIT, window=60)
+    return limits[key]
 
 
-def _client_bucket_exhausted(client_id: str) -> bool:
-    """A non-creating peek, for the pre-check only — see _token_limit_for."""
-    bucket = _token_limits.get(client_id)
+def _bucket_exhausted(limits: dict[str, SlidingWindow], key: str) -> bool:
+    """A non-creating peek, for the pre-check only — see _bucket_for."""
+    bucket = limits.get(key)
     return bucket is not None and bucket.exhausted()
 
 
@@ -255,6 +271,26 @@ def _client_id_from_request(oreq: OAuth2Request) -> str | None:
         return client_id
     client_id, _ = extract_basic_authorization(oreq.headers)
     return client_id
+
+
+def _source_ip(request: Request) -> str:
+    """The real caller's address for the one case where client_id isn't a
+    safe or even available attribution signal (client authentication itself
+    failed). Traefik always sits between this public endpoint and the
+    internet, so `request.client` is always Traefik's own container address
+    — not useful. X-Forwarded-For is, specifically because this repo's
+    Traefik config doesn't opt in to trusting/forwarding an inbound one (see
+    the big comment above); reading it here, for this one narrow purpose,
+    doesn't carry the impersonation risk _public_url's docstring describes
+    for enabling uvicorn's proxy-header middleware process-wide, since that
+    risk is specifically about request.client feeding /internal/call_peer.
+    Falls back to the raw socket peer for direct access (no Traefik in
+    front) — local testing, and this test suite.
+    """
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded
+    return request.client.host if request.client else "unknown"
 
 
 # --- endpoints -------------------------------------------------------------------
@@ -289,15 +325,18 @@ async def token(request: Request):
     server = await _get_server(request)
     oreq = await _build_oauth2_request(request)
     client_id = _client_id_from_request(oreq)
+    source_ip = _source_ip(request)
 
     # Reject an already-exhausted bucket before paying for full grant
     # processing — a peek, not a charge (see SlidingWindow.exhausted). This
     # uses the unverified client_id purely as an admission-control guess: a
     # wrong guess here only changes *when* a 429 is returned, never which
     # bucket gets charged below, so it carries none of that decision's trust
-    # requirements.
-    if _token_limit.exhausted() or (
-        client_id is not None and _client_bucket_exhausted(client_id)
+    # requirements. The source-IP bucket, unlike the client_id one, IS the
+    # same key the charge step below would use, since it's already safe to
+    # trust (see _source_ip).
+    if _bucket_exhausted(_unauthenticated_limits, source_ip) or (
+        client_id is not None and _bucket_exhausted(_token_limits, client_id)
     ):
         return Response(status_code=429)
 
@@ -314,12 +353,13 @@ async def token(request: Request):
         if authenticated_client_id is not None:
             # Client authentication succeeded; this request's own code or
             # refresh token then failed. Safe to charge its own bucket.
-            _token_limit_for(authenticated_client_id).try_acquire()
+            _bucket_for(_token_limits, authenticated_client_id).try_acquire()
         else:
             # Client authentication itself failed. See the big comment above
-            # _token_limit for why this must not be charged to the
-            # (unverified) client_id the caller merely typed into the form.
-            _token_limit.try_acquire()
+            # _token_limits for why this must not be charged to the
+            # (unverified) client_id the caller merely typed into the form —
+            # charge the caller's own source-IP bucket instead.
+            _bucket_for(_unauthenticated_limits, source_ip).try_acquire()
 
     return response
 

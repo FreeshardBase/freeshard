@@ -90,12 +90,13 @@ def reset_rate_limits():
     """The rate limiters are module-level, so they leak between tests otherwise
     — and a 429 in an unrelated test points at entirely the wrong code."""
     from shard_core.service.owner_email import _send_limit
-    from shard_core.web.public.oidc import _token_limit, _token_limits
+    from shard_core.web.public.oidc import _token_limits, _unauthenticated_limits
     from shard_core.web.public.users import _miss_limit
 
-    for limiter in (_send_limit, _miss_limit, _token_limit):
+    for limiter in (_send_limit, _miss_limit):
         limiter.reset()
     _token_limits.clear()
+    _unauthenticated_limits.clear()
 
 
 @pytest.fixture(scope="session")
