@@ -559,6 +559,45 @@ async def test_stuck_in_flight_row_is_reclaimed_after_a_crash(app_client: AsyncC
     assert [r["id"] for r in reclaimed] == [entry_id]
 
 
+async def test_outcome_writes_are_guarded_against_a_stale_straggler(
+    app_client: AsyncClient,
+):
+    """A row reclaimed from a slow-but-not-crashed worker leaves two writers
+    racing to record an outcome for the same id. mark_outbox_delivered/
+    retry/failed must only take effect for the writer whose claim is still
+    the current one (status='in_flight') -- found in review: without the
+    guard, whichever writer runs last silently stomps the other's result,
+    including turning an already-'delivered' row back to 'pending'."""
+    await pair_new_terminal(app_client, name="phone")
+    tid = await terminal_id("phone")
+    oidc_client = await make_client("bc_app")
+    await set_app_status("bc_app", "running")
+    await run_code_flow(app_client, oidc_client)
+    await unpair(app_client, tid)
+    entry_id = (await rows("SELECT * FROM oidc_backchannel_logout_outbox"))[0]["id"]
+
+    async with db_conn() as conn:
+        claimed = await db_oidc.claim_due_outbox_entries(conn)
+    assert [c["id"] for c in claimed] == [entry_id]
+
+    # a stale straggler's writes must all be no-ops once the row is no
+    # longer 'in_flight' under it (simulated here by marking it delivered
+    # out from under the "straggler", rather than engineering a second
+    # real claim race)
+    async with db_conn() as conn:
+        await db_oidc.mark_outbox_delivered(conn, entry_id)
+    delivered = (await rows("SELECT * FROM oidc_backchannel_logout_outbox"))[0]
+    assert delivered["status"] == "delivered"
+
+    async with db_conn() as conn:
+        await db_oidc.mark_outbox_retry(
+            conn, entry_id, 1, delivered["next_attempt_at"], "stale straggler"
+        )
+    unchanged = (await rows("SELECT * FROM oidc_backchannel_logout_outbox"))[0]
+    assert unchanged["status"] == "delivered", "stale write must not resurrect the row"
+    assert unchanged["last_error"] is None
+
+
 # --- discovery flag gating ---------------------------------------------------
 
 

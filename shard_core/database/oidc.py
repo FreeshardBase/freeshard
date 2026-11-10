@@ -251,8 +251,22 @@ async def claim_due_outbox_entries(
 
 
 async def mark_outbox_delivered(conn: AsyncConnection, id_: int) -> None:
+    """Guarded by `AND status = 'in_flight'`: the claim (claim_due_outbox_
+    entries) is what's supposed to make this id_ exclusively ours, but the
+    stuck-row reclaim branch of that same query means a row claimed by a
+    worker that stalled (slow, not actually crashed) past stuck_after_seconds
+    can be re-claimed by a second worker while the first is still running.
+    Without this guard, whichever of the two writes last would stomp the
+    other's outcome -- a 'delivered' overwritten back to 'pending'/'failed',
+    or a lost-update on `attempts` (found in DB review; same race class as
+    the one the claim step itself was built to close, one layer further
+    in). The guard makes the second writer's UPDATE match zero rows instead
+    (found in review; low-probability given DELIVERY_TIMEOUT=10 vs
+    stuck_after_seconds=120, and OIDC Back-Channel Logout 1.0 tolerates a
+    duplicate logout_token delivery by spec -- but the fix costs nothing)."""
     sql: LiteralString = """UPDATE oidc_backchannel_logout_outbox
-        SET status = 'delivered', updated = now() WHERE id = %s"""
+        SET status = 'delivered', updated = now()
+        WHERE id = %s AND status = 'in_flight'"""
     await conn.execute(sql, (id_,))
 
 
@@ -264,20 +278,23 @@ async def mark_outbox_retry(
     error: str,
 ) -> None:
     """Release the claim: back to 'pending' so the next due drain can pick
-    it up again (it would otherwise stay 'in_flight' forever)."""
+    it up again (it would otherwise stay 'in_flight' forever). Guarded by
+    `AND status = 'in_flight'` -- see mark_outbox_delivered's docstring."""
     sql: LiteralString = """UPDATE oidc_backchannel_logout_outbox
         SET status = 'pending', attempts = %s, next_attempt_at = %s,
             last_error = %s, updated = now()
-        WHERE id = %s"""
+        WHERE id = %s AND status = 'in_flight'"""
     await conn.execute(sql, (attempts, next_attempt_at, error, id_))
 
 
 async def mark_outbox_failed(
     conn: AsyncConnection, id_: int, attempts: int, error: str
 ) -> None:
+    """Guarded by `AND status = 'in_flight'` -- see mark_outbox_delivered's
+    docstring."""
     sql: LiteralString = """UPDATE oidc_backchannel_logout_outbox
         SET status = 'failed', attempts = %s, last_error = %s, updated = now()
-        WHERE id = %s"""
+        WHERE id = %s AND status = 'in_flight'"""
     await conn.execute(sql, (attempts, error, id_))
 
 
