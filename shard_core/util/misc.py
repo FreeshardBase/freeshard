@@ -81,10 +81,7 @@ class SlidingWindow:
         return True
 
     def exhausted(self) -> bool:
-        """Report whether the window is already at capacity, without
-        recording an attempt.
-
-        Lets a caller reject cheaply, before doing expensive work, while
+        """Lets a caller reject cheaply before doing expensive work, while
         still deciding whether to *charge* the budget (try_acquire) only
         once it knows that work's outcome — the classic
         check-before-expensive-work / charge-after-failure split.

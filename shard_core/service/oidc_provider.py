@@ -258,18 +258,14 @@ def public_jwks() -> dict:
 
 
 class StampsAuthenticatedClientId:
-    """Marks `request.authenticated_client_id` the moment Authlib's own
-    client authentication succeeds, independent of whatever the grant does
-    afterward.
-
-    The base grant classes only set `request.client` once the *entire*
-    request has validated as correct — for AuthorizationCodeGrant that is
-    after the authorization-code lookup has already succeeded (see
+    """Authlib's base grant classes only set `request.client` once the
+    *entire* request has validated as correct — for AuthorizationCodeGrant
+    that is after the authorization-code lookup has already succeeded (see
     `validate_token_request` in authlib's authorization_code.py, which sets
     it as the very last step). That's too late for web.public.oidc's rate
-    limiter, which needs to know "did this request prove it is this client"
+    limiter, which needs "did this request prove it is this client"
     independent of whether a later, grant-specific check also passed — see
-    `_token_limits` in web/public/oidc.py for why.
+    `_token_limits` in web/public/oidc.py.
     """
 
     def authenticate_token_endpoint_client(self):

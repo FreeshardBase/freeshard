@@ -182,66 +182,56 @@ async def _session_user(authorization: str | None) -> ShardUser | None:
 
 # --- token endpoint rate limit ------------------------------------------------------
 
-# Two bucket kinds, both SlidingWindows created lazily, both charged only on
-# a *failed* grant attempt (never on success) — the charge decision in
-# `_charge_for_failed_attempt` below picks between them.
-#
-# _token_limits, keyed by client_id: deliberately per-client rather than
-# per-shard, overriding SlidingWindow's own "a shard has one owner" rationale
-# (shard_core/util/misc.py) — that comment is about brute-force resistance,
-# but the problem here is availability between the owner's *own* apps, which
-# all share this one /token endpoint (#215). Only safe to charge once Authlib
-# has actually authenticated the caller as that client (a confidential
-# client's real secret matched, or an existing public client was named — see
+# _token_limits is keyed by client_id, deliberately per-client rather than
+# per-shard — overriding SlidingWindow's own "a shard has one owner"
+# rationale (shard_core/util/misc.py), written for brute-force resistance;
+# the problem here is availability between the owner's *own* apps, which
+# all share this one /token endpoint (#215). Charging it is only safe once
+# Authlib has actually authenticated the caller as that client (see
 # StampsAuthenticatedClientId in oidc_provider.py): client_id is not a
-# secret, so charging it on an unauthenticated claim would let anyone grief
-# a named victim's budget for free.
+# secret, so charging an unauthenticated claim would let anyone grief a
+# named victim's budget for free.
 #
-# _unauthenticated_limits, keyed by source IP: the bucket for everything
-# that doesn't clear that bar — wrong/missing client secret, or any other
-# failure before authentication succeeds. Keyed by IP rather than one shared
-# bucket, because a single shared bucket here is just as griefable as the
-# per-client one above, only shard-wide instead of per-client. IP is a safe,
-# non-spoofable key in this deployment specifically: Traefik is the sole
-# ingress for this public endpoint, `request.client` is always Traefik's own
-# address (useless for this), but Traefik's default X-Forwarded-For handling
-# with this repo's actual config (no `forwardedHeaders.trustedIPs` anywhere
-# in data/traefik.yml) replaces any inbound value with its own observed
-# connection peer rather than trusting or appending to it — verified against
-# the real traefik:v3.6 image. See _source_ip.
+# _unauthenticated_limits, keyed by source IP, covers everything that
+# doesn't clear that bar (wrong/missing client secret, or any other
+# pre-authentication failure) — a single shared bucket here is just as
+# griefable as per-client charging would be above, only shard-wide instead
+# of per-client. IP is safe and non-spoofable in this deployment
+# specifically: Traefik is the sole ingress for this public endpoint, so
+# `request.client` is always Traefik's own address (useless for this), but
+# Traefik's default X-Forwarded-For handling, with this repo's actual
+# config (no `forwardedHeaders.trustedIPs` anywhere in data/traefik.yml),
+# replaces any inbound value with its own observed connection peer rather
+# than trusting or appending to it — verified against the real traefik:v3.6
+# image. See _source_ip.
 #
 # Both dicts are in-process and single-worker, like SlidingWindow itself:
 # they reset on restart, and a second uvicorn worker would keep its own
-# independent set, doubling the effective budget. Fine while shard_core
-# runs one worker.
+# independent set, doubling the effective budget.
 _token_limits: dict[str, SlidingWindow] = {}
 _unauthenticated_limits: dict[str, SlidingWindow] = {}
 
 
 def _bucket_for(limits: dict[str, SlidingWindow], key: str) -> SlidingWindow:
-    """Get-or-create — call only right before an actual charge
-    (try_acquire). A peek must use the non-creating `_bucket_exhausted`
-    instead, or either dict above would gain an entry for every key anyone
-    merely names, regardless of whether they're ever charged."""
+    """Call only right before an actual charge (try_acquire) — a peek must
+    use the non-creating `_bucket_exhausted` instead, or either dict above
+    would gain an entry for every key anyone merely names, regardless of
+    whether they're ever charged."""
     if key not in limits:
         limits[key] = SlidingWindow(limit=TOKEN_RATE_LIMIT, window=60)
     return limits[key]
 
 
 def _bucket_exhausted(limits: dict[str, SlidingWindow], key: str) -> bool:
-    """A non-creating peek, for the pre-check only — see _bucket_for."""
+    """See _bucket_for for why this must not create an entry."""
     bucket = limits.get(key)
     return bucket is not None and bucket.exhausted()
 
 
 def _client_id_from_request(oreq: OAuth2Request) -> str | None:
-    """Best-effort, *unverified* client_id, read the same way Authlib's own
-    client authenticators read it: the form for client_secret_post/none, the
-    Basic auth header for client_secret_basic. Used only for the cheap
-    pre-check below (skip expensive work for a client that's already over
-    its own budget) — never to decide which bucket a failure charges, since
-    nothing here confirms the caller actually is this client.
-    """
+    """Unverified — used only for the pre-check below, never to decide which
+    bucket a failure charges, since nothing here confirms the caller
+    actually is this client."""
     if client_id := oreq.payload.client_id:
         return client_id
     client_id, _ = extract_basic_authorization(oreq.headers)
@@ -249,11 +239,8 @@ def _client_id_from_request(oreq: OAuth2Request) -> str | None:
 
 
 def _source_ip(request: Request) -> str:
-    """The caller's real address — see _token_limits above for why source IP
-    is safe to trust here (unlike client_id). Falls back to the raw socket
-    peer for direct access with no Traefik in front — local testing, and
-    this test suite.
-    """
+    """See _token_limits above for why source IP is safe to trust here,
+    unlike client_id."""
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
         return forwarded
@@ -263,12 +250,8 @@ def _source_ip(request: Request) -> str:
 def _charge_for_failed_attempt(
     oreq: OAuth2Request, source_ip: str, response: Response
 ) -> None:
-    """Charge the right bucket once the grant's outcome is known. A 4xx
-    response is exactly the failure classes this endpoint can produce (wrong
-    client secret, bad/expired/reused code, bad/expired/reused refresh
-    token); a 2xx never reaches the charge below, so success never costs
-    any budget.
-    """
+    # Excludes 5xx deliberately: a bug on our side isn't the caller's fault
+    # to pay for.
     if not (400 <= response.status_code < 500):
         return
     authenticated_client_id = getattr(oreq, "authenticated_client_id", None)
@@ -312,11 +295,8 @@ async def token(request: Request):
     client_id = _client_id_from_request(oreq)
     source_ip = _source_ip(request)
 
-    # Admission control: reject an already-exhausted bucket before paying
-    # for full grant processing (a peek, not a charge — see
-    # SlidingWindow.exhausted). client_id here is unverified, but a wrong
-    # guess only changes *when* a 429 is returned, never which bucket the
-    # charge below lands in.
+    # client_id is unverified here, but a wrong guess only changes *when*
+    # a 429 comes back, never which bucket the charge below lands in.
     if _bucket_exhausted(_unauthenticated_limits, source_ip) or (
         client_id is not None and _bucket_exhausted(_token_limits, client_id)
     ):
