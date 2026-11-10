@@ -11,6 +11,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs, unquote, urlparse
 
+import jwt as pyjwt
 import pytest
 from httpx import AsyncClient
 from joserfc import jwt as joserfc_jwt
@@ -24,7 +25,9 @@ from shard_core.database import oidc as db_oidc
 from shard_core.database import terminals as db_terminals
 from shard_core.database import users as db_users
 from shard_core.service import oidc_provider
+from shard_core.service import pairing
 from shard_core.service.identity import get_default_identity
+from shard_core.web.public import oidc as web_oidc
 from tests.util import pair_new_terminal
 
 AUTHORIZE = "public/oidc/authorize"
@@ -46,11 +49,13 @@ async def expected_issuer() -> str:
     return f"https://{identity.domain}/core/public/oidc"
 
 
-async def make_client(public_client: bool = False, scope: str = None) -> OidcClient:
+async def make_client(
+    public_client: bool = False, scope: str = None, app_name: str = "testapp"
+) -> OidcClient:
     kwargs = {"scope": scope} if scope else {}
-    await _ensure_app_row("testapp")
+    await _ensure_app_row(app_name)
     return await oidc_provider.register_client(
-        "testapp", [REDIRECT_URI], public_client=public_client, **kwargs
+        app_name, [REDIRECT_URI], public_client=public_client, **kwargs
     )
 
 
@@ -113,6 +118,25 @@ async def exchange_code(
     else:
         auth = (oidc_client.client_id, oidc_client.client_secret)
     return await client.post(TOKEN, data=data, auth=auth)
+
+
+async def wrong_secret_attempt(
+    client: AsyncClient, oidc_client: OidcClient, source_ip: str | None = None
+):
+    """A /token call that never authenticates: a client_id paired with a
+    secret guess, not the real one. source_ip, when given, is forwarded as
+    X-Forwarded-For to simulate a distinct caller address."""
+    headers = {"X-Forwarded-For": source_ip} if source_ip else {}
+    return await client.post(
+        TOKEN,
+        data={
+            "grant_type": "authorization_code",
+            "code": "no-such-code",
+            "redirect_uri": REDIRECT_URI,
+        },
+        auth=(oidc_client.client_id, "not-the-real-secret"),
+        headers=headers,
+    )
 
 
 async def run_code_flow(
@@ -233,6 +257,58 @@ async def test_id_token_omits_nonce_when_client_sent_none(app_client: AsyncClien
     claims = joserfc_jwt.decode(r.json()["id_token"], keyset).claims
     assert "nonce" not in claims
     assert all(v is not None for v in claims.values()), f"null claim in {claims}"
+
+
+async def test_auth_time_is_the_pairing_time_not_the_authorize_time(
+    app_client: AsyncClient,
+):
+    """`auth_time` must report when the user authenticated, which under the
+    terminal cookie is when this device was paired — possibly long before a
+    token is minted. The bug stamped the /authorize moment, asserting a fresh
+    authentication that never happened."""
+    await pair_new_terminal(app_client, name="laptop")
+    tid = await terminal_id("laptop")
+
+    # Re-stamp the session cookie as if this device were paired 30 days ago.
+    # The real pairing just above is seconds old, indistinguishable from the
+    # /authorize moment, so it could never catch the bug; backdating the JWT's
+    # `iat` (the pairing time) gives the two timestamps room to diverge.
+    paired_at = int(datetime.now(timezone.utc).timestamp()) - 30 * 24 * 3600
+    app_client.cookies.set(
+        "authorization",
+        await pairing.create_terminal_jwt(tid, iat=paired_at),
+        domain=app_client.base_url.host,
+    )
+
+    oidc_client = await make_client()
+    tok, _ = await run_code_flow(app_client, oidc_client)
+
+    keyset = await jwks_keyset(app_client)
+    claims = joserfc_jwt.decode(tok["id_token"], keyset).claims
+    assert claims["auth_time"] == paired_at
+    # the old code stamped `now`; auth_time must sit well before this token's iat
+    assert claims["auth_time"] < claims["iat"] - 24 * 3600
+
+    # and the stored code row carries the same honest value
+    code_auth_time = (await rows("SELECT auth_time FROM oidc_codes"))[0]["auth_time"]
+    assert code_auth_time == paired_at
+
+
+async def test_authorize_rejects_a_session_token_without_iat(app_client: AsyncClient):
+    """A session token that cannot prove its authentication time must not yield
+    a code (which would force Authlib to fabricate `auth_time` as `now`); it is
+    treated as no session, i.e. a redirect to the pairing UI."""
+    await pair_new_terminal(app_client, name="laptop")
+    tid = await terminal_id("laptop")
+
+    secret = await pairing._ensure_jwt_secret()
+    no_iat = pyjwt.encode({"sub": tid}, secret, algorithm="HS256")
+    app_client.cookies.set("authorization", no_iat, domain=app_client.base_url.host)
+
+    oidc_client = await make_client()
+    _, r = await authorize(app_client, oidc_client, secrets.token_urlsafe(32))
+    assert r.status_code == 302
+    assert urlparse(r.headers["location"]).path == "/"
 
 
 async def test_public_client_pkce_flow(app_client: AsyncClient):
@@ -563,17 +639,216 @@ async def test_no_plaintext_tokens_in_database(app_client: AsyncClient):
         assert not any(secret_value in v for v in all_values), "plaintext token stored"
 
 
-async def test_token_endpoint_rate_limited(app_client: AsyncClient):
+async def test_token_rate_limit_is_per_client(app_client: AsyncClient):
+    """The core fairness fix (#215): one client's exhausted budget must not
+    429 a different client's legitimate request."""
+    await pair_new_terminal(app_client)
+    noisy = await make_client(app_name="noisy-app")
+    other = await make_client(app_name="other-app")
+
+    for _ in range(oidc_provider.TOKEN_RATE_LIMIT):
+        r = await exchange_code(
+            app_client, noisy, "no-such-code", secrets.token_urlsafe(32)
+        )
+        assert r.status_code == 400, r.text
+
+    r = await exchange_code(
+        app_client, noisy, "no-such-code", secrets.token_urlsafe(32)
+    )
+    assert r.status_code == 429, "the noisy client's own budget must be exhausted"
+
+    verifier = secrets.token_urlsafe(32)
+    code = await get_code(app_client, other, verifier)
+    r = await exchange_code(app_client, other, code, verifier)
+    assert (
+        r.status_code == 200
+    ), "a different client's request must not be caught by someone else's limit"
+
+
+async def test_successful_refreshes_do_not_consume_the_rate_limit(
+    app_client: AsyncClient,
+):
+    """Only a failed grant attempt may charge the budget (#215) — a
+    legitimate burst of refresh rotations, well past the per-window limit,
+    must all succeed."""
+    await pair_new_terminal(app_client)
+    oidc_client = await make_client()
+    tok, _ = await run_code_flow(app_client, oidc_client)
+    auth = (oidc_client.client_id, oidc_client.client_secret)
+
+    refresh_token = tok["refresh_token"]
+    for _ in range(oidc_provider.TOKEN_RATE_LIMIT + 5):
+        r = await app_client.post(
+            TOKEN,
+            data={"grant_type": "refresh_token", "refresh_token": refresh_token},
+            auth=auth,
+        )
+        assert r.status_code == 200, r.text
+        refresh_token = r.json()["refresh_token"]
+
+
+async def test_rate_limit_exceeded_returns_bare_429(app_client: AsyncClient):
+    """429 must be bare, not the RFC 8628 device-grant 'slow_down' body —
+    that error code doesn't apply to the authorization-code/refresh grants
+    this endpoint actually serves (#215)."""
     await pair_new_terminal(app_client)
     oidc_client = await make_client()
 
-    statuses = []
-    for _ in range(oidc_provider.TOKEN_RATE_LIMIT + 5):
-        r = await exchange_code(
+    for _ in range(oidc_provider.TOKEN_RATE_LIMIT):
+        await exchange_code(
             app_client, oidc_client, "no-such-code", secrets.token_urlsafe(32)
         )
-        statuses.append(r.status_code)
-    assert 429 in statuses, "token endpoint must rate-limit bursts"
+
+    r = await exchange_code(
+        app_client, oidc_client, "no-such-code", secrets.token_urlsafe(32)
+    )
+    assert r.status_code == 429
+    assert r.content == b"", "429 must carry no JSON error body"
+
+
+async def test_unauthenticated_client_id_claim_does_not_charge_that_client(
+    app_client: AsyncClient,
+):
+    """A caller that never proves it IS a client must not create or charge
+    that client's own bucket just by naming it (see `_token_limits` in
+    web/public/oidc.py for why). Checked directly against the per-client
+    bucket dict — an end-to-end "does the victim's next request still
+    succeed" assertion would be confounded by the separate per-source
+    bucket unauthenticated failures *do* charge (see the next test), which
+    one request here doesn't exhaust."""
+    await pair_new_terminal(app_client)
+    victim = await make_client(app_name="victim-app")
+
+    r = await wrong_secret_attempt(app_client, victim)
+    assert r.status_code in (400, 401), r.text
+
+    assert victim.client_id not in web_oidc._token_limits, (
+        "an unauthenticated claim of victim's client_id must not create or "
+        "charge victim's own per-client bucket"
+    )
+
+    # and the victim's own, correctly-authenticated request still succeeds
+    verifier = secrets.token_urlsafe(32)
+    code = await get_code(app_client, victim, verifier)
+    r = await exchange_code(app_client, victim, code, verifier)
+    assert r.status_code == 200, r.text
+
+
+async def test_repeated_wrong_secret_attempts_from_one_source_share_a_budget(
+    app_client: AsyncClient,
+):
+    """Failed client authentication isn't attributed to any one client's
+    bucket (see the previous test), so it falls to a bucket shared by
+    source IP instead. Split across two distinct client_ids from the same
+    source, neither alone reaching the limit, so a 429 can only be
+    explained by a genuinely shared-per-source budget — hammering one
+    client_id alone wouldn't distinguish that from a per-client bucket keyed
+    off the one name under attack."""
+    await pair_new_terminal(app_client)
+    first = await make_client(app_name="first-target-app")
+    second = await make_client(app_name="second-target-app")
+
+    half = oidc_provider.TOKEN_RATE_LIMIT // 2
+    for _ in range(half):
+        r = await wrong_secret_attempt(app_client, first)
+        assert r.status_code in (400, 401), r.text
+    for _ in range(half):
+        r = await wrong_secret_attempt(app_client, second)
+        assert r.status_code in (400, 401), r.text
+
+    # neither client_id alone reached the limit, but together, from the
+    # same source, they must have exhausted the one budget they share
+    statuses = [
+        (await wrong_secret_attempt(app_client, first)).status_code for _ in range(10)
+    ]
+    assert 429 in statuses, "wrong-secret attempts across clients must share a budget"
+
+
+async def test_unauthenticated_failures_are_rate_limited_per_source_ip_not_shard_wide(
+    app_client: AsyncClient,
+):
+    """A single anonymous, zero-credential flood must not 429 the whole
+    /token endpoint for every other caller (see `_token_limits` in
+    web/public/oidc.py for why source IP, not one shard-wide bucket): a
+    flood from one source must exhaust only its own bucket, leaving a
+    different source's identical attempt unaffected."""
+    await pair_new_terminal(app_client)
+    target = await make_client(app_name="some-app")
+
+    for _ in range(oidc_provider.TOKEN_RATE_LIMIT):
+        r = await wrong_secret_attempt(app_client, target, source_ip="203.0.113.1")
+        assert r.status_code in (400, 401), r.text
+
+    # the attacker's own source is now blocked...
+    r = await wrong_secret_attempt(app_client, target, source_ip="203.0.113.1")
+    assert r.status_code == 429, "the flooding source's own budget must be exhausted"
+
+    # ...but a different source doing the exact same thing is not
+    r = await wrong_secret_attempt(app_client, target, source_ip="203.0.113.2")
+    assert r.status_code in (
+        400,
+        401,
+    ), "a flood from one source must not rate-limit a different source"
+
+
+async def test_failed_refresh_charges_the_refreshing_clients_own_bucket(
+    app_client: AsyncClient,
+):
+    """A bad/expired/reused refresh token, presented with the client's real
+    secret, is the safely-attributable case: authentication succeeded
+    before the refresh-token lookup failed, so it charges that client's own
+    bucket — exercised here for ShardRefreshTokenGrant specifically."""
+    await pair_new_terminal(app_client)
+    oidc_client = await make_client(app_name="refresher-app")
+    tok, _ = await run_code_flow(app_client, oidc_client)
+    auth = (oidc_client.client_id, oidc_client.client_secret)
+
+    # rotate once for real, then replay the now-stale refresh token
+    r = await app_client.post(
+        TOKEN,
+        data={"grant_type": "refresh_token", "refresh_token": tok["refresh_token"]},
+        auth=auth,
+    )
+    assert r.status_code == 200, r.text
+
+    r = await app_client.post(
+        TOKEN,
+        data={"grant_type": "refresh_token", "refresh_token": tok["refresh_token"]},
+        auth=auth,
+    )
+    assert r.status_code in (400, 401), r.text
+
+    assert oidc_client.client_id in web_oidc._token_limits, (
+        "a correctly-authenticated client's own failed refresh must charge "
+        "its own per-client bucket"
+    )
+
+
+async def test_public_client_failed_grant_charges_its_own_bucket(
+    app_client: AsyncClient,
+):
+    """A public client has no secret to check, so Authlib's "none" method
+    authenticates it by existence alone — the accepted, weaker-than-secret
+    signal the issue's resolved intent explicitly carries forward for public
+    clients. A failed grant from a public client must still charge its OWN
+    bucket (not the shared one), the same as a confidential client."""
+    await pair_new_terminal(app_client)
+    public_client = await make_client(public_client=True, app_name="public-app")
+
+    r = await app_client.post(
+        TOKEN,
+        data={
+            "grant_type": "authorization_code",
+            "code": "no-such-code",
+            "redirect_uri": REDIRECT_URI,
+            "client_id": public_client.client_id,
+        },
+    )
+    assert r.status_code in (400, 401), r.text
+
+    assert (
+        public_client.client_id in web_oidc._token_limits
+    ), "a public client's own failed grant must charge its own bucket"
 
 
 @pytest.mark.config_override({"oidc": {"enabled": False}})

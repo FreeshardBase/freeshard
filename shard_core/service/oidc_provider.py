@@ -131,6 +131,10 @@ class ShardUser:
     # set only on the /authorize path, where the terminal cookie is in hand;
     # None when the user is reconstructed from a stored grant
     terminal_id: str | None = None
+    # the terminal's pairing time (seconds since the epoch) = when the user
+    # authenticated; becomes the id_token `auth_time` claim. Set only on the
+    # /authorize path, alongside terminal_id.
+    auth_time: int | None = None
 
     @classmethod
     def from_user(cls, user: User | None):
@@ -309,7 +313,24 @@ def sign_logout_token(client_id: str, user_sub: int, sid: str) -> str:
 # --- grants ------------------------------------------------------------------------
 
 
-class ShardAuthCodeGrant(grants.AuthorizationCodeGrant):
+class StampsAuthenticatedClientId:
+    """Authlib's base grant classes only set `request.client` once the
+    *entire* request has validated as correct — for AuthorizationCodeGrant
+    that is after the authorization-code lookup has already succeeded (see
+    `validate_token_request` in authlib's authorization_code.py, which sets
+    it as the very last step). That's too late for web.public.oidc's rate
+    limiter, which needs "did this request prove it is this client"
+    independent of whether a later, grant-specific check also passed — see
+    `_token_limits` in web/public/oidc.py.
+    """
+
+    def authenticate_token_endpoint_client(self):
+        client = super().authenticate_token_endpoint_client()
+        self.request.authenticated_client_id = client.get_client_id()
+        return client
+
+
+class ShardAuthCodeGrant(StampsAuthenticatedClientId, grants.AuthorizationCodeGrant):
     TOKEN_ENDPOINT_AUTH_METHODS = ["client_secret_basic", "client_secret_post", "none"]
 
     def save_authorization_code(self, code, request):
@@ -334,8 +355,9 @@ class ShardAuthCodeGrant(grants.AuthorizationCodeGrant):
                     "nonce": data.get("nonce"),
                     "code_challenge": data.get("code_challenge"),
                     "code_challenge_method": data.get("code_challenge_method"),
-                    "auth_time": int(time.time()),
-                    "expires_at": datetime.now(timezone.utc) + timedelta(seconds=CODE_EXPIRES_IN),
+                    "auth_time": request.user.auth_time,
+                    "expires_at": datetime.now(timezone.utc)
+                    + timedelta(seconds=CODE_EXPIRES_IN),
                 },
             )
         )
@@ -369,7 +391,7 @@ class ShardAuthCodeGrant(grants.AuthorizationCodeGrant):
         return _run(_user_from_id_async(authorization_code.user_sub))
 
 
-class ShardRefreshTokenGrant(grants.RefreshTokenGrant):
+class ShardRefreshTokenGrant(StampsAuthenticatedClientId, grants.RefreshTokenGrant):
     INCLUDE_NEW_REFRESH_TOKEN = True
 
     def authenticate_refresh_token(self, refresh_token):
