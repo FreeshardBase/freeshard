@@ -34,6 +34,7 @@ from shard_core.database.connection import db_conn
 from shard_core.database import oidc as db_oidc
 from shard_core.database import terminals as db_terminals
 from shard_core.service import oidc_backchannel_logout, oidc_provider
+from shard_core.util import signals
 from tests.util import pair_new_terminal
 
 AUTHORIZE = "public/oidc/authorize"
@@ -287,6 +288,27 @@ async def test_drain_delivers_once_the_app_is_running(app_client: AsyncClient, m
 
     post.assert_called_once()
     assert post.call_args.args[0] == LOGOUT_URI
+    entry = (await rows("SELECT * FROM oidc_backchannel_logout_outbox"))[0]
+    assert entry["status"] == "delivered"
+
+
+async def test_on_apps_update_signal_drains_a_due_entry(app_client: AsyncClient, mocker):
+    """The spec's actual hook: drain is triggered by on_apps_update, not by
+    a test calling drain_due_outbox() directly."""
+    post = mocker.patch(
+        "shard_core.service.oidc_backchannel_logout._post_logout_token",
+        return_value=None,
+    )
+    await pair_new_terminal(app_client, name="phone")
+    tid = await terminal_id("phone")
+    oidc_client = await make_client("bc_app")
+    await set_app_status("bc_app", "running")
+    await run_code_flow(app_client, oidc_client)
+    await unpair(app_client, tid)
+
+    await signals.on_apps_update.send_async()
+
+    post.assert_called_once()
     entry = (await rows("SELECT * FROM oidc_backchannel_logout_outbox"))[0]
     assert entry["status"] == "delivered"
 

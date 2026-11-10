@@ -17,6 +17,7 @@ from .service import (
     app_installation,
     identity,
     app_lifecycle,
+    oidc_backchannel_logout,
     peer,
     app_usage_reporting,
     websocket,
@@ -138,6 +139,12 @@ def _make_background_tasks() -> List[BackgroundTask]:
         ),
         PeriodicTask(disk.update_disk_space, 30),
         PeriodicTask(metrics.update_stats, s.metrics.sample_interval_seconds),
+        # Backstop for OIDC backchannel-logout retries: the on_apps_update
+        # signal (service/oidc_backchannel_logout.py) drains the outbox as
+        # soon as an app reaches RUNNING, but a failed delivery's backoff
+        # elapses without any app status changing in between — this tick
+        # is what actually fires the retry.
+        PeriodicTask(oidc_backchannel_logout.drain_due_outbox, 30),
         websocket.ws_worker,
         PeriodicTask(telemetry.send_telemetry, s.telemetry.send_interval_seconds),
     ]

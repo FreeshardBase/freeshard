@@ -23,8 +23,12 @@ such reconciliation; the next drain just picks it up again.
 drain_due_outbox() attempts delivery of every outbox entry that is due and
 whose owning app is currently RUNNING (get_due_outbox_entries bakes that
 filter in — a stopped app is never woken just to receive its own logout).
-Wiring drain_due_outbox() to actually run (the on_apps_update signal, plus a
-periodic backstop for retries) lands in a follow-up commit on this branch.
+It is driven by two triggers, both calling the same function:
+  * the on_apps_update signal (connected below), which fires on every app
+    status write — draining then is a no-op unless some due row's app just
+    became RUNNING;
+  * a PeriodicTask backstop (app_factory.py), for bounded retries whose
+    backoff elapses without any app status changing in between.
 
 The logout_token is minted fresh on every delivery attempt
 (oidc_provider.sign_logout_token), never cached from enqueue time: Immich
@@ -44,6 +48,7 @@ import httpx
 from shard_core.database import oidc as db_oidc
 from shard_core.database.connection import db_conn
 from shard_core.service import oidc_provider
+from shard_core.util import signals
 
 log = logging.getLogger(__name__)
 
@@ -148,3 +153,8 @@ async def drain_due_outbox() -> None:
                 entry["sid"],
                 e,
             )
+
+
+@signals.on_apps_update.connect
+async def _drain_on_apps_update(_):
+    await drain_due_outbox()
