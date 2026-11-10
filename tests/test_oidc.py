@@ -25,6 +25,7 @@ from shard_core.database import terminals as db_terminals
 from shard_core.database import users as db_users
 from shard_core.service import oidc_provider
 from shard_core.service.identity import get_default_identity
+from shard_core.web.public import oidc as web_oidc
 from tests.util import pair_new_terminal
 
 AUTHORIZE = "public/oidc/authorize"
@@ -641,6 +642,73 @@ async def test_rate_limit_exceeded_returns_bare_429(app_client: AsyncClient):
     )
     assert r.status_code == 429
     assert r.content == b"", "429 must carry no JSON error body"
+
+
+async def test_unauthenticated_client_id_claim_does_not_charge_that_client(
+    app_client: AsyncClient,
+):
+    """A caller that never proves it IS a client must not be able to charge
+    that client's own per-client bucket just by naming it in the form body —
+    client_id is not a secret (it's visible in every /authorize redirect),
+    so charging a bare, unauthenticated claim would let anyone grief an
+    arbitrary victim's budget for free, which is the exact fairness problem
+    per-client keying exists to fix, just aimed at one client instead of all
+    of them (caught in review of #215). Checked directly against the
+    per-client bucket dict — an end-to-end "does the victim's next request
+    still succeed" assertion would be confounded by the separate shared
+    bucket that unauthenticated failures *do* still charge (see the next
+    test), which a single request here does not exhaust."""
+    await pair_new_terminal(app_client)
+    victim = await make_client(app_name="victim-app")
+
+    r = await app_client.post(
+        TOKEN,
+        data={
+            "grant_type": "authorization_code",
+            "code": "no-such-code",
+            "redirect_uri": REDIRECT_URI,
+            "client_id": victim.client_id,
+            "client_secret": "not-the-real-secret",
+        },
+    )
+    assert r.status_code in (400, 401), r.text
+
+    assert victim.client_id not in web_oidc._token_limits, (
+        "an unauthenticated claim of victim's client_id must not create or "
+        "charge victim's own per-client bucket"
+    )
+
+    # and the victim's own, correctly-authenticated request still succeeds
+    verifier = secrets.token_urlsafe(32)
+    code = await get_code(app_client, victim, verifier)
+    r = await exchange_code(app_client, victim, code, verifier)
+    assert r.status_code == 200, r.text
+
+
+async def test_repeated_wrong_secret_attempts_share_one_global_budget(
+    app_client: AsyncClient,
+):
+    """Failed client authentication (wrong/missing secret) isn't attributed
+    to any one client's bucket (see the previous test for why) — it falls to
+    a shared bucket instead, preserving the brute-force resistance the
+    single global counter gave before this change, just scoped to this one
+    unattributable failure class."""
+    await pair_new_terminal(app_client)
+    target = await make_client(app_name="target-app")
+
+    statuses = []
+    for _ in range(oidc_provider.TOKEN_RATE_LIMIT + 5):
+        r = await app_client.post(
+            TOKEN,
+            data={
+                "grant_type": "authorization_code",
+                "code": "no-such-code",
+                "redirect_uri": REDIRECT_URI,
+            },
+            auth=(target.client_id, "not-the-real-secret"),
+        )
+        statuses.append(r.status_code)
+    assert 429 in statuses, "wrong-secret attempts must still be rate-limited somewhere"
 
 
 @pytest.mark.config_override({"oidc": {"enabled": False}})

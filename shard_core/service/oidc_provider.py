@@ -257,7 +257,35 @@ def public_jwks() -> dict:
 # --- grants ------------------------------------------------------------------------
 
 
-class ShardAuthCodeGrant(grants.AuthorizationCodeGrant):
+class StampsAuthenticatedClientId:
+    """Marks `request.authenticated_client_id` the moment Authlib's own
+    client authentication succeeds, independent of whatever the grant does
+    afterward.
+
+    The base grant classes only set `request.client` once the *entire*
+    request has validated as correct — for AuthorizationCodeGrant that is
+    after the authorization-code lookup has already succeeded (see
+    `validate_token_request` in authlib's authorization_code.py, which sets
+    it as the very last step), which is too late for a caller that needs to
+    know "did this request prove it is this client" independent of whether
+    a later, grant-specific check (code/refresh-token validity) also
+    passed. web.public.oidc's rate limiter needs exactly that: a failure
+    that happens *after* successful client authentication is safely
+    chargeable to that client's own bucket (it had to know the real secret,
+    or be a registered public client, to get this far); a failure where
+    authentication itself never succeeded must not be, since client_id is
+    not a secret (see AuthlibClient.get_client_id / register_client) and an
+    unauthenticated caller could otherwise grief an arbitrary victim's
+    budget just by naming it.
+    """
+
+    def authenticate_token_endpoint_client(self):
+        client = super().authenticate_token_endpoint_client()
+        self.request.authenticated_client_id = client.get_client_id()
+        return client
+
+
+class ShardAuthCodeGrant(StampsAuthenticatedClientId, grants.AuthorizationCodeGrant):
     TOKEN_ENDPOINT_AUTH_METHODS = ["client_secret_basic", "client_secret_post", "none"]
 
     def save_authorization_code(self, code, request):
@@ -320,7 +348,7 @@ class ShardAuthCodeGrant(grants.AuthorizationCodeGrant):
         return _run(_user_from_id_async(authorization_code.user_sub))
 
 
-class ShardRefreshTokenGrant(grants.RefreshTokenGrant):
+class ShardRefreshTokenGrant(StampsAuthenticatedClientId, grants.RefreshTokenGrant):
     INCLUDE_NEW_REFRESH_TOKEN = True
 
     def authenticate_refresh_token(self, refresh_token):
