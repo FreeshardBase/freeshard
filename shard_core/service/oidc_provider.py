@@ -21,6 +21,7 @@ import secrets
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
 
 import jinja2
 from authlib.oauth2.rfc6749 import (
@@ -32,6 +33,7 @@ from authlib.oauth2.rfc6749 import (
 from authlib.oauth2.rfc7636 import CodeChallenge
 from authlib.oidc.core import UserInfo
 from authlib.oidc.core.grants import OpenIDCode
+from joserfc import jwt as joserfc_jwt
 from joserfc.jwk import RSAKey
 
 from shard_core.database import kv_store
@@ -41,6 +43,7 @@ from shard_core.database import users as db_users
 from shard_core.database.connection import db_conn, with_conn
 from shard_core.data_model.oidc import OidcClient, OidcCode, OidcToken
 from shard_core.data_model.user import User
+from shard_core.service import identity as identity_service
 
 log = logging.getLogger(__name__)
 
@@ -64,6 +67,25 @@ def configure(issuer: str, jwk: dict, loop: asyncio.AbstractEventLoop):
     _state["loop"] = loop
 
 
+async def ensure_configured() -> None:
+    """Make sure the issuer and signing key are set, without requiring an
+    HTTP request to have reached the OIDC router first.
+
+    The per-request lazy path (web.public.oidc._get_server) does the same
+    derivation, but backchannel-logout delivery can run from a background
+    task or signal handler before any OIDC endpoint has ever been hit — e.g.
+    right after boot, before anyone has logged into an app. Idempotent: a
+    second call (from a real request, later) just re-sets the same values.
+    """
+    if _state["jwk"] is not None:
+        return
+    i = await identity_service.get_default_identity()
+    protocol = "http" if settings().traefik.disable_ssl else "https"
+    issuer = f"{protocol}://{i.domain}/core/public/oidc"
+    jwk = await ensure_jwk()
+    configure(issuer, jwk, asyncio.get_running_loop())
+
+
 def hash_secret(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
 
@@ -84,9 +106,7 @@ def _run(coro):
     """
     loop = _state["loop"]
     if loop is None or loop.is_closed():
-        raise RuntimeError(
-            "OIDC provider has no running event loop — reach it through _get_server()"
-        )
+        raise RuntimeError("OIDC provider has no running event loop — reach it through _get_server()")
     future = asyncio.run_coroutine_threadsafe(coro, loop)
     try:
         return future.result(BRIDGE_TIMEOUT)
@@ -171,9 +191,7 @@ class AuthlibClient(OidcClient, ClientMixin):
         return redirect_uri in self.redirect_uris
 
     def check_client_secret(self, client_secret):
-        return self.client_secret is not None and secrets.compare_digest(
-            self.client_secret, client_secret
-        )
+        return self.client_secret is not None and secrets.compare_digest(self.client_secret, client_secret)
 
     def check_endpoint_auth_method(self, method, endpoint):
         if endpoint == "token":
@@ -255,6 +273,40 @@ def public_jwks() -> dict:
     return {"keys": [public]}
 
 
+# OIDC Back-Channel Logout 1.0 §2.4's required "events" member — present,
+# with an empty object value, never omitted or null.
+BACKCHANNEL_LOGOUT_EVENT = "http://schemas.openid.net/event/backchannel-logout"
+
+
+def sign_logout_token(client_id: str, user_sub: int, sid: str) -> str:
+    """Mint a fresh OIDC Back-Channel Logout 1.0 logout_token.
+
+    Called by service.oidc_backchannel_logout at EVERY delivery attempt, and
+    never cached or reused across attempts: a relying party may reject a
+    token whose age exceeds its own tolerance (e.g. Immich's maxTokenAge),
+    so one signed at enqueue/un-pair time and replayed on a later retry
+    could be rejected even though delivery itself went through. Deliberately
+    carries no "nonce" claim — the spec forbids one on logout tokens.
+
+    Caller contract: ensure_configured() must have run first (it sets the
+    issuer/signing key this reads from _state).
+    """
+    if _state["jwk"] is None or _state["issuer"] is None:
+        raise RuntimeError("OIDC provider not configured — call ensure_configured() first")
+    key = RSAKey.import_key(_state["jwk"])
+    header = {"alg": "RS256", "kid": _state["jwk"].get("kid")}
+    claims = {
+        "iss": _state["issuer"],
+        "sub": str(user_sub),
+        "aud": [client_id],
+        "iat": int(time.time()),
+        "jti": secrets.token_urlsafe(16),
+        "sid": sid,
+        "events": {BACKCHANNEL_LOGOUT_EVENT: {}},
+    }
+    return joserfc_jwt.encode(header, claims, key, algorithms=["RS256"])
+
+
 # --- storage bridges (called from Authlib's sync hooks) ---------------------------
 
 
@@ -316,9 +368,7 @@ class ShardAuthCodeGrant(StampsAuthenticatedClientId, grants.AuthorizationCodeGr
         # both get it (RFC 9700 single-use)
         row = _run(with_conn(db_oidc.redeem_code, hash_secret(code), client.client_id))
         if row is None:
-            stale = _run(
-                with_conn(db_oidc.get_code, hash_secret(code), client.client_id)
-            )
+            stale = _run(with_conn(db_oidc.get_code, hash_secret(code), client.client_id))
             if stale and stale.redeemed:
                 # reuse of a redeemed code signals interception — kill every
                 # token issued to this (client, user) grant
@@ -345,9 +395,7 @@ class ShardRefreshTokenGrant(StampsAuthenticatedClientId, grants.RefreshTokenGra
     INCLUDE_NEW_REFRESH_TOKEN = True
 
     def authenticate_refresh_token(self, refresh_token):
-        row = _run(
-            with_conn(db_oidc.get_token_by_refresh_hash, hash_secret(refresh_token))
-        )
+        row = _run(with_conn(db_oidc.get_token_by_refresh_hash, hash_secret(refresh_token)))
         if row is None:
             return None
         if row.revoked:
@@ -445,19 +493,13 @@ def _save_token(token: dict, request):
     # request.user is rebuilt from the stored grant and has no terminal, so the
     # binding comes from the credential: the code on first issue, the previous
     # token on rotation.
-    credential = getattr(request, "authorization_code", None) or getattr(
-        request, "refresh_token", None
-    )
+    credential = getattr(request, "authorization_code", None) or getattr(request, "refresh_token", None)
     _run(
         with_conn(
             db_oidc.insert_token,
             {
                 "access_token_hash": hash_secret(token["access_token"]),
-                "refresh_token_hash": (
-                    hash_secret(token["refresh_token"])
-                    if token.get("refresh_token")
-                    else None
-                ),
+                "refresh_token_hash": (hash_secret(token["refresh_token"]) if token.get("refresh_token") else None),
                 "client_id": request.client.client_id,
                 "user_sub": request.user.id,
                 "terminal_id": credential.terminal_id,
@@ -497,11 +539,47 @@ def build_authorization_server(server_cls=AuthorizationServer) -> AuthorizationS
 # --- async API for routes and app installation ---------------------------------------
 
 
+_ALLOWED_BACKCHANNEL_LOGOUT_SCHEMES = {"http", "https"}
+
+
+def _validated_backchannel_logout_uri(app_name: str, uri: str | None) -> str | None:
+    """Defense-in-depth against SSRF (CWE-918).
+
+    backchannel_logout_uri is declared by the app's OWN app_meta.json and,
+    unlike redirect_uris (only ever compared for an exact string match),
+    this one is actually dereferenced -- oidc_backchannel_logout.
+    _post_logout_token issues a real outbound HTTP request to it at every
+    delivery attempt. Reject anything that isn't a plain http(s) URL
+    (no javascript:, data:, file:, gopher:, ...) before it is ever
+    persisted, rather than trusting app-declared metadata as a free target
+    for a request shard_core itself makes.
+
+    Deliberately NOT also resolving the host and rejecting private/
+    loopback/link-local ranges here: that would need a DNS-rebinding-safe
+    check at delivery time, not registration time, and it would reject the
+    legitimate case too eagerly in this repo's own test fixtures (mock app
+    domains that never resolve at all) without a redesign of how those
+    fixtures declare their logout URI.
+    """
+    if uri is None:
+        return None
+    if urlparse(uri).scheme not in _ALLOWED_BACKCHANNEL_LOGOUT_SCHEMES:
+        log.warning(
+            "app %s declared a backchannel_logout_uri with a disallowed "
+            "scheme (%r) -- registering the client without it",
+            app_name,
+            uri,
+        )
+        return None
+    return uri
+
+
 async def register_client(
     app_name: str,
     redirect_uris: list[str],
     public_client: bool = False,
     scope: str = "openid profile email",
+    backchannel_logout_uri: str | None = None,
 ) -> OidcClient:
     """Create the OIDC client for an installed app, or refresh its
     configuration — credentials are preserved if the app already has one.
@@ -511,15 +589,15 @@ async def register_client(
     same disk anyway. Codes and tokens, by contrast, are stored hashed.
     """
     client_secret = None if public_client else secrets.token_urlsafe(32)
+    backchannel_logout_uri = _validated_backchannel_logout_uri(app_name, backchannel_logout_uri)
     row = {
         "client_id": f"{app_name}-{secrets.token_urlsafe(6)}",
         "client_secret": client_secret,
         "app_name": app_name,
         "redirect_uris": redirect_uris,
         "scope": scope,
-        "token_endpoint_auth_method": (
-            "none" if public_client else "client_secret_basic"
-        ),
+        "token_endpoint_auth_method": ("none" if public_client else "client_secret_basic"),
+        "backchannel_logout_uri": backchannel_logout_uri,
     }
     async with db_conn() as conn:
         stored = await db_oidc.upsert_client(conn, row)
@@ -536,21 +614,23 @@ def issuer_for_domain(domain: str, disable_ssl: bool = False) -> str:
 async def ensure_app_client(app_name: str, oidc_meta, portal) -> dict:
     """Register/refresh the app's OIDC client and return the docker-compose
     template context: client_id, client_secret, issuer."""
-    redirect_uris = [
-        jinja2.Template(uri).render(portal=portal) for uri in oidc_meta.redirect_uris
-    ]
+    redirect_uris = [jinja2.Template(uri).render(portal=portal) for uri in oidc_meta.redirect_uris]
+    backchannel_logout_uri = (
+        jinja2.Template(oidc_meta.backchannel_logout_uri).render(portal=portal)
+        if oidc_meta.backchannel_logout_uri
+        else None
+    )
     client = await register_client(
         app_name,
         redirect_uris,
         public_client=oidc_meta.public_client,
         scope=oidc_meta.scope,
+        backchannel_logout_uri=backchannel_logout_uri,
     )
     return {
         "client_id": client.client_id,
         "client_secret": client.client_secret,
-        "issuer": issuer_for_domain(
-            portal.domain, disable_ssl=settings().traefik.disable_ssl
-        ),
+        "issuer": issuer_for_domain(portal.domain, disable_ssl=settings().traefik.disable_ssl),
     }
 
 
@@ -562,9 +642,7 @@ async def userinfo_for_access_token(access_token: str) -> dict | None:
         user = ShardUser.from_user(await db_users.get_by_id(conn, row.user_sub))
     if user is None:
         return None
-    return dict(
-        ShardOpenIDCode(require_nonce=False).generate_user_info(user, row.scope or "")
-    )
+    return dict(ShardOpenIDCode(require_nonce=False).generate_user_info(user, row.scope or ""))
 
 
 def discovery_document() -> dict:
@@ -586,4 +664,6 @@ def discovery_document() -> dict:
             "none",
         ],
         "code_challenge_methods_supported": ["S256"],
+        "backchannel_logout_supported": True,
+        "backchannel_logout_session_supported": True,
     }

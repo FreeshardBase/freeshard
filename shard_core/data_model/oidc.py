@@ -12,6 +12,11 @@ class OidcClient(BaseModel):
     redirect_uris: list[str]
     scope: str
     token_endpoint_auth_method: str
+    # OIDC Back-Channel Logout 1.0 endpoint, already rendered (portal
+    # variables resolved) at registration time. None: the app declared no
+    # backchannel_logout_uri in app_meta.json and cannot be signed out from
+    # our side, only from its own UI.
+    backchannel_logout_uri: str | None = None
     created: datetime | None = None
 
 

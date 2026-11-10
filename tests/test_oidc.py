@@ -197,6 +197,8 @@ async def test_discovery_document(app_client: AsyncClient):
     assert {"client_secret_basic", "client_secret_post", "none"} <= set(
         disco["token_endpoint_auth_methods_supported"]
     )
+    assert disco["backchannel_logout_supported"] is True
+    assert disco["backchannel_logout_session_supported"] is True
 
 
 async def test_jwks_returns_rsa_sig_key_and_is_stable(app_client: AsyncClient):
