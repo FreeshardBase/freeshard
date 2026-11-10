@@ -53,6 +53,14 @@ class SafeIdentity(BaseModel):
     domain: str
     id: str
     public_key_pem: str
+    # The shard owner's verified email (users.email), for templates that want
+    # it alongside the other portal facts. None whenever no owner exists yet,
+    # or the owner has no verified address (unset, or still pending
+    # confirmation) — never an empty string, so a Jinja template can branch on
+    # it cleanly. Not populated by the other two callers of from_identity
+    # (traefik config compilation, the auth cache); it only matters for
+    # docker-compose template rendering.
+    owner_email: Optional[str] = None
 
     @computed_field
     @property
@@ -60,11 +68,12 @@ class SafeIdentity(BaseModel):
         return self.id[:6]
 
     @classmethod
-    def from_identity(cls, identity: Identity):
+    def from_identity(cls, identity: Identity, owner_email: Optional[str] = None):
         return cls(
             domain=identity.domain,
             id=identity.id,
             public_key_pem=identity.public_key_pem,
+            owner_email=owner_email,
         )
 
 

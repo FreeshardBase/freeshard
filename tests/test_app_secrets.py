@@ -8,8 +8,10 @@ import yaml
 from shard_core.data_model.app_meta import InstallationReason, InstalledApp, Status
 from shard_core.database import app_secrets as db_app_secrets
 from shard_core.database import installed_apps as db_installed_apps
+from shard_core.database import users as db_users
 from shard_core.database.connection import db_conn
 from shard_core.service import identity
+from shard_core.service import user as user_service
 from shard_core.service.app_installation.app_secrets import generate_secret
 from shard_core.service.app_installation.util import render_docker_compose_template
 from shard_core.service.app_installation.worker import _uninstall_app
@@ -240,3 +242,42 @@ async def test_generate_secret_length_charset_and_uniqueness():
     # distinct values across 100 draws → the generator is actually random,
     # not returning a constant.
     assert len(set(values)) == 100
+
+
+# --- portal.owner_email --------------------------------------------------------
+
+_OWNER_EMAIL_TEMPLATE = """
+services:
+    app:
+        image: nginx:alpine
+        environment:
+            PLACEHOLDER: "x"
+            {% if portal.owner_email %}
+            OWNER_EMAIL: "{{ portal.owner_email }}"
+            {% endif %}
+"""
+
+
+async def test_owner_email_rendered_when_verified():
+    owner = await user_service.ensure_owner_user()
+    async with db_conn() as conn:
+        await db_users.update(conn, owner.id, {"email": "owner@example.org"})
+
+    app = await _install_app_with_template("owner_email_app", _OWNER_EMAIL_TEMPLATE)
+    await render_docker_compose_template(app)
+
+    assert _rendered_env("owner_email_app")["OWNER_EMAIL"] == "owner@example.org"
+
+
+async def test_owner_email_absent_when_none_set():
+    # ensure_owner_user leaves a fresh owner's address empty: users.email is
+    # verified by definition and a fresh shard has verified nothing yet (see
+    # shard_core/service/owner_email.py).
+    await user_service.ensure_owner_user()
+
+    app = await _install_app_with_template(
+        "no_owner_email_app", _OWNER_EMAIL_TEMPLATE
+    )
+    await render_docker_compose_template(app)
+
+    assert "OWNER_EMAIL" not in _rendered_env("no_owner_email_app")
