@@ -108,12 +108,8 @@ async def render_docker_compose_template(app: InstalledApp):
         default_row = await db_identities.get_default(conn)
         owner = await db_users.get_owner(conn)
     default_identity = Identity(**default_row)
-    # None whenever there's no owner yet or the owner has no verified address
-    # (unset, or a pending_email still awaiting confirmation) — see
-    # shard_core/service/owner_email.py for why users.email is the only
-    # column that's ever verified.
     owner_email = owner.email if owner is not None else None
-    portal = SafeIdentity.from_identity(default_identity, owner_email=owner_email)
+    portal = SafeIdentity.from_identity(default_identity)
 
     oidc = None
     app_meta = get_app_metadata(app.name)
@@ -135,6 +131,7 @@ async def render_docker_compose_template(app: InstalledApp):
     rendered = template.render(
         fs=fs,
         portal=portal,
+        owner_email=owner_email,
         oidc=oidc,
         secret=secret_resolver,
     )

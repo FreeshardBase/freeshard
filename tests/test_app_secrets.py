@@ -244,7 +244,7 @@ async def test_generate_secret_length_charset_and_uniqueness():
     assert len(set(values)) == 100
 
 
-# --- portal.owner_email --------------------------------------------------------
+# --- owner_email --------------------------------------------------------
 
 _OWNER_EMAIL_TEMPLATE = """
 services:
@@ -252,8 +252,8 @@ services:
         image: nginx:alpine
         environment:
             PLACEHOLDER: "x"
-            {% if portal.owner_email %}
-            OWNER_EMAIL: "{{ portal.owner_email }}"
+            {% if owner_email %}
+            OWNER_EMAIL: "{{ owner_email }}"
             {% endif %}
 """
 
