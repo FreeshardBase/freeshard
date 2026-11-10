@@ -1,7 +1,8 @@
+from datetime import datetime
 from typing import LiteralString
 
 from psycopg import AsyncConnection
-from psycopg.rows import class_row
+from psycopg.rows import class_row, dict_row
 from psycopg.types.json import Jsonb
 
 from shard_core.data_model.oidc import OidcClient, OidcCode, OidcToken
@@ -154,3 +155,101 @@ async def revoke_for_terminal(conn: AsyncConnection, terminal_id: str):
     )
     await conn.execute(revoke_tokens, (terminal_id,))
     await conn.execute(burn_codes, (terminal_id,))
+
+
+# --- backchannel logout outbox ----------------------------------------------
+
+
+async def get_live_grants_for_terminal(
+    conn: AsyncConnection, terminal_id: str
+) -> list[dict]:
+    """Distinct (client, sid, user) combinations with a live (unrevoked)
+    token for this terminal — the app sessions a back-channel logout must
+    notify. Must be called before revoke_for_terminal marks these tokens
+    revoked, and before the terminal row is deleted (the FK is ON DELETE SET
+    NULL, so afterwards nothing matches terminal_id any more)."""
+    sql: LiteralString = """SELECT DISTINCT client_id, sid, user_sub
+        FROM oidc_tokens WHERE terminal_id = %s AND NOT revoked"""
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(sql, (terminal_id,))
+        return await cur.fetchall()
+
+
+async def enqueue_backchannel_logout(
+    conn: AsyncConnection, terminal_id: str, grants: list[dict]
+) -> None:
+    """One outbox row per (client_id, sid) grant whose client declared a
+    backchannel_logout_uri — nothing to deliver to otherwise. Idempotent: a
+    (client_id, sid) pair already enqueued is left alone (ON CONFLICT DO
+    NOTHING), so calling this twice for the same grant is harmless."""
+    sql: LiteralString = """INSERT INTO oidc_backchannel_logout_outbox
+        (client_id, user_sub, sid, terminal_id)
+        SELECT %(client_id)s, %(user_sub)s, %(sid)s, %(terminal_id)s
+        WHERE EXISTS (
+            SELECT 1 FROM oidc_clients
+            WHERE client_id = %(client_id)s AND backchannel_logout_uri IS NOT NULL
+        )
+        ON CONFLICT (client_id, sid) DO NOTHING"""
+    for grant in grants:
+        await conn.execute(sql, {**grant, "terminal_id": terminal_id})
+
+
+async def get_due_outbox_entries(conn: AsyncConnection) -> list[dict]:
+    """Pending outbox rows whose backoff has elapsed and whose app is
+    currently RUNNING. A stopped app serves nothing, so it is never woken
+    just to receive its own logout notification — the row simply waits for
+    the app's next on_apps_update (or the periodic backstop) once it is."""
+    sql: LiteralString = """SELECT o.*, c.backchannel_logout_uri, c.app_name
+        FROM oidc_backchannel_logout_outbox o
+        JOIN oidc_clients c ON c.client_id = o.client_id
+        JOIN installed_apps ia ON ia.name = c.app_name
+        WHERE o.status = 'pending'
+          AND o.next_attempt_at <= now()
+          AND ia.status = 'running'"""
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(sql)
+        return await cur.fetchall()
+
+
+async def mark_outbox_delivered(conn: AsyncConnection, id_: int) -> None:
+    sql: LiteralString = """UPDATE oidc_backchannel_logout_outbox
+        SET status = 'delivered', updated = now() WHERE id = %s"""
+    await conn.execute(sql, (id_,))
+
+
+async def mark_outbox_retry(
+    conn: AsyncConnection,
+    id_: int,
+    attempts: int,
+    next_attempt_at: datetime,
+    error: str,
+) -> None:
+    sql: LiteralString = """UPDATE oidc_backchannel_logout_outbox
+        SET attempts = %s, next_attempt_at = %s, last_error = %s, updated = now()
+        WHERE id = %s"""
+    await conn.execute(sql, (attempts, next_attempt_at, error, id_))
+
+
+async def mark_outbox_failed(
+    conn: AsyncConnection, id_: int, attempts: int, error: str
+) -> None:
+    sql: LiteralString = """UPDATE oidc_backchannel_logout_outbox
+        SET status = 'failed', attempts = %s, last_error = %s, updated = now()
+        WHERE id = %s"""
+    await conn.execute(sql, (attempts, error, id_))
+
+
+async def get_outbox_entries_by_status(
+    conn: AsyncConnection, status: str
+) -> list[dict]:
+    """Queryable durable state for a future "delivery failed for this
+    terminal/client" UI marker — deliberately not built here (see issue #192:
+    that's a separate Sundial-repo follow-up). This is the backend half it
+    will read from."""
+    sql: LiteralString = """SELECT o.*, c.app_name
+        FROM oidc_backchannel_logout_outbox o
+        JOIN oidc_clients c ON c.client_id = o.client_id
+        WHERE o.status = %s"""
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(sql, (status,))
+        return await cur.fetchall()

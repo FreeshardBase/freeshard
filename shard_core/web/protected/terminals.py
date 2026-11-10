@@ -8,7 +8,7 @@ from shard_core.database.connection import db_conn
 from shard_core.database import oidc as db_oidc
 from shard_core.database import terminals as db_terminals
 from shard_core.data_model.terminal import Terminal, InputTerminal
-from shard_core.service import pairing
+from shard_core.service import oidc_backchannel_logout, pairing
 from shard_core.service.pairing import PairingCode
 from shard_core.util.signals import on_terminals_update
 
@@ -61,6 +61,11 @@ async def edit_terminal(id_: str, terminal: InputTerminal):
 )
 async def delete_terminal_by_id(id_: str):
     async with db_conn() as conn:
+        # Must run first: it reads the terminal's still-live OIDC grants,
+        # and both revoke_for_terminal (marks them revoked) and
+        # terminals.remove (ON DELETE SET NULL severs the FK) destroy the
+        # only way to find them afterwards.
+        await oidc_backchannel_logout.enqueue_for_terminal(conn, id_)
         await db_oidc.revoke_for_terminal(conn, id_)
         await db_terminals.remove(conn, id_)
     await on_terminals_update.send_async()
