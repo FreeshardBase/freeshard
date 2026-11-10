@@ -16,13 +16,14 @@ async def upsert_client(conn: AsyncConnection, client: dict) -> OidcClient:
     re-renders keep working credentials."""
     sql: LiteralString = """INSERT INTO oidc_clients
         (client_id, client_secret, app_name, redirect_uris,
-         scope, token_endpoint_auth_method)
+         scope, token_endpoint_auth_method, backchannel_logout_uri)
         VALUES (%(client_id)s, %(client_secret)s, %(app_name)s, %(redirect_uris)s,
-                %(scope)s, %(token_endpoint_auth_method)s)
+                %(scope)s, %(token_endpoint_auth_method)s, %(backchannel_logout_uri)s)
         ON CONFLICT (app_name) DO UPDATE SET
             redirect_uris = EXCLUDED.redirect_uris,
             scope = EXCLUDED.scope,
-            token_endpoint_auth_method = EXCLUDED.token_endpoint_auth_method
+            token_endpoint_auth_method = EXCLUDED.token_endpoint_auth_method,
+            backchannel_logout_uri = EXCLUDED.backchannel_logout_uri
         RETURNING *"""
     async with conn.cursor(row_factory=class_row(OidcClient)) as cur:
         await cur.execute(

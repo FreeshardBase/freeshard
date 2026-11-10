@@ -36,6 +36,12 @@ async def test_install_registers_client_and_renders_creds(api_client: AsyncClien
 
     domain = (await api_client.get("public/meta/whoareyou")).json()["domain"]
     assert row.redirect_uris == [f"https://{APP_NAME}.{domain}/callback"]
+    # app_meta.json's backchannel_logout_uri is rendered and persisted the
+    # same way redirect_uris are, at registration time (see issue #192) --
+    # delivery later reads it from this column, never from app_meta.json.
+    assert (
+        row.backchannel_logout_uri == f"https://{APP_NAME}.{domain}/backchannel-logout"
+    )
 
     compose = (get_installed_apps_path() / APP_NAME / "docker-compose.yml").read_text()
     assert f"OIDC_CLIENT_ID={row.client_id}" in compose

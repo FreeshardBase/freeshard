@@ -32,6 +32,7 @@ from authlib.oauth2.rfc6749 import (
 from authlib.oauth2.rfc7636 import CodeChallenge
 from authlib.oidc.core import UserInfo
 from authlib.oidc.core.grants import OpenIDCode
+from joserfc import jwt as joserfc_jwt
 from joserfc.jwk import RSAKey
 
 from shard_core.database import kv_store
@@ -41,6 +42,7 @@ from shard_core.database import users as db_users
 from shard_core.database.connection import db_conn, with_conn
 from shard_core.data_model.oidc import OidcClient, OidcCode, OidcToken
 from shard_core.data_model.user import User
+from shard_core.service import identity as identity_service
 
 log = logging.getLogger(__name__)
 
@@ -62,6 +64,25 @@ def configure(issuer: str, jwk: dict, loop: asyncio.AbstractEventLoop):
     _state["issuer"] = issuer
     _state["jwk"] = jwk
     _state["loop"] = loop
+
+
+async def ensure_configured() -> None:
+    """Make sure the issuer and signing key are set, without requiring an
+    HTTP request to have reached the OIDC router first.
+
+    The per-request lazy path (web.public.oidc._get_server) does the same
+    derivation, but backchannel-logout delivery can run from a background
+    task or signal handler before any OIDC endpoint has ever been hit — e.g.
+    right after boot, before anyone has logged into an app. Idempotent: a
+    second call (from a real request, later) just re-sets the same values.
+    """
+    if _state["jwk"] is not None:
+        return
+    i = await identity_service.get_default_identity()
+    protocol = "http" if settings().traefik.disable_ssl else "https"
+    issuer = f"{protocol}://{i.domain}/core/public/oidc"
+    jwk = await ensure_jwk()
+    configure(issuer, jwk, asyncio.get_running_loop())
 
 
 def hash_secret(value: str) -> str:
@@ -249,6 +270,43 @@ def public_jwks() -> dict:
     public.setdefault("use", "sig")
     public.setdefault("alg", "RS256")
     return {"keys": [public]}
+
+
+# OIDC Back-Channel Logout 1.0 §2.4's required "events" member — present,
+# with an empty object value, never omitted or null.
+BACKCHANNEL_LOGOUT_EVENT = "http://schemas.openid.net/event/backchannel-logout"
+
+
+def sign_logout_token(client_id: str, user_sub: int, sid: str) -> str:
+    """Mint a fresh OIDC Back-Channel Logout 1.0 logout_token.
+
+    Called by service.oidc_backchannel_logout at EVERY delivery attempt, and
+    never cached or reused across attempts: relying parties validate the
+    token's age (Immich: maxTokenAge '2m', server/src/repositories/
+    oauth.repository.ts), so a token signed once at enqueue/un-pair time and
+    replayed on a later retry would be rejected by the RP even though
+    delivery itself went through. Deliberately carries no "nonce" claim —
+    the spec forbids one on logout tokens.
+
+    Caller contract: ensure_configured() must have run first (it sets the
+    issuer/signing key this reads from _state).
+    """
+    if _state["jwk"] is None or _state["issuer"] is None:
+        raise RuntimeError(
+            "OIDC provider not configured — call ensure_configured() first"
+        )
+    key = RSAKey.import_key(_state["jwk"])
+    header = {"alg": "RS256", "kid": _state["jwk"].get("kid")}
+    claims = {
+        "iss": _state["issuer"],
+        "sub": str(user_sub),
+        "aud": [client_id],
+        "iat": int(time.time()),
+        "jti": secrets.token_urlsafe(16),
+        "sid": sid,
+        "events": {BACKCHANNEL_LOGOUT_EVENT: {}},
+    }
+    return joserfc_jwt.encode(header, claims, key, algorithms=["RS256"])
 
 
 # --- storage bridges (called from Authlib's sync hooks) ---------------------------
@@ -481,6 +539,7 @@ async def register_client(
     redirect_uris: list[str],
     public_client: bool = False,
     scope: str = "openid profile email",
+    backchannel_logout_uri: str | None = None,
 ) -> OidcClient:
     """Create the OIDC client for an installed app, or refresh its
     configuration — credentials are preserved if the app already has one.
@@ -499,6 +558,7 @@ async def register_client(
         "token_endpoint_auth_method": (
             "none" if public_client else "client_secret_basic"
         ),
+        "backchannel_logout_uri": backchannel_logout_uri,
     }
     async with db_conn() as conn:
         stored = await db_oidc.upsert_client(conn, row)
@@ -518,11 +578,17 @@ async def ensure_app_client(app_name: str, oidc_meta, portal) -> dict:
     redirect_uris = [
         jinja2.Template(uri).render(portal=portal) for uri in oidc_meta.redirect_uris
     ]
+    backchannel_logout_uri = (
+        jinja2.Template(oidc_meta.backchannel_logout_uri).render(portal=portal)
+        if oidc_meta.backchannel_logout_uri
+        else None
+    )
     client = await register_client(
         app_name,
         redirect_uris,
         public_client=oidc_meta.public_client,
         scope=oidc_meta.scope,
+        backchannel_logout_uri=backchannel_logout_uri,
     )
     return {
         "client_id": client.client_id,
