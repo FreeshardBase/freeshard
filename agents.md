@@ -98,7 +98,7 @@ Started at app lifespan startup, stopped at shutdown:
 ### The Owner's Email Address
 `users.email` is the single home for a person's address and is **verified by definition**; `users.pending_email` is an unverified candidate, at most one in flight per user. That invariant is the only reason the OIDC provider may assert `email_verified: true` — with no verified address it emits neither claim, and there is deliberately no synthetic fallback.
 
-- `service/owner_email.py` owns every transition. Anything that writes `pending_email` must retire the token with it, or the token promotes an address it was never sent to.
+- `service/owner_email.py` owns the interactive transitions: set a candidate, confirm, promote, clear. Two other writers touch the column directly. Identity bootstrap seeds `pending_email` from the controller's profile (`service/identity.py`), and snapshot restore demotes an unverified address back to `pending_email` (`database/db_snapshot.py`). Anything that writes `pending_email` must retire the token with it, or the token promotes an address it was never sent to.
 - On confirmation, in this order: notify the old address, promote, mirror to `shards.owner_email`, notify the new one. The first step must precede the mirror — the controller's relay only ever reaches the address it currently has on file.
 - `POST /public/users/confirm-email` is unauthenticated by design and the token is its only credential. There is no `GET`: mail scanners and link prefetchers would burn a single-use token.
 - `email.enabled` (default `true`) says whether the shard can send mail at all, and is the explicit self-hosted signal — no controller means no mail, so the address is set directly. Never infer it from a failed delivery; a controller outage would silently downgrade a security control.
@@ -116,8 +116,8 @@ Blinker-based async signals defined in `util/signals.py`. DB-writing handlers ar
 1. Request queued → `InstallationWorker` picks it up
 2. Docker Compose template rendered with Jinja2 (shard domain, data paths, per-app secrets, etc.)
 3. Traefik dynamic config generated for the app's subdomain routing
-4. `docker-compose up -d` via subprocess
-5. Status updated in PostgreSQL
+4. `docker-compose up --no-start` via subprocess: the containers are created but not started
+5. Status set to `STOPPED` in PostgreSQL; the app starts on first access via `start_app`
 
 Reinstall tears the old stack down with `docker_shutdown_app(force=True)`: by then the
 status is `REINSTALLING`, which no teardown gate accepts, so without the force flag the
@@ -175,7 +175,7 @@ malicious template can escape and read any app's secrets. Closing that gap would
 `SandboxedEnvironment`; it is out of scope here.
 
 ### Async Fire-and-Forget
-Long operations use `asyncio.create_task()` with done callbacks. No thread pools.
+Long operations use `asyncio.create_task()` with done callbacks. Blocking library calls are run in worker threads via `asyncio.to_thread` or `run_in_executor`: the outbound signed HTTP in `signed_call.py` and `peer.py`, Authlib's synchronous OIDC server (`web/public/oidc.py`), and the cgroup page-out in `memory_pressure.py`.
 
 ### Service-to-Controller Communication
 `freeshard_controller.py` and `portal_controller.py` make HTTP calls to the central platform. Requests are signed with the shard's RSA key via `signed_call.py`, using HTTP Message Signatures with `RSA_PSS_SHA512`.
