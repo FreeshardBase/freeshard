@@ -11,6 +11,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs, unquote, urlparse
 
+import jwt as pyjwt
 import pytest
 from httpx import AsyncClient
 from joserfc import jwt as joserfc_jwt
@@ -24,6 +25,7 @@ from shard_core.database import oidc as db_oidc
 from shard_core.database import terminals as db_terminals
 from shard_core.database import users as db_users
 from shard_core.service import oidc_provider
+from shard_core.service import pairing
 from shard_core.service.identity import get_default_identity
 from tests.util import pair_new_terminal
 
@@ -231,6 +233,58 @@ async def test_id_token_omits_nonce_when_client_sent_none(app_client: AsyncClien
     claims = joserfc_jwt.decode(r.json()["id_token"], keyset).claims
     assert "nonce" not in claims
     assert all(v is not None for v in claims.values()), f"null claim in {claims}"
+
+
+async def test_auth_time_is_the_pairing_time_not_the_authorize_time(
+    app_client: AsyncClient,
+):
+    """`auth_time` must report when the user authenticated, which under the
+    terminal cookie is when this device was paired — possibly long before a
+    token is minted. The bug stamped the /authorize moment, asserting a fresh
+    authentication that never happened."""
+    await pair_new_terminal(app_client, name="laptop")
+    tid = await terminal_id("laptop")
+
+    # Re-stamp the session cookie as if this device were paired 30 days ago.
+    # The real pairing just above is seconds old, indistinguishable from the
+    # /authorize moment, so it could never catch the bug; backdating the JWT's
+    # `iat` (the pairing time) gives the two timestamps room to diverge.
+    paired_at = int(datetime.now(timezone.utc).timestamp()) - 30 * 24 * 3600
+    app_client.cookies.set(
+        "authorization",
+        await pairing.create_terminal_jwt(tid, iat=paired_at),
+        domain=app_client.base_url.host,
+    )
+
+    oidc_client = await make_client()
+    tok, _ = await run_code_flow(app_client, oidc_client)
+
+    keyset = await jwks_keyset(app_client)
+    claims = joserfc_jwt.decode(tok["id_token"], keyset).claims
+    assert claims["auth_time"] == paired_at
+    # the old code stamped `now`; auth_time must sit well before this token's iat
+    assert claims["auth_time"] < claims["iat"] - 24 * 3600
+
+    # and the stored code row carries the same honest value
+    code_auth_time = (await rows("SELECT auth_time FROM oidc_codes"))[0]["auth_time"]
+    assert code_auth_time == paired_at
+
+
+async def test_authorize_rejects_a_session_token_without_iat(app_client: AsyncClient):
+    """A session token that cannot prove its authentication time must not yield
+    a code (which would force Authlib to fabricate `auth_time` as `now`); it is
+    treated as no session, i.e. a redirect to the pairing UI."""
+    await pair_new_terminal(app_client, name="laptop")
+    tid = await terminal_id("laptop")
+
+    secret = await pairing._ensure_jwt_secret()
+    no_iat = pyjwt.encode({"sub": tid}, secret, algorithm="HS256")
+    app_client.cookies.set("authorization", no_iat, domain=app_client.base_url.host)
+
+    oidc_client = await make_client()
+    _, r = await authorize(app_client, oidc_client, secrets.token_urlsafe(32))
+    assert r.status_code == 302
+    assert urlparse(r.headers["location"]).path == "/"
 
 
 async def test_public_client_pkce_flow(app_client: AsyncClient):
