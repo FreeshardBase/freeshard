@@ -294,7 +294,9 @@ async def test_drain_delivers_once_the_app_is_running(app_client: AsyncClient, m
     assert entry["status"] == "delivered"
 
 
-async def test_on_apps_update_signal_drains_a_due_entry(app_client: AsyncClient, mocker):
+async def test_on_apps_update_signal_drains_a_due_entry(
+    app_client: AsyncClient, mocker
+):
     """The spec's actual hook: drain is triggered by on_apps_update, not by
     a test calling drain_due_outbox() directly."""
     post = mocker.patch(
