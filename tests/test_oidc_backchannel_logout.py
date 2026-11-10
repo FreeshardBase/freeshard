@@ -9,9 +9,10 @@ This slice covers enqueue (reading the terminal's live grants and writing
 one outbox row per (client_id, sid) BEFORE the un-pair transaction revokes
 them / deletes the terminal row), registering a client's logout URI, and
 delivery itself: minting a fresh logout_token on every attempt, retrying
-with backoff, and the bounded-retry-then-permanently-failed path. The
-on_apps_update drain trigger and the discovery-flag gate land in follow-up
-commits on this branch.
+with backoff, and the bounded-retry-then-permanently-failed path. Discovery
+advertises backchannel_logout_supported unconditionally (covered by
+tests/test_oidc.py::test_discovery_document) since the whole /oidc router
+already 404s unless oidc.enabled is set — there is no separate flag.
 
 Real-Immich end-to-end verification is explicitly out of scope here (see the
 issue and the freeshard-oidc-identity-campaign skill). All tests use
@@ -35,13 +36,11 @@ from shard_core.database import oidc as db_oidc
 from shard_core.database import terminals as db_terminals
 from shard_core.service import oidc_backchannel_logout, oidc_provider
 from shard_core.util import signals
-from tests.conftest import settings_override
 from tests.util import pair_new_terminal
 
 AUTHORIZE = "public/oidc/authorize"
 TOKEN = "public/oidc/token"
 JWKS = "public/oidc/jwks"
-DISCOVERY = "public/oidc/.well-known/openid-configuration"
 
 REDIRECT_URI = "http://app.testserver/oauth/callback"
 LOGOUT_URI = "https://bc_app.example/backchannel-logout"
@@ -596,27 +595,3 @@ async def test_outcome_writes_are_guarded_against_a_stale_straggler(
     unchanged = (await rows("SELECT * FROM oidc_backchannel_logout_outbox"))[0]
     assert unchanged["status"] == "delivered", "stale write must not resurrect the row"
     assert unchanged["last_error"] is None
-
-
-# --- discovery flag gating ---------------------------------------------------
-
-
-async def test_backchannel_logout_discovery_flags_off_by_default(
-    app_client: AsyncClient,
-):
-    r = await app_client.get(DISCOVERY)
-    assert r.status_code == 200
-    disco = r.json()
-    assert "backchannel_logout_supported" not in disco
-    assert "backchannel_logout_session_supported" not in disco
-
-
-async def test_backchannel_logout_discovery_flags_on_when_enabled(
-    app_client: AsyncClient,
-):
-    with settings_override({"oidc": {"backchannel_logout_supported": True}}):
-        r = await app_client.get(DISCOVERY)
-    assert r.status_code == 200
-    disco = r.json()
-    assert disco["backchannel_logout_supported"] is True
-    assert disco["backchannel_logout_session_supported"] is True
