@@ -286,10 +286,6 @@ class ShardAuthCodeGrant(grants.AuthorizationCodeGrant):
                     "nonce": data.get("nonce"),
                     "code_challenge": data.get("code_challenge"),
                     "code_challenge_method": data.get("code_challenge_method"),
-                    # when the user authenticated on this device (terminal
-                    # pairing time), NOT now: the id_token `auth_time` claim
-                    # must describe the authentication event, which under the
-                    # terminal cookie happened at pairing, possibly long ago.
                     "auth_time": request.user.auth_time,
                     "expires_at": datetime.now(timezone.utc)
                     + timedelta(seconds=CODE_EXPIRES_IN),
