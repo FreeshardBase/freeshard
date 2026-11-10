@@ -713,3 +713,152 @@ Of the root invariants it keeps true:
 - *Types shared with the controller are copied, never written*: the copy is regenerated and never edited; `VMSize` is a hand-written twin of a copied type.
 - *The lifespan order is load-bearing*: the boot refresh is step 6, holds up the boot while the controller does not answer, and aborts it on any failure outside the three tolerated kinds.
 - *Deployment mode is explicit*: not met, since no exchange keys on the mode.
+
+## Backup
+
+Backup keeps an off-shard copy a shard can be rebuilt from: once a night it dumps the database into `core/db_snapshot.json` and syncs `core/` and `user_data/`, encrypted with the shard's passphrase, into the storage container the controller keeps for the shard's identity, and a boot that finds that snapshot beside an empty database loads it back, so that the rebuilt shard keeps its identity, its paired devices, its apps and its passphrase.
+
+### Files
+
+`service/backup.py` holds the run, the entry point `start_backup` that both triggers share, the passphrase's creation and its reveal to a terminal, and the reader of the latest report. `database/db_snapshot.py` holds the snapshot's writer, which only the run calls, and its restore, which only `database.init_database` calls. `database/backups.py` and `data_model/backup.py` hold the report table's two queries and the models. A report is a start and an end time and, per directory, rclone's final stats as an untyped dict: a typed model of them failed every backup once rclone's output changed (b9dfcfd), and both UIs print the report as raw JSON. `download_backup.sh` is this repository's copy of the command that downloads and decrypts a backup, and the justfile's `run-from-backup` unpacks a zipped backup into `run/` for local development.
+
+Three neighbours carry parts of the flow: `util/passphrase.py` (Utilities) draws the passphrase's words, `portal_controller.get_backup_sas_url` (Controller integration) requests the storage URL, and `web/protected/backup.py` (HTTP surface) gives terminals the latest report, the passphrase and a manual start.
+
+### A run
+
+Two triggers start a run, both through `start_backup`. The cron task built from `services.backup.timing` fires at 03:00 UTC, whatever the container's time zone, plus a delay drawn each night uniformly up to `max_random_delay` (an hour). `POST /protected/backup/start` is the "Start backup now" button in both UIs. `start_backup` refuses while a run holds `BACKUP_IN_PROGESS_LOCK`, requests the storage URL from the controller, turns a non-2xx answer into `BackupStartFailedError`, spawns the run as a task held in the module's `background_tasks` (asyncio holds tasks only weakly, #127), and returns. The handler's 204 therefore only means a run was spawned. Its outcome arrives as `on_backup_update`, sent with the exception when any step of the run raised; Observability's websocket receiver forwards it as `backup_update`, and both UIs toast "Backup completed" or "Backup failed". The URL request has no timeout, because `signed_request` sets none, and the cron task awaits `start_backup`, so a controller that accepts the connection and never answers suspends the schedule until the core restarts.
+
+```mermaid
+sequenceDiagram
+    participant T as Cron or manual start
+    participant B as backup.py
+    participant C as Controller
+    participant DB as Postgres
+    participant R as rclone
+    participant S as Backup storage
+    participant W as Terminals
+    T->>B: start_backup
+    B->>C: signed GET api/shard_backup/backup_sas_url
+    C-->>B: container name and a URL valid for one hour
+    B->>B: spawn the run and return
+    Note over B,S: the run holds BACKUP_IN_PROGESS_LOCK
+    B->>DB: read every table in one REPEATABLE READ transaction
+    B->>B: replace core/db_snapshot.json
+    loop core, then user_data
+        B->>R: sync the directory into the crypt remote
+        R->>S: upload changed files, delete removed ones
+    end
+    B->>DB: insert the report into backups
+    B->>S: overwrite _last_backup, best effort
+    B-->>W: backup_update, with the error if a step raised
+```
+
+The run takes the lock, writes the snapshot, obscures the passphrase with `rclone obscure`, and syncs each directory of `services.backup.directories` in turn, `core` and then `user_data`, logging and skipping one that is not a directory. It then inserts the report and writes the marker, a small blob that tells the controller a run completed (see *The storage URL and the marker*). The report and the marker exist only for a run in which every step succeeded: a failed `rclone obscure` raises (#180), and a non-zero rclone exit raises with rclone's stderr, which an earlier version misreported as unparseable output (#117).
+
+At most one run executes at a time, because the run itself checks and takes the lock. `start_backup` checks it too, but before the URL request, so two starts that arrive while one URL request is in flight both get past that check. The second run then fails at the lock with `BackupInProgressError`, which reaches the UIs as "Backup failed" while the first run proceeds.
+
+The root sets what a backup owes each app it copies (*A backup restores the shard as it was*). A database copied file by file while its server runs is not a state it can start from, because it is usable only from a stopped server or from one atomic snapshot of its files *(Convention — https://www.postgresql.org/docs/current/backup-file.html)*. The run does not meet the root's rule yet. It freezes and stops nothing, and syncs all of `user_data/` in one pass while the apps keep running, among them dawarich and umami, two `always_on` store apps that keep a Postgres under `user_data/` and so have their databases copied live on every run. The run takes no lock against Installation either.
+
+### The copy
+
+The run syncs each directory to `:crypt:<container>/<directory>`, where the crypt remote wraps `:azureblob:<container>` and its password is the obscured passphrase. Nothing else about the encryption is configured, so the defaults of [rclone crypt](https://rclone.org/crypt/) apply: file and directory names are encrypted, and the salt is rclone's built-in one. The container therefore holds one top-level directory, whose name is the container's own name encrypted, with `core` and `user_data` beneath it, encrypted likewise, and the marker `_last_backup` in clear at its root, outside the encrypted tree.
+
+That format is stated three times, and the three must change together: in `_build_backup_command`, in `download_backup.sh`, and in the controller's restore command. Both downloads sync `:crypt:<container>` into `./<container>`, which then holds `core/` and `user_data/` and becomes the rebuilt shard's `FREESHARD_DIR`, as the README describes. A backup written with crypt options the restore command does not pass cannot be read by it. `run-from-backup` does not fit this format: it unzips a zip of `core/` and `user_data/`, the format of the `/protected/backup/export` download that a776b03 removed in January 2025.
+
+The run and both download commands pass `--create-empty-src-dirs`, so empty directories are part of the copy. A Postgres data directory restored without its empty subdirectories does not start (#52), and every store app that runs its own Postgres keeps that data directory under `user_data/`.
+
+The copy holds one generation. [rclone sync](https://rclone.org/commands/rclone_sync/) makes the destination identical to the source, deletions included, so the copy is the shard as of the last run, and a file deleted on the shard leaves the copy at the next one. Both UIs tell the owner: "New backups overwrite the old ones." The restore command reads the current state; whatever the storage retains of earlier states lies outside shard_core.
+
+The image installs rclone from its Debian release (1.60.1 in bookworm), and every flag the command uses must exist in that version: a newer flag failed every run of one release (#117), and `test_backup_commands_only_use_supported_flags` guards against its return. `--fast-list` lists the destination in one recursive listing, which cuts the number of listing requests a run makes (#106). `_build_cleartext_backup_command`, which writes the same layout unencrypted, has had no production caller since it was written (0885690); #180 kept it so the flag guard covers both builders.
+
+### The storage URL and the marker
+
+The controller keeps one container per shard, and the copy outlives the shard, as both UIs tell the owner. The container belongs to the shard's identity, so a shard rebuilt with its identity writes into the container it was rebuilt from. A shard that came up with a new identity is one the controller does not know: it gets no URL, and the old copy stays as it was.
+
+The storage URL is a shared access signature: a URL to the container that carries its own permission, valid for one hour from issue. The run requests it once, before the snapshot, and uses it for both syncs and the marker. A run that outlasts it fails at its first storage request after the hour. The files uploaded until then stay, and the next night's sync continues from them, so a run with more to upload than an hour allows fails night after night until the remainder fits.
+
+After the report, the run overwrites `_last_backup` with the current time through the same URL and logs any failure as a warning (#59). The controller reads that blob's modification time as the shard's last backup once the nightly window has passed (freeshard-controller#196) and flags a shard whose last backup is old (freeshard-controller#104). The marker follows every directory's sync, so a partial run never counts as a backup, and a failed marker write makes a complete run look missing, never the reverse.
+
+### The passphrase
+
+`ensure_backup_passphrase`, in step 5 of the boot, creates the passphrase once, when `kv_store` holds none: ten words drawn with `secrets.choice` from the [EFF large wordlist](https://www.eff.org/dice) of 7776 words, about 129 bits. Nothing replaces it later, so one passphrase encrypts a shard's copy for the shard's whole life. It is stored in clear in `kv_store`, like the other secrets there.
+
+It is the only key to the copy. The copy carries it, inside the snapshot inside the encrypted tree, which does not help to decrypt it. shard_core hands it out only through `/protected/backup/passphrase` and never sends it to the controller, so a restore needs the owner's written-down passphrase or the running shard. Both UIs show it on request and warn while it has never been shown: `get_backup_passphrase` records the time and the terminal ID of the latest reveal in `kv_store`, the ID taken from `X-Ptl-Client-Id` (root, *Admission is decided at the proxy*), and `/backup/info` reports it with that terminal's name, or "Unknown" once the terminal is gone. Only the latest reveal is kept.
+
+The restore runs before `ensure_backup_passphrase` (steps 1 and 5 of the root's *The lifespan order is load-bearing*), so a rebuilt shard finds its own passphrase and goes on writing the same copy under the same key. In the other order it would keep a fresh passphrase, which survives the restore's `ON CONFLICT DO NOTHING`, and its next run would write a second, differently encrypted tree beside the copy the owner's passphrase opens.
+
+### The database snapshot
+
+At the start of a run, `write_db_snapshot` reads every base table of the `public` schema whose name does not contain `yoyo`, in one REPEATABLE READ transaction, so the database part of the copy is one point in time. It replaces `core/db_snapshot.json` by writing a temporary file and renaming it, so an interrupted write leaves the previous snapshot. Tables are discovered when the snapshot is written, so a table a migration adds is in the next snapshot without a change here. Only a run that obtained a URL writes the snapshot: its age is that of the last run that got that far, and on a shard that never obtains one it does not exist.
+
+The file holds, in clear, everything the shard's identity and trust rest on: the identities with their private keys, the terminal rows and the JWT secret that signs their cookies, the users, the OIDC signing key, clients and tokens, the app secrets, and the passphrase. It lies in `core/` on the shard's own disk, the exposure `postgres_data/` already had (#152), and is encrypted in the copy like the rest of `core/`.
+
+The restore as the code runs it today, without a version check:
+
+```mermaid
+flowchart TD
+    M[migrations, pool, TinyDB import] --> F{core/db_snapshot.json exists?}
+    F -- no --> I[init_default_identity]
+    F -- yes --> P{identities has a row?}
+    P -- yes --> I
+    P -- no --> X[insert every table, referenced tables first, in one transaction]
+    X -- a row is rejected --> E[roll back and raise, the core does not start]
+    X -- every row accepted --> Q[advance serial sequences, demote a pre-0005 owner address]
+    Q --> I
+```
+
+`restore_db_snapshot` runs in `init_database` after the migrations, the pool and the TinyDB import, and before the default identity is generated (root, *A backup restores the shard as it was*). It does nothing when the file is absent or `identities` has a row. It cannot tell a shard rebuilt from its copy from a shard whose Postgres data was lost under an intact `core/`: either way the database returns to the last run, while `core/` and `user_data/` are what is on disk. It inserts the tables a foreign key references before the tables that point at them, an order derived from the live schema because the file's alphabetical order failed once the `users` foreign key existed (a86af57), turns ISO strings back into timestamps and JSON into `jsonb`, and advances every serial sequence past the restored rows. The restore is one transaction, because the pool's connection context commits on success and rolls back on error. Its inserts are a boot-time database path and announce nothing (root, *Every change to an installed app is announced*).
+
+Which core version may restore a backup is the root's rule (*A backup restores the shard as it was*). The refusal of a snapshot from another version compares the core version that wrote the snapshot with the one booting it, so the snapshot must record the core version that wrote it (#224, stage 1), and the README's restore instructions say to restore on that version. *(Confirmed 2026-11-10 — the code cannot show which versions a restore is meant to accept.)* The upgrade after the restore then applies the remaining migrations to the restored rows, so the migration chain is the only place a migration rule lives.
+
+The code does not meet this yet. The snapshot records no version and the README names none, so nothing is refused: the restore loads a snapshot from any version into the schema the running core has just migrated to. A row that schema rejects undoes the whole restore, and the error leaves `init_database` and the lifespan as a bare database error: the core does not start, and fails the same way on every boot while the file is there. Every snapshot written by 0.40.1 to 0.41.3 that holds a terminal does this when 0.42.0 boots it, because migration 0002 made `terminals.user_id` NOT NULL without a default and none of those snapshots has the column. A table a later migration drops would stop the restore the same way.
+
+Two parts of the restore exist only for snapshots written by another version, and the rule makes both unnecessary: the skip, with a warning, of columns the schema no longer has, and the demotion of an owner address from a snapshot older than migration 0005 to an unverified candidate (#224).
+
+### What a restore brings back and what it loses
+
+A restore is a procedure, and shard_core offers no operation for it. Someone with the passphrase runs the download command, and a fresh shard running the core version that wrote the backup boots with the result as its `FREESHARD_DIR` and is upgraded afterwards (see *The database snapshot*); both UIs tell the owner to ask Freeshard for this.
+
+A rebuilt shard is the same shard if the restore brings back its identity. The controller keys the shard's record, its profile and its backup container on it, the domain derives from it, and the devices' cookies belong to that domain. With the identity come the terminal rows and the JWT secret, so devices stay paired, as #122 required of a restore. The app rows come with the app secrets, which must arrive together with `user_data/`: an app's database was initialized with them, and `secret()` mints a new value for a name it cannot find, which that database then rejects. The passphrase comes back, so the next run continues the same copy, and so do the OIDC key and clients; `core/` brings back `acme.json`, which holds Traefik's certificates.
+
+The boot re-derives the rest. It renders the compose files again with the new host's `path_root_host` (root, *Paths are resolved on the side that uses them*) and writes the Traefik configuration again. Containers and images are not in the copy. A restored row that says `RUNNING` or `PAUSED` has no containers on the new host, and App runtime's revive, which acts on the containers' real state, brings such an app up when it is opened. The images are pulled again, so a restore depends on the registries still serving every image the restored compose files name.
+
+A restore loses everything after the snapshot in the copy, which is the snapshot of the last run that uploaded one: at least the hours since that night's run, and more after nights whose runs failed before uploading theirs. A run writes its report after its snapshot, so a rebuilt shard's latest report is the one of the run before. The copy is not one point in time either. The database is as of the snapshot and each file as of the moment rclone read it, and a run that failed partway leaves a newer `core/`, snapshot included, beside a partly updated `user_data/`. An app installed or uninstalled during a run can come back as a directory without a row, which the boot ignores, or as a row without its directory, which costs the control tick its pressure demotion (App runtime, *The control tick*).
+
+A restore also undoes revocations. A device un-paired after the snapshot is paired again on the rebuilt shard, and OIDC tokens revoked after it are valid again; keeping paired devices across a restore (#122) carries that price. Process memory is lost as on every restart (root, *Work that must survive a restart is a row*), and the idle clock then counts every `RUNNING` app as idle since the epoch.
+
+Until the run freezes or stops apps while it copies them (see *A run*), a restore can also bring back an app database that was copied while it ran and does not start.
+
+The first run after a restore mirrors the rebuilt shard over the copy it came from, deletions included, so a restore must be complete before that run, which starts between 03:00 and 04:00 UTC: whatever the restore left out is deleted from the copy. Leaving `user_data/` out is no protection, because the core's compose file mounts it with the short syntax, which creates a missing host directory, and the run then syncs an empty directory over the copy's.
+
+### Deployment mode
+
+The backup keys on no deployment mode. Its cron task runs on every shard, so a self-hosted shard sends its signed URL request to the Freeshard controller every night. The controller refuses a shard it does not know, every run ends as `BackupStartFailedError` in the log, the manual start answers 500, and no snapshot is ever written. Both UIs show the nightly-backup text and the passphrase whatever the mode, while they hide the subscription and size cards when no profile is stored. The README tells self-hosters to snapshot `${FREESHARD_DIR}` themselves. The root's *Deployment mode is explicit* requires the backup to key on the explicit concept, and it does not.
+
+### Restarts and the core's stop
+
+A run is not work that must survive a restart (root, *Work that must survive a restart is a row*). It leaves no row, and an interrupted run leaves the copy partly synced and the marker unchanged, which the next run's sync repairs. The schedule is not stored either: the cron task computes the next 03:00 when the core starts, so a restart after 03:00 UTC and before that night's run began skips that night.
+
+The run is not one of the lifespan's background tasks; the cron task only spawns it. The core's stop therefore neither cancels nor awaits it (root, *The lifespan order is load-bearing*), and the run ends with the process, possibly after the database pool has closed, in which case it fails before writing its report.
+
+### Boundaries
+
+Backup owns the nightly run and its lock, the copy's format and its three statements, the passphrase's creation and its reveal record, the snapshot and its restore, the report table and the marker.
+
+It relies on Controller integration for the signed URL request, and on the controller for one container per identity that outlives the shard, a URL valid for as long as a run takes (not met today), the download command a restore starts from, and the nightly recency scan. It relies on Utilities for the cron task, whose catch-all logs a failed start and keeps the schedule alive (#58), for the signals, and for `util/passphrase.py`, which reads its wordlist relative to the working directory. Observability forwards the outcome to terminals. Database provides the pool, `kv_store`, and the connection context whose rollback makes the restore all-or-nothing. The composition root runs the restore in step 1, before the identity in step 2, creates the passphrase in step 5, after the restore, and starts the cron task with the other background tasks. The HTTP surface exposes `/protected/backup/info`, `/passphrase` and `/start` (the root records which caller identity `/passphrase` trusts). After a restore, Installation renders the compose files again from the restored rows and secrets, and App runtime's revive brings restored rows back to running containers. Freezing or stopping an app while its directory syncs, which the run must do, changes container state, and container state belongs to App runtime (root, module map); the run calls App runtime for nothing today. Apps must keep everything they persist under the `fs.*` paths; the developer docs allow no other host directory, and no store app uses a named volume. From the host it needs the compose file to mount `core/` and `user_data/` and the image to ship rclone.
+
+Of the root invariants it keeps true:
+
+- *A backup restores the shard as it was*: all of it. Today the snapshot records no version, one written before 0.42.0 that holds a terminal stops every boot of 0.42.0, and apps keep running while they are copied.
+- *The lifespan order is load-bearing*: the restore before the identity, the passphrase after the restore.
+- *Every change to an installed app is announced*: the restore's inserts are a boot-time database path, before any receiver holds state.
+- *Deployment mode is explicit*: currently broken, since the backup keys on no mode.
+
+### Constraints
+
+From the written record, each with its source:
+
+- A flag the bundled rclone lacks is dropped from the command, and rclone is never pinned to a newer version. The maintainer on #117: "Drop the flag, do not pin the version."
+- Rejected: copying the database with `pg_dump`, because the image ships no Postgres client and one matching the server's Postgres 17 would be needed in the image and in CI (#152).
+- Old data formats are handled by booting an intermediate core version that still reads them (#225).
+- No two shards share a storage container; the controller guarantees it (the maintainer on freeshard-controller#104, enforced by freeshard-controller#350).
