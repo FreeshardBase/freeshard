@@ -614,7 +614,7 @@ async def userinfo_for_access_token(access_token: str) -> dict | None:
 
 def discovery_document() -> dict:
     issuer = _state["issuer"]
-    return {
+    doc = {
         "issuer": issuer,
         "authorization_endpoint": f"{issuer}/authorize",
         "token_endpoint": f"{issuer}/token",
@@ -632,3 +632,12 @@ def discovery_document() -> dict:
         ],
         "code_challenge_methods_supported": ["S256"],
     }
+    # Off by default (Max's 2026-11-10 decision on issue #192): delivery
+    # ships now, but these only advertise once a one-time manual/AI
+    # verification pass against a real shard confirms it actually works —
+    # advertising earlier would be a lie told to every RP that reads this
+    # document. See service.oidc_backchannel_logout for the mechanism.
+    if settings().oidc.backchannel_logout_supported:
+        doc["backchannel_logout_supported"] = True
+        doc["backchannel_logout_session_supported"] = True
+    return doc

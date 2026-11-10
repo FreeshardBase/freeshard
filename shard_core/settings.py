@@ -91,6 +91,12 @@ class MetricsSettings(BaseModel):
 
 class OidcSettings(BaseModel):
     enabled: bool = False  # rollout kill-switch for the embedded OIDC provider
+    # Advertises backchannel_logout_supported / backchannel_logout_session_supported
+    # in discovery. Off by default per Max's 2026-11-10 decision on issue #192:
+    # the durable-outbox delivery mechanism ships now, but the flag flips only
+    # after a one-time manual/AI verification pass against a real shard
+    # (tracked as a follow-up, not gating this setting's existence).
+    backchannel_logout_supported: bool = False
 
 
 class SundialSettings(BaseModel):

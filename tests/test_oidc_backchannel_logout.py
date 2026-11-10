@@ -35,11 +35,13 @@ from shard_core.database import oidc as db_oidc
 from shard_core.database import terminals as db_terminals
 from shard_core.service import oidc_backchannel_logout, oidc_provider
 from shard_core.util import signals
+from tests.conftest import settings_override
 from tests.util import pair_new_terminal
 
 AUTHORIZE = "public/oidc/authorize"
 TOKEN = "public/oidc/token"
 JWKS = "public/oidc/jwks"
+DISCOVERY = "public/oidc/.well-known/openid-configuration"
 
 REDIRECT_URI = "http://app.testserver/oauth/callback"
 LOGOUT_URI = "https://bc_app.example/backchannel-logout"
@@ -403,3 +405,27 @@ async def test_bounded_retry_then_permanent_failure_is_queryable(
     async with db_conn() as conn:
         due = await db_oidc.get_due_outbox_entries(conn)
     assert due == []
+
+
+# --- discovery flag gating ---------------------------------------------------
+
+
+async def test_backchannel_logout_discovery_flags_off_by_default(
+    app_client: AsyncClient,
+):
+    r = await app_client.get(DISCOVERY)
+    assert r.status_code == 200
+    disco = r.json()
+    assert "backchannel_logout_supported" not in disco
+    assert "backchannel_logout_session_supported" not in disco
+
+
+async def test_backchannel_logout_discovery_flags_on_when_enabled(
+    app_client: AsyncClient,
+):
+    with settings_override({"oidc": {"backchannel_logout_supported": True}}):
+        r = await app_client.get(DISCOVERY)
+    assert r.status_code == 200
+    disco = r.json()
+    assert disco["backchannel_logout_supported"] is True
+    assert disco["backchannel_logout_session_supported"] is True
