@@ -66,7 +66,7 @@ For hosted Shards, the ID is also part of the domain name.
 The Shard ID is a hash of the Shard's public key.
 Therefore, it can be used to authenticate the Shard during communication or to verify data signed by the Shard.
 
-Its full length is 96 characters, but it is usually shortened to 6 characters for easier handling.
+Its full length is 103 characters, but it is usually shortened to 6 characters for easier handling.
 This is seen as a compromise between security and usability.
 
 ### REST API
