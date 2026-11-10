@@ -862,3 +862,124 @@ From the written record, each with its source:
 - Rejected: copying the database with `pg_dump`, because the image ships no Postgres client and one matching the server's Postgres 17 would be needed in the image and in CI (#152).
 - Old data formats are handled by booting an intermediate core version that still reads them (#225).
 - No two shards share a storage container; the controller guarantees it (the maintainer on freeshard-controller#104, enforced by freeshard-controller#350).
+
+## Observability
+
+Observability samples the shard's disk, CPU and memory into in-memory snapshots, one of which is the input of the low-disk gates, and pushes announced changes, the controller's notices and the disk snapshot to every connected terminal over one websocket.
+
+### Files
+
+`disk.py` holds the disk snapshot and its sampler. `metrics.py` holds the CPU and memory snapshot and its sampler; it takes `find_cgroup` from App runtime's `memory_pressure.py`. `websocket.py` holds `WSWorker`, which owns the connected sockets and the outgoing queue, and the six signal receivers that turn announcements into messages.
+
+Their callers sit in the HTTP surface. `web/protected/stats.py` serves the shard snapshot (`GET /protected/stats`) and the disk snapshot (`GET /protected/stats/disk`); its third route, `/stats/tasks`, reports Installation's queue and reads nothing of this module. `web/protected/apps.py` serves one app's sample (`GET /protected/apps/{name}/stats`). `web/protected/ws.py` accepts the websocket at `/protected/ws/updates`, which terminals reach as `/core/protected/ws/updates`, and `web/management/notify.py` lets the controller put a message on it.
+
+### The snapshots
+
+```mermaid
+flowchart LR
+  DS[update_disk_space<br/>every 30 s] --> D[(current_disk_usage)]
+  MS[update_stats<br/>every 5 s] --> M[(current_shard_stats<br/>current_app_stats)]
+  D --> G[low-disk gates:<br/>wake-on-access, control tick, splash]
+  D --> E1[GET /protected/stats/disk]
+  M --> E2[GET /protected/stats<br/>GET /protected/apps/name/stats]
+  DS -->|on_disk_usage_update| R[six receivers]
+  P[Installation, App runtime,<br/>pairing, terminals, backup] -->|signals| R
+  N[controller:<br/>POST /core/management/notify] --> Q
+  R --> Q[outgoing queue]
+  Q --> W[message task] --> S[every connected socket]
+```
+
+Both snapshots are module-level values that one periodic task replaces whole. A pass builds the new sample completely and assigns it without an await in between, so a reader gets the latest sample and never parts of two. Nothing is persisted (root, *Work that must survive a restart is a row*): after a restart both snapshots read zero until their first pass, which runs when the lifespan starts the background tasks. The samplers run on every shard whether or not anything reads them. A disk pass is one `statvfs` call; a resource pass is one Postgres read of `installed_apps`, one `docker ps` process and a few small file reads per container.
+
+| Snapshot | Sampler and period | Source | Read by |
+| --- | --- | --- | --- |
+| `disk.current_disk_usage` | `update_disk_space`, 30 seconds after each pass, not configurable | `statvfs` of `<path_root>/user_data` | wake-on-access and the control tick (App runtime), the splash, `GET /protected/stats/disk`, the `disk_usage_update` push |
+| `metrics.current_shard_stats`, `metrics.current_app_stats` | `update_stats`, `metrics.sample_interval_seconds` (5) after each pass | `/proc/stat`, `/proc/meminfo`, `docker ps`, each container's cgroup v2 files | `GET /protected/stats`, `GET /protected/apps/{name}/stats` |
+
+### The disk snapshot
+
+The snapshot measures the disk that the root's *An app is started only where it can run* defines. On a hosted shard that is the separately attached data volume, the one that can be expanded. b9c9625 (PR #48) moved the measurement there from the container's root filesystem, which is the boot disk, so that the reported size follows a volume expansion, and the low-disk gate moved with it. The boot disk holds Docker's images, container layers and container logs, and it is outside this module's watch. On hosted shards its growth is bounded elsewhere: by the daemon-wide log rotation the controller has installed since a root disk filled up with container logs (freeshard-controller#306), and by App runtime's nightly image prune, switched on in the compose file the controller ships with each core version, which hosted shards run from. Where `user_data` shares a filesystem with Docker's data root, the one measurement covers both.
+
+`free_gb` is the space an unprivileged writer may still use ([`shutil.disk_usage`](https://docs.python.org/3/library/shutil.html) reports `f_bavail`), so the blocks a filesystem reserves for root count as used, and `total_gb - free_gb` exceeds what `df` reports as used by that reserve. Both fields are GiB, though named `_gb`. `disk_space_low` is `free_gb < 1`, an absolute threshold whatever the volume's size (c761903).
+
+Every pass replaces the snapshot and announces it with `on_disk_usage_update`, changed or not, so every connected terminal gets a `disk_usage_update` every 30 seconds. A pass that raises leaves the previous snapshot in place and announces nothing, and before the first pass the snapshot reads zero total and not low. A measurement that fails therefore keeps the gate at its last answer, and on a shard whose disk has never been measured the gate is open.
+
+The low-disk gates read the snapshot directly. Wake-on-access refuses to revive while it reads low, the control tick stops every app, `always_on` apps included, and the splash names the low disk (root, *An app is started only where it can run*). The sampler's period bounds how late they react: a disk that fills is noticed at most 30 seconds later, and the stop follows on the next control tick. The pass does nothing slow, because its one receiver only enqueues a message. Any receiver connected to `on_disk_usage_update` runs inside the pass, after the snapshot is replaced, and delays every later sample by as long as it takes.
+
+### CPU and memory
+
+`update_stats` reads every row of `installed_apps`, lists every running or paused container that carries a compose project label with one `docker ps`, and assigns containers to apps by project name through `normalize_project_name`, the same normalisation `app_compose_command` passes as `-p`, so a container counts for the app whose compose project created it. For each app it sums three [cgroup v2](https://docs.kernel.org/admin-guide/cgroup-v2.html) counters over its containers: `memory.current`, `memory.swap.current`, and the `usage_usec` line of `cpu.stat`. The shard figures come from `/proc/meminfo` and `/proc/stat`, which inside the core's container describe the whole host.
+
+| Field | Per app (`AppStats`) | Shard (`ShardStats`) |
+| --- | --- | --- |
+| `memory_bytes` | `memory.current`: memory charged to the app's containers, page cache included, pages swapped out excluded | `MemTotal` minus `MemAvailable` |
+| `memory_swap_bytes` | `memory.swap.current` | `SwapTotal` minus `SwapFree` |
+| `memory_limit_bytes` | none | `MemTotal` |
+| `cpu_pct` | growth of `usage_usec` over the time between two reads, in percent of one CPU, so above 100 on a shard with several | growth of busy jiffies over growth of all jiffies on `/proc/stat`'s aggregate line between two samples, iowait counted as idle, in percent of the whole machine, 0 to 100 |
+
+`memory_bytes` counts what is resident and leaves out what a pause has paged to swap, which the maintainer asked for so that the pause tier's effect shows; swap is reported beside it (#155). The two levels are on different bases and are not meant to add up (PR #249). The shard figure is host-wide, so it includes the system and the core, and it leaves out the page cache the kernel counts as available ([`MemAvailable`](https://man7.org/linux/man-pages/man5/proc_meminfo.5.html)), which an app's `memory.current` includes. An app that reads many files can therefore show more memory than its share of the shard figure, and the apps together can show more than the shard. The two `cpu_pct` fields use different scales as well: an app at 150 on a four-CPU shard puts the shard at about 37.5 or more. A consumer that sets an app's figure against the shard's has to convert.
+
+CPU is a rate, so it needs two readings of the same counters. The first sample after a start, and the first sample in which an app appears, report 0.0. The elapsed time is taken next to the reads, after the Postgres and docker awaits, so a rate divides by the time that passed between two reads (edca938); since the period runs after each pass, a figure averages over the interval plus one pass. At the shard level, a sample that cannot read `/proc/stat` keeps the previous reading as its baseline, and the next rate spans both intervals. At the app level the same must hold: a sample that could not read an app's containers must not become its baseline. The code does not meet this. When `docker ps` fails, or a container's cgroup cannot be found or read, the sample records the app's cumulative CPU time without those containers, zero in the first case, and the next good sample reports their whole lifetime CPU time as one interval's usage. A container that restarts between two samples starts a fresh counter, and the drop reads as 0.0.
+
+Per-app figures need the host's cgroup tree. `find_cgroup` looks a container up by its path in the host's hierarchy, `system.slice/docker-<id>.scope` or `docker/<id>`, and under Docker's default private cgroup namespace ([dockerd](https://docs.docker.com/reference/cli/dockerd/)) a container sees those paths only when the host's `/sys/fs/cgroup` is mounted into it. The compose file the controller ships with each core version mounts it (freeshard-controller#246); this repository's `docker-compose.yml` does not. Without it every app reads zero memory and zero CPU, the same answer the endpoint gives for an app whose containers are not running, and nothing in the answer tells the two apart. The shard figures need no mount.
+
+`GET /protected/apps/{name}/stats` answers 404 for a name without a row. Otherwise it returns the app's latest sample, zeros if the sampler has not seen the app yet, together with the row's status read from Postgres on every request: the sample carries no status, because every caller has a fresher read of its own.
+
+The shard keeps only the latest sample, so history belongs to the client. Sundial's resource monitor polls `GET /protected/stats` every 5 seconds and keeps ten minutes of samples in the browser, which a reload loses; #257 proposes keeping a window on the shard. The maintainer's further asks in #155, history in Postgres and a live stream on the websocket, were deferred when PR #249 shipped the snapshot. No UI reads the per-app endpoint yet, and web-terminal reads neither endpoint.
+
+### The websocket
+
+The endpoint is mounted under `/protected`, so Traefik admits a client with a valid terminal JWT cookie (root, *Admission is decided at the proxy*). It does so once, on the upgrade request; after the upgrade nothing checks the connection again. The handler accepts, registers the socket with the worker and then only reads, logging and dropping whatever arrives; neither UI sends anything.
+
+`broadcast_message` puts a message on the worker's queue and never waits. One task takes messages off the queue in order and sends each to every socket registered at that moment, and it takes the next one only when every send has finished or one has failed. A message therefore reaches each socket in the order it was queued, and a send that fails costs only its own socket. A socket whose send blocks holds back every terminal's messages until it drains or its connection is lost. Every message goes to every socket. There is no addressing, and `send_personal_message` has had no caller since it was added in b4ab649. The queue is unbounded (`maxsize=0`), so the handler for `QueueFull` never runs.
+
+Every message is the JSON object `{"message_type": ..., "message": ...}`, where `message` is an object or a list, and `{}` when there is nothing to carry. A push carries a list exactly as the REST route that lists it, an empty list included. The code does not meet this for an empty table: `broadcast_message` sends `message or {}`, so an empty list goes out as `{}`, which Sundial's validator drops, and after the last app or terminal is removed Sundial keeps showing the old list.
+
+| `message_type` | Sent on | `message` | What the UIs do |
+| --- | --- | --- | --- |
+| `apps_update` | `on_apps_update`: every insert, delete or status write on an `installed_apps` row (root, *Every change to an installed app is announced*) | every app row with its manifest, serialised as `GET /protected/apps` serialises it, except when there is none (above) | both replace their app list |
+| `terminals_update` | `on_terminals_update`: a pairing, an edit or a removal of a terminal | every terminal row, as `GET /protected/terminals` returns it, except when there is none (above) | both replace their terminal list |
+| `terminal_add` | `on_terminal_add`: a pairing, after its `terminals_update` | the new terminal | both close their pairing dialog |
+| `app_install_error` | `on_app_install_error`: an install or reinstall that ended in `ERROR` | `name`, `error` | both show an error toast |
+| `backup_update` | `on_backup_update`: a backup run that ended, either way | `error` when it failed, otherwise `{}` | both show a toast, and their settings views reload the backup info |
+| `disk_usage_update` | `on_disk_usage_update`: every disk pass | the disk snapshot | both replace their disk state |
+| the type the controller names | `POST /core/management/notify` | `{}` | today only `subscription_updated`, on which both reload the profile |
+| `heartbeat` | nothing: the loop that sends it has been dead since cdad15b (below) | `{}` | nothing reads it |
+
+`apps_update` and `terminals_update` carry the whole table, which their receivers read again on a connection of their own. A push therefore shows what was committed when its receiver read, and a push announced before its writer's transaction commits carries the old state; Database's theory records the one such writer among these signals, `edit_terminal`. Pushes carry no sequence number, so a consumer keeps whichever list arrives last.
+
+A message reaches only the sockets registered when it is sent, and nothing is sent to a socket when it connects. A terminal loads the state it shows over REST and loads it again after a reconnect; the websocket tells it only what changed while it was connected. Both UIs load apps, terminals and disk usage over REST when they boot and when a view opens. web-terminal reloads its profile after a reconnect. Neither UI reloads its app or terminal list after a reconnect, so a list that changed while it was disconnected stays as it was until the next push or until a view that loads it opens.
+
+The queue exists from import and accepts messages before the worker starts, so announcements made during the boot are queued and sent when the worker starts, normally before any terminal can connect. At the stop, uvicorn closes every socket with code 1012 before the lifespan's exit runs, and the exit cancels the worker with the other background tasks before the take-down (Composition root). The `DOWN` statuses the take-down writes are still announced, their receivers still read the table, and the messages stay in the queue. A terminal learns those statuses only by loading them again.
+
+The six receivers run inside their sender's call. Four are plain functions on signals sent with `send()`, and two, `send_apps_update` and `send_terminals_update`, are coroutines on signals sent with `send_async()`, matching every sender (root, *Every change to an installed app is announced*). A receiver that raises therefore raises in its sender, after the sender's write, and the receivers due after it do not run. `send_apps_update` must not fail for one app, and today it can. [blinker](https://blinker.readthedocs.io/en/stable/) leaves the order of a signal's receivers undefined; in practice it is the order of connection, and `service/websocket.py` is imported before `web/internal/auth.py`, so `send_apps_update` runs before the `/internal/auth` app cache is cleared, and its failure leaves the cache holding the old admission decision too.
+
+A socket leaves the worker's list whenever its handler ends. Today it leaves only through `WebSocketDisconnect`, which a client's close, a dropped connection and uvicorn's keepalive timeout all produce; a handler that ends any other way leaves its socket registered, and every later message logs a send error for it until the core restarts.
+
+Liveness rests on the websocket protocol's own ping ([RFC 6455](https://www.rfc-editor.org/rfc/rfc6455)). uvicorn pings every client every 20 seconds and closes a connection whose client does not answer within 20 more; these are its defaults ([uvicorn settings](https://uvicorn.dev/settings/)), which `fastapi run` keeps. That is what drops a terminal that went away without closing. The application heartbeat is residue. Its loop has been dead since cdad15b made `broadcast_message` synchronous: `_send_heartbeats` still awaits it, so the loop puts one `heartbeat` on the queue when the worker starts and dies with a `TypeError`. `stop()` cancels the finished task, which also discards asyncio's report of its exception, so nothing logs it. Nothing reads heartbeats: web-terminal has an unused `lastHeartbeat` field, and Sundial lets the type through unhandled. Both UIs take the socket's state as the shard's reachability, web-terminal for its navbar warning and Sundial for its shard-down overlay. A browser answers pings without telling the page, so a terminal notices an unreachable shard only when its connection closes.
+
+Un-pairing a terminal closes its sockets (root, *Un-pairing takes effect on the next request*). Admission happens only at the upgrade request, so a socket stays admitted for as long as it is open, and closing it is the only way an un-pairing reaches it. The code does not meet this. Nothing closes a socket when its terminal is removed, and the worker does not record which terminal a socket belongs to, so a socket opened before the un-pairing keeps receiving every push until its connection closes.
+
+`POST /core/management/notify` puts a message of whatever type the controller names on the queue, with an empty body, and answers 204 even when that fails. The shard does not know this vocabulary; the controller and the UIs share it. Today the controller sends only `subscription_updated`, after a PayPal webhook changes the shard's subscription (Controller integration).
+
+### Boundaries
+
+Observability owns the disk snapshot and the resource snapshot and their samplers, the websocket worker with its socket list and queue, the six receivers, and the message vocabulary apart from the types the controller sends through `notify`.
+
+It relies on Utilities for `PeriodicTask`, whose catch-all keeps a sampler alive after a pass raises, for `BackgroundTask`, the signals, the subprocess runner and `normalize_project_name`. It relies on App runtime for `find_cgroup` and for the manifest reader behind each `apps_update`, on Database for `installed_apps.get_all` and `terminals.get_all`, and on the composition root to start the samplers and the worker with the other background tasks and to stop them before the take-down. It relies on the HTTP surface for its routes and on the proxy to admit the upgrade, on every producer of a signal it receives to announce after its write has committed, on the host for `/proc` and, for per-app figures, the cgroup v2 tree, and on the controller for the vocabulary of `notify`. App runtime and the splash read `disk_space_low`, and both UIs read the snapshots and every push.
+
+Of the root invariants it keeps true:
+
+- *An app is started only where it can run*: it supplies the disk predicate, measured on the filesystem that holds `user_data` and at most 30 seconds old. A failed measurement keeps the last answer, and before the first one the predicate passes.
+- *Every change to an installed app is announced*: `send_apps_update` is one of the two receivers and must not raise. Today it can, and because it runs first, its failure skips the auth cache's invalidation as well.
+- *Every change to an installed app is announced*, on signal kinds: its four plain and two coroutine receivers match their senders.
+- *Un-pairing takes effect on the next request*: it must close an un-paired terminal's sockets; today nothing does.
+- *Work that must survive a restart is a row*: the snapshots, the queue and the socket list are caches and coordination state, and messages still queued at a stop are lost.
+- *The lifespan order is load-bearing*: the samplers and the worker start with the background tasks and stop before the take-down, which is why the take-down's statuses are never pushed.
+
+### Constraints
+
+From the written record, each with its source:
+
+- Rejected: Server-Sent Events for live data, because browsers cap concurrent SSE connections per domain (#155's scope comment, reviewed by the maintainer; Sundial's agents.md).
+- Prohibition: swap is never folded into per-app `memory_bytes` (the maintainer on #155).
