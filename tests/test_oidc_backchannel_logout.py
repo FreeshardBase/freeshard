@@ -249,6 +249,25 @@ async def test_register_client_renders_and_stores_backchannel_logout_uri(
     assert stored.backchannel_logout_uri == "https://templated_app.shard.example/blco"
 
 
+async def test_register_client_rejects_a_non_http_scheme_backchannel_logout_uri(
+    app_client: AsyncClient,
+):
+    """Defense-in-depth against SSRF (found in review): backchannel_logout_uri
+    is app-declared metadata that ends up as the target of an outbound
+    request shard_core itself makes at delivery time, unlike redirect_uris
+    (only ever string-compared, never dereferenced). A non-http(s) scheme
+    must never reach the database."""
+    await ensure_app("evil_app")
+    client = await oidc_provider.register_client(
+        "evil_app", [REDIRECT_URI], backchannel_logout_uri="javascript:alert(1)"
+    )
+    assert client.backchannel_logout_uri is None
+
+    async with db_conn() as conn:
+        stored = await db_oidc.get_client(conn, client.client_id)
+    assert stored.backchannel_logout_uri is None
+
+
 # --- delivery, fresh token per attempt, bounded retry ------------------------
 
 

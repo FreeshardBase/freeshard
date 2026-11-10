@@ -21,6 +21,7 @@ import secrets
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
 
 import jinja2
 from authlib.oauth2.rfc6749 import (
@@ -534,6 +535,42 @@ def build_authorization_server(server_cls=AuthorizationServer) -> AuthorizationS
 # --- async API for routes and app installation ---------------------------------------
 
 
+_ALLOWED_BACKCHANNEL_LOGOUT_SCHEMES = {"http", "https"}
+
+
+def _validated_backchannel_logout_uri(app_name: str, uri: str | None) -> str | None:
+    """Defense-in-depth against SSRF (CWE-918).
+
+    backchannel_logout_uri is declared by the app's OWN app_meta.json and,
+    unlike redirect_uris (only ever compared for an exact string match),
+    this one is actually dereferenced -- oidc_backchannel_logout.
+    _post_logout_token issues a real outbound HTTP request to it at every
+    delivery attempt. Reject anything that isn't a plain http(s) URL
+    (no javascript:, data:, file:, gopher:, ...) before it is ever
+    persisted, rather than trusting app-declared metadata as a free target
+    for a request shard_core itself makes.
+
+    Deliberately NOT also resolving the host and rejecting private/
+    loopback/link-local ranges here: that would need a DNS-rebinding-safe
+    check at delivery time, not registration time, and it would reject the
+    legitimate case too eagerly in this repo's own test fixtures (mock app
+    domains that never resolve at all) without a redesign of how those
+    fixtures declare their logout URI. Flagged as a follow-up candidate,
+    not implemented in this change -- see the PR description.
+    """
+    if uri is None:
+        return None
+    if urlparse(uri).scheme not in _ALLOWED_BACKCHANNEL_LOGOUT_SCHEMES:
+        log.warning(
+            "app %s declared a backchannel_logout_uri with a disallowed "
+            "scheme (%r) -- registering the client without it",
+            app_name,
+            uri,
+        )
+        return None
+    return uri
+
+
 async def register_client(
     app_name: str,
     redirect_uris: list[str],
@@ -549,6 +586,9 @@ async def register_client(
     same disk anyway. Codes and tokens, by contrast, are stored hashed.
     """
     client_secret = None if public_client else secrets.token_urlsafe(32)
+    backchannel_logout_uri = _validated_backchannel_logout_uri(
+        app_name, backchannel_logout_uri
+    )
     row = {
         "client_id": f"{app_name}-{secrets.token_urlsafe(6)}",
         "client_secret": client_secret,
