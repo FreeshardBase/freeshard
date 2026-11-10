@@ -261,7 +261,24 @@ def public_jwks() -> dict:
 # --- grants ------------------------------------------------------------------------
 
 
-class ShardAuthCodeGrant(grants.AuthorizationCodeGrant):
+class StampsAuthenticatedClientId:
+    """Authlib's base grant classes only set `request.client` once the
+    *entire* request has validated as correct — for AuthorizationCodeGrant
+    that is after the authorization-code lookup has already succeeded (see
+    `validate_token_request` in authlib's authorization_code.py, which sets
+    it as the very last step). That's too late for web.public.oidc's rate
+    limiter, which needs "did this request prove it is this client"
+    independent of whether a later, grant-specific check also passed — see
+    `_token_limits` in web/public/oidc.py.
+    """
+
+    def authenticate_token_endpoint_client(self):
+        client = super().authenticate_token_endpoint_client()
+        self.request.authenticated_client_id = client.get_client_id()
+        return client
+
+
+class ShardAuthCodeGrant(StampsAuthenticatedClientId, grants.AuthorizationCodeGrant):
     TOKEN_ENDPOINT_AUTH_METHODS = ["client_secret_basic", "client_secret_post", "none"]
 
     def save_authorization_code(self, code, request):
@@ -324,7 +341,7 @@ class ShardAuthCodeGrant(grants.AuthorizationCodeGrant):
         return _run(_user_from_id_async(authorization_code.user_sub))
 
 
-class ShardRefreshTokenGrant(grants.RefreshTokenGrant):
+class ShardRefreshTokenGrant(StampsAuthenticatedClientId, grants.RefreshTokenGrant):
     INCLUDE_NEW_REFRESH_TOKEN = True
 
     def authenticate_refresh_token(self, refresh_token):

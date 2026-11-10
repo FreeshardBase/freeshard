@@ -16,6 +16,7 @@ from urllib.parse import quote
 
 from authlib.oauth2.rfc6749 import AuthorizationServer, OAuth2Request
 from authlib.oauth2.rfc6749.requests import BasicOAuth2Payload
+from authlib.oauth2.rfc6749.util import extract_basic_authorization
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from requests.structures import CaseInsensitiveDict
@@ -151,7 +152,8 @@ async def _get_server(request: Request) -> StarletteAuthorizationServer:
                 issuer = f"{app.state.oidc_public_base}/public/oidc"
                 jwk = await ensure_jwk()
                 configure(issuer, jwk, asyncio.get_running_loop())
-                _token_limit.reset()
+                _token_limits.clear()
+                _unauthenticated_limits.clear()
                 app.state.oidc_server = build_authorization_server(
                     StarletteAuthorizationServer
                 )
@@ -184,7 +186,83 @@ async def _session_user(authorization: str | None) -> ShardUser | None:
 
 # --- token endpoint rate limit ------------------------------------------------------
 
-_token_limit = SlidingWindow(limit=TOKEN_RATE_LIMIT, window=60)
+# _token_limits is keyed by client_id, deliberately per-client rather than
+# per-shard — overriding SlidingWindow's own "a shard has one owner"
+# rationale (shard_core/util/misc.py), written for brute-force resistance;
+# the problem here is availability between the owner's *own* apps, which
+# all share this one /token endpoint (#215). Charging it is only safe once
+# Authlib has actually authenticated the caller as that client (see
+# StampsAuthenticatedClientId in oidc_provider.py): client_id is not a
+# secret, so charging an unauthenticated claim would let anyone grief a
+# named victim's budget for free.
+#
+# _unauthenticated_limits, keyed by source IP, covers everything that
+# doesn't clear that bar (wrong/missing client secret, or any other
+# pre-authentication failure) — a single shared bucket here is just as
+# griefable as per-client charging would be above, only shard-wide instead
+# of per-client. IP is safe and non-spoofable in this deployment
+# specifically: Traefik is the sole ingress for this public endpoint, so
+# `request.client` is always Traefik's own address (useless for this), but
+# Traefik's default X-Forwarded-For handling, with this repo's actual
+# config (no `forwardedHeaders.trustedIPs` anywhere in data/traefik.yml),
+# replaces any inbound value with its own observed connection peer rather
+# than trusting or appending to it — verified against the real traefik:v3.6
+# image. See _source_ip.
+#
+# Both dicts are in-process and single-worker, like SlidingWindow itself:
+# they reset on restart, and a second uvicorn worker would keep its own
+# independent set, doubling the effective budget.
+_token_limits: dict[str, SlidingWindow] = {}
+_unauthenticated_limits: dict[str, SlidingWindow] = {}
+
+
+def _bucket_for(limits: dict[str, SlidingWindow], key: str) -> SlidingWindow:
+    """Call only right before an actual charge (try_acquire) — a peek must
+    use the non-creating `_bucket_exhausted` instead, or either dict above
+    would gain an entry for every key anyone merely names, regardless of
+    whether they're ever charged."""
+    if key not in limits:
+        limits[key] = SlidingWindow(limit=TOKEN_RATE_LIMIT, window=60)
+    return limits[key]
+
+
+def _bucket_exhausted(limits: dict[str, SlidingWindow], key: str) -> bool:
+    """See _bucket_for for why this must not create an entry."""
+    bucket = limits.get(key)
+    return bucket is not None and bucket.exhausted()
+
+
+def _client_id_from_request(oreq: OAuth2Request) -> str | None:
+    """Unverified — used only for the pre-check below, never to decide which
+    bucket a failure charges, since nothing here confirms the caller
+    actually is this client."""
+    if client_id := oreq.payload.client_id:
+        return client_id
+    client_id, _ = extract_basic_authorization(oreq.headers)
+    return client_id
+
+
+def _source_ip(request: Request) -> str:
+    """See _token_limits above for why source IP is safe to trust here,
+    unlike client_id."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded
+    return request.client.host if request.client else "unknown"
+
+
+def _charge_for_failed_attempt(
+    oreq: OAuth2Request, source_ip: str, response: Response
+) -> None:
+    # Excludes 5xx deliberately: a bug on our side isn't the caller's fault
+    # to pay for.
+    if not (400 <= response.status_code < 500):
+        return
+    authenticated_client_id = getattr(oreq, "authenticated_client_id", None)
+    if authenticated_client_id is not None:
+        _bucket_for(_token_limits, authenticated_client_id).try_acquire()
+    else:
+        _bucket_for(_unauthenticated_limits, source_ip).try_acquire()
 
 
 # --- endpoints -------------------------------------------------------------------
@@ -217,10 +295,20 @@ async def authorize(request: Request, authorization: str = Cookie(None)):
 @router.post("/token")
 async def token(request: Request):
     server = await _get_server(request)
-    if not _token_limit.try_acquire():
-        return JSONResponse({"error": "slow_down"}, status_code=429)
     oreq = await _build_oauth2_request(request)
-    return await asyncio.to_thread(server.create_token_response, oreq)
+    client_id = _client_id_from_request(oreq)
+    source_ip = _source_ip(request)
+
+    # client_id is unverified here, but a wrong guess only changes *when*
+    # a 429 comes back, never which bucket the charge below lands in.
+    if _bucket_exhausted(_unauthenticated_limits, source_ip) or (
+        client_id is not None and _bucket_exhausted(_token_limits, client_id)
+    ):
+        return Response(status_code=429)
+
+    response = await asyncio.to_thread(server.create_token_response, oreq)
+    _charge_for_failed_attempt(oreq, source_ip, response)
+    return response
 
 
 @router.get("/userinfo")
