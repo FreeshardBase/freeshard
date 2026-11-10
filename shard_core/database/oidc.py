@@ -195,20 +195,58 @@ async def enqueue_backchannel_logout(
         await conn.execute(sql, {**grant, "terminal_id": terminal_id})
 
 
-async def get_due_outbox_entries(conn: AsyncConnection) -> list[dict]:
-    """Pending outbox rows whose backoff has elapsed and whose app is
-    currently RUNNING. A stopped app serves nothing, so it is never woken
-    just to receive its own logout notification — the row simply waits for
-    the app's next on_apps_update (or the periodic backstop) once it is."""
-    sql: LiteralString = """SELECT o.*, c.backchannel_logout_uri, c.app_name
+async def claim_due_outbox_entries(
+    conn: AsyncConnection, stuck_after_seconds: int = 120
+) -> list[dict]:
+    """Atomically claim pending outbox rows whose backoff has elapsed and
+    whose app is currently RUNNING — flipping them to 'in_flight' in the same
+    statement that selects them.
+
+    drain_due_outbox() has two independent, uncoordinated callers (the
+    on_apps_update signal and a periodic backstop), so two overlapping drains
+    are routine, not an edge case. A bare SELECT here would let both fetch the
+    same row and both attempt delivery: duplicate logout_token POSTs to the
+    relying party, and a lost-update on `attempts` (two racing
+    mark_outbox_retry calls each computing the same "+1" from a stale
+    snapshot), letting a row dodge MAX_ATTEMPTS far longer than intended.
+    `WHERE id IN (SELECT ... FOR UPDATE SKIP LOCKED)` makes two concurrent
+    claims disjoint instead of racing: whichever transaction's SELECT commits
+    the row-lock first wins it, and SKIP LOCKED makes the other claim simply
+    not see it, rather than block or double-claim.
+
+    A row stuck 'in_flight' longer than stuck_after_seconds (the process
+    crashed between claiming it and calling mark_outbox_delivered/retry/
+    failed) is reclaimed the same way — otherwise a single crash would strand
+    the row forever, no different in kind from the installation worker's own
+    in-memory-queue hazard this outbox exists to avoid.
+    """
+    claim_sql: LiteralString = """UPDATE oidc_backchannel_logout_outbox
+        SET status = 'in_flight', updated = now()
+        WHERE id IN (
+            SELECT o.id
+            FROM oidc_backchannel_logout_outbox o
+            JOIN oidc_clients c ON c.client_id = o.client_id
+            JOIN installed_apps ia ON ia.name = c.app_name
+            WHERE ia.status = 'running'
+              AND (
+                (o.status = 'pending' AND o.next_attempt_at <= now())
+                OR (o.status = 'in_flight'
+                    AND o.updated <= now() - %(stuck_after)s * INTERVAL '1 second')
+              )
+            FOR UPDATE OF o SKIP LOCKED
+        )
+        RETURNING id"""
+    async with conn.cursor() as cur:
+        await cur.execute(claim_sql, {"stuck_after": stuck_after_seconds})
+        claimed_ids = [row[0] for row in await cur.fetchall()]
+    if not claimed_ids:
+        return []
+    fetch_sql: LiteralString = """SELECT o.*, c.backchannel_logout_uri, c.app_name
         FROM oidc_backchannel_logout_outbox o
         JOIN oidc_clients c ON c.client_id = o.client_id
-        JOIN installed_apps ia ON ia.name = c.app_name
-        WHERE o.status = 'pending'
-          AND o.next_attempt_at <= now()
-          AND ia.status = 'running'"""
+        WHERE o.id = ANY(%s)"""
     async with conn.cursor(row_factory=dict_row) as cur:
-        await cur.execute(sql)
+        await cur.execute(fetch_sql, (claimed_ids,))
         return await cur.fetchall()
 
 
@@ -225,8 +263,11 @@ async def mark_outbox_retry(
     next_attempt_at: datetime,
     error: str,
 ) -> None:
+    """Release the claim: back to 'pending' so the next due drain can pick
+    it up again (it would otherwise stay 'in_flight' forever)."""
     sql: LiteralString = """UPDATE oidc_backchannel_logout_outbox
-        SET attempts = %s, next_attempt_at = %s, last_error = %s, updated = now()
+        SET status = 'pending', attempts = %s, next_attempt_at = %s,
+            last_error = %s, updated = now()
         WHERE id = %s"""
     await conn.execute(sql, (attempts, next_attempt_at, error, id_))
 

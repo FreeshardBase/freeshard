@@ -21,8 +21,11 @@ reconcile_interrupted_* steps it needed to compensate. An outbox row needs no
 such reconciliation; the next drain just picks it up again.
 
 drain_due_outbox() attempts delivery of every outbox entry that is due and
-whose owning app is currently RUNNING (get_due_outbox_entries bakes that
+whose owning app is currently RUNNING (claim_due_outbox_entries bakes that
 filter in — a stopped app is never woken just to receive its own logout).
+Claiming is atomic (FOR UPDATE SKIP LOCKED, see database.oidc) because this
+module's two drain triggers are independent and uncoordinated, so overlapping
+drains are routine, not a theoretical edge case.
 It is driven by two triggers, both calling the same function:
   * the on_apps_update signal (connected below), which fires on every app
     status write — draining then is a no-op unless some due row's app just
@@ -88,6 +91,28 @@ async def _post_logout_token(url: str, token: str) -> None:
 
 
 async def _attempt_delivery(entry: dict) -> None:
+    if not entry.get("backchannel_logout_uri"):
+        # The claim is live-joined against oidc_clients, not a snapshot
+        # taken at enqueue time, so a reinstall/update landing inside the
+        # retry window can null this out from under an already-queued row
+        # (register_client overwrites it on every re-registration). There is
+        # nowhere to deliver to any more -- fail now rather than retry
+        # forever, since nothing about this condition fixes itself with time.
+        async with db_conn() as conn:
+            error = "client no longer declares a backchannel_logout_uri"
+            log.error(
+                "backchannel logout delivery to app %s (client %s, sid %s) "
+                "failed permanently: %s",
+                entry["app_name"],
+                entry["client_id"],
+                entry["sid"],
+                error,
+            )
+            await db_oidc.mark_outbox_failed(
+                conn, entry["id"], entry["attempts"] + 1, error
+            )
+        return
+
     await oidc_provider.ensure_configured()
     token = oidc_provider.sign_logout_token(
         client_id=entry["client_id"], user_sub=entry["user_sub"], sid=entry["sid"]
@@ -95,7 +120,15 @@ async def _attempt_delivery(entry: dict) -> None:
     error = None
     try:
         await _post_logout_token(entry["backchannel_logout_uri"], token)
-    except httpx.HTTPError as e:
+    except Exception as e:
+        # Deliberately not narrowed to httpx.HTTPError: ANY failure to
+        # deliver must flow through the retry bookkeeping below. A narrower
+        # catch here lets an exception of a type we didn't anticipate (e.g.
+        # a TypeError from a malformed URL) escape to drain_due_outbox's
+        # batch-level catch-all, which only logs -- it cannot update
+        # next_attempt_at/status, so the row stays due and gets retried on
+        # every single drain forever: an uncapped retry storm that never
+        # reaches MAX_ATTEMPTS and is never marked failed (found in review).
         error = f"{type(e).__name__}: {e}"
 
     async with db_conn() as conn:
@@ -136,10 +169,11 @@ async def _attempt_delivery(entry: dict) -> None:
 async def drain_due_outbox() -> None:
     """Attempt delivery of every outbox entry that is due and whose app is
     currently RUNNING. Cheap and safe to call often and from multiple
-    triggers: each entry is independent, and a delivered/failed row simply
-    stops matching the WHERE clause on the next call."""
+    triggers: claim_due_outbox_entries atomically claims each row it
+    returns, so two overlapping calls to this function split the due rows
+    between them instead of racing on the same one."""
     async with db_conn() as conn:
-        entries = await db_oidc.get_due_outbox_entries(conn)
+        entries = await db_oidc.claim_due_outbox_entries(conn)
     for entry in entries:
         try:
             await _attempt_delivery(entry)

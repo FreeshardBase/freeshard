@@ -405,8 +405,139 @@ async def test_bounded_retry_then_permanent_failure_is_queryable(
     # a permanently-failed entry must not be picked up again
     await force_due_now(entry_id)
     async with db_conn() as conn:
-        due = await db_oidc.get_due_outbox_entries(conn)
+        due = await db_oidc.claim_due_outbox_entries(conn)
     assert due == []
+
+
+async def test_missing_backchannel_logout_uri_at_delivery_fails_fast(
+    app_client: AsyncClient, mocker
+):
+    """The claim query live-joins oidc_clients rather than snapshotting the
+    uri at enqueue time, so a reinstall that drops backchannel_logout_uri
+    can null it out from under an already-queued row. There is nowhere to
+    deliver to any more -- this must fail immediately, not retry forever
+    (found in review: an earlier version had no such guard)."""
+    post = mocker.patch("shard_core.service.oidc_backchannel_logout._post_logout_token")
+    await pair_new_terminal(app_client, name="phone")
+    tid = await terminal_id("phone")
+    oidc_client = await make_client("bc_app")
+    await set_app_status("bc_app", "running")
+    await run_code_flow(app_client, oidc_client)
+    await unpair(app_client, tid)
+
+    async with db_conn() as conn:
+        await conn.execute(
+            "UPDATE oidc_clients SET backchannel_logout_uri = NULL WHERE client_id = %s",
+            (oidc_client.client_id,),
+        )
+
+    await oidc_backchannel_logout.drain_due_outbox()
+
+    post.assert_not_called()
+    final = (await rows("SELECT * FROM oidc_backchannel_logout_outbox"))[0]
+    assert final["status"] == "failed"
+    assert "backchannel_logout_uri" in final["last_error"]
+
+
+async def test_non_http_exception_during_post_is_retried_not_stuck(
+    app_client: AsyncClient, mocker
+):
+    """Regression for the bug class found in review: a prior version only
+    caught httpx.HTTPError around the POST, so any other exception (e.g. a
+    TypeError from a bad argument) escaped to drain_due_outbox's batch-level
+    catch-all, which cannot update next_attempt_at/status -- the row stayed
+    due and was retried on every single drain forever, uncapped. Any
+    exception from the POST must flow through the normal retry bookkeeping."""
+    mocker.patch(
+        "shard_core.service.oidc_backchannel_logout._post_logout_token",
+        side_effect=TypeError("Request URL is missing an 'http://' scheme"),
+    )
+    await pair_new_terminal(app_client, name="phone")
+    tid = await terminal_id("phone")
+    oidc_client = await make_client("bc_app")
+    await set_app_status("bc_app", "running")
+    await run_code_flow(app_client, oidc_client)
+    await unpair(app_client, tid)
+
+    await oidc_backchannel_logout.drain_due_outbox()
+
+    entry = (await rows("SELECT * FROM oidc_backchannel_logout_outbox"))[0]
+    assert (
+        entry["status"] == "pending"
+    ), "must be released for retry, not stuck in_flight"
+    assert entry["attempts"] == 1
+    assert "TypeError" in entry["last_error"]
+    assert entry["next_attempt_at"] > entry["created"]
+
+
+async def test_concurrent_claims_do_not_double_claim_a_row(app_client: AsyncClient):
+    """Two overlapping drains (the on_apps_update signal and the periodic
+    backstop are independent, uncoordinated callers) must split due rows
+    between them, never both deliver to the same one. Uses two genuinely
+    separate, overlapping connections -- conn1's claim transaction is still
+    open (uncommitted, row lock held) when conn2 attempts its own claim --
+    to prove the FOR UPDATE SKIP LOCKED mechanism itself, not just that an
+    already-committed status flip is invisible to a later query."""
+    await pair_new_terminal(app_client, name="phone")
+    tid = await terminal_id("phone")
+    oidc_client = await make_client("bc_app")
+    await set_app_status("bc_app", "running")
+    await run_code_flow(app_client, oidc_client)
+    await unpair(app_client, tid)
+
+    async with db_conn() as conn1:
+        first_claim = await db_oidc.claim_due_outbox_entries(conn1)
+        assert len(first_claim) == 1
+        assert first_claim[0]["client_id"] == oidc_client.client_id
+
+        # conn1's transaction has not committed yet -- its FOR UPDATE row
+        # lock is still held. A second, independent connection (what a
+        # genuinely concurrent drain would use) must not be able to claim
+        # the same row while that lock stands.
+        async with db_conn() as conn2:
+            second_claim = await db_oidc.claim_due_outbox_entries(conn2)
+        assert (
+            second_claim == []
+        ), "SKIP LOCKED must exclude a row locked by another transaction"
+
+    entry = (await rows("SELECT * FROM oidc_backchannel_logout_outbox"))[0]
+    assert entry["status"] == "in_flight"
+
+
+async def test_stuck_in_flight_row_is_reclaimed_after_a_crash(app_client: AsyncClient):
+    """A row claimed (flipped to 'in_flight') by a process that then crashed
+    before calling mark_outbox_delivered/retry/failed must not be stranded
+    forever -- it has to come back to the pool of claimable work once it's
+    been stuck long enough to assume the claimant is gone."""
+    await pair_new_terminal(app_client, name="phone")
+    tid = await terminal_id("phone")
+    oidc_client = await make_client("bc_app")
+    await set_app_status("bc_app", "running")
+    await run_code_flow(app_client, oidc_client)
+    await unpair(app_client, tid)
+
+    async with db_conn() as conn:
+        claimed = await db_oidc.claim_due_outbox_entries(conn)
+    assert len(claimed) == 1
+    entry_id = claimed[0]["id"]
+
+    # simulate the claim going stale (process died mid-delivery): backdate
+    # `updated` past the stuck threshold instead of waiting it out for real.
+    await rows(
+        "UPDATE oidc_backchannel_logout_outbox "
+        "SET updated = now() - interval '10 minutes' WHERE id = %s RETURNING id",
+        entry_id,
+    )
+
+    async with db_conn() as conn:
+        # threshold well above the 10-minute backdate above -- not a tight
+        # boundary, to avoid flaking on wall-clock drift between statements
+        not_yet = await db_oidc.claim_due_outbox_entries(conn, stuck_after_seconds=900)
+    assert not_yet == [], "must not reclaim before the stuck threshold"
+
+    async with db_conn() as conn:
+        reclaimed = await db_oidc.claim_due_outbox_entries(conn, stuck_after_seconds=60)
+    assert [r["id"] for r in reclaimed] == [entry_id]
 
 
 # --- discovery flag gating ---------------------------------------------------
