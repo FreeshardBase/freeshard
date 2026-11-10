@@ -588,3 +588,128 @@ From the maintainer's comment on #167 (2026-07-22) and the record named:
 - Trust is never granted for recognizing a name, since owners would accept a familiar name without checking the ID. This one is tentative: the maintainer wrote that it needs deeper thought.
 - Mapping user identities across shards is deferred; one user per shard stays the norm.
 - Peering stays unoffered in the UIs until an app uses it (documentation 8628133, README ef3e9fe).
+
+## Controller integration
+
+Controller integration is the shard's half of every exchange service code has with the Freeshard controller (the profile, the management shared secret, the mail to the owner, the verification mail, the owner-address mirror, the backup storage URL and telemetry) and of the monthly app-usage report, which still goes to the old backend (#208); it keeps the shard's stored copy of what the controller knows about it, the **profile**, and the verbatim copy of the controller's models that the answers are parsed with.
+
+### Files
+
+`freeshard_controller.py` and `portal_controller.py` are the two client modules left from the two backends that were repointed at freeshard-controller in 2025 without being merged (root, *The controller is one signed counterparty*). `freeshard_controller.py` holds the shared secret, the three calls that serve the owner's address, and `call_freeshard_controller`, the generic call that telemetry and the management passthrough use. `portal_controller.py` holds the profile refresh and the backup storage URL. `telemetry.py` counts and sends telemetry, `app_usage_reporting.py` records which apps are installed and sends the monthly report, `data_model/profile.py` defines the profile and persists it in `kv_store`, `data_model/app_usage.py` defines the usage track and report, and `data_model/backend/` is the copy of the controller's models.
+
+### The exchanges
+
+| Exchange | Controller route | Shard function | Called from | A failed call |
+| --- | --- | --- | --- | --- |
+| Profile | `GET /api/shards/self`, parsed as `ShardResponse` | `portal_controller.refresh_profile` | The lifespan; `identity.enrich_identity_from_profile` on the first pairing; `GET /protected/management/profile` | A 401 stores `None`. Every other failure raises to the caller. |
+| Shared secret | `GET /api/shards/self`, parsed as `ShardDb` | `freeshard_controller.refresh_shared_secret` | `validate_shared_secret`, from the forwardAuth route `/internal/authenticate_management` | Raises; the request is refused. |
+| Mail to the owner | `POST /api/email_relay` | `relay_email_to_owner` | People and owner email, for the notices about an address change | Raises; the caller logs it and carries on. |
+| Verification mail | `POST /api/email_verification` | `send_verification_email` | People and owner email, when an address is set or the link resent | Raises; the caller answers 502. |
+| Owner-address mirror | `PUT /api/shards/self/owner-email` | `set_owner_email` | People and owner email, when an address is confirmed, cleared, or set without verification | Raises; the caller logs it and carries on. |
+| Backup storage URL | `GET /api/shard_backup/backup_sas_url`, parsed as `SasUrlResponse` | `portal_controller.get_backup_sas_url` | `backup.start_backup` | Raises; Backup turns an HTTP error into `BackupStartFailedError`. |
+| Telemetry | `POST /api/telemetry`, a `Telemetry` | `telemetry.send_telemetry` | A `PeriodicTask` every `telemetry.send_interval_seconds` | An exception keeps the batch for the next send; a rejection drops it. |
+| App usage | `POST <management.api_url>/app_usage`, the shard's own `AppUsageReport` | `app_usage_reporting.report_app_usage` | A `CronTask` on the first day of each month | Up to ten attempts on HTTP errors; a 409 or a connection error ends the run. |
+
+Every call is signed with the default identity and goes to `freeshard_controller.base_url`, except the app-usage report (root, *The controller is one signed counterparty*). No call sets a timeout, because `signed_request` sets none, so a controller that accepts the connection and never answers holds the caller until it does. The three calls that serve the owner's address go through `post_json`, which declares the body as JSON, and check the answer with `raise_for_status`. `call_freeshard_controller` sends a raw byte body that declares no Content-Type (#269) and returns the answer unchecked.
+
+### The profile
+
+The profile is the shard's stored copy of what the controller knows about it. `Profile.from_shard` projects the controller's `ShardResponse` onto the machine id, the VM size and the largest size the shard may be resized to, the volume size, the owner's name and address, the dates the controller keeps (`time_created`, `time_assigned`, and `delete_after`, which #79 renames), the subscription summary, and the billing settings the UIs need for PayPal. It lives in `kv_store` under `profile` in one of three states: absent until a refresh first stores something, the string `"None"` when the controller last answered 401, or the profile. The shard itself reads three of its fields. App runtime's size gate reads `vm_size` (root, *Deployment mode is explicit*). The first-pairing receiver copies `owner` into the default identity's name, and `owner_email` into the owner's address candidate when the owner has no verified address. Every other field is for the UIs, which read the whole profile through `GET /protected/management/profile`. Nothing keeps a copy of the profile in memory: every `get_profile` reads `kv_store`, which is why wake-on-access reads it on every admitted request (root, *The auth path does no per-request database work*).
+
+The shard refreshes the profile only when something asks for it: at boot, when a pairing leaves exactly one terminal, and when a UI sends `?refresh=true` or finds no profile stored. No timer refreshes it, so a VM size the controller changes reaches the size gate with the next of those events. The controller keeps the UIs' view fresh through the shared-secret channel. When it changes something they show, today only a subscription, it posts the message type to `/core/management/notify`, shard_core broadcasts it to the connected terminals, and the UIs refetch the profile.
+
+```mermaid
+sequenceDiagram
+    participant C as Controller
+    participant S as shard_core
+    participant U as web-terminal or Sundial
+    C->>S: POST /core/management/notify with the shared secret
+    S-->>U: websocket message subscription_updated
+    U->>S: GET /core/protected/management/profile?refresh=true
+    S->>C: GET /api/shards/self, signed
+    C-->>S: ShardResponse
+    S->>S: Profile.from_shard, stored in kv_store
+    S-->>U: the profile
+```
+
+`refresh_profile` parses the whole `ShardResponse` with the copied models, most of which the shard then discards. Fields the controller adds are ignored. A value the controller adds to one of the enums inside it (`ShardStatus`, `VmSize`, `Cloud`, `Permission`, `SubscriptionStatus`) fails the parse and the profile refresh with it; for the first three it also fails the shared-secret refresh, which parses the same answer as `ShardDb` (#231). A value the controller adds to an enum the shard parses therefore reaches every shard in a released copy before the controller emits it. #231 kept the strict parse and ordered the releases that way.
+
+`from_shard` converts the controller's VM size into the shard's own `VMSize` (`data_model/app_meta.py`, also the type of an app's `minimum_portal_size`) by value. Nothing checks that the two enums keep the same members. The todo above `VMSize` plans to replace it with the copied `VmSize` once that type can compare sizes, which the copy now does. Until then a size the controller adds and the copy receives raises a plain `ValueError` in `from_shard`. The lifespan tolerates three kinds of failure from its profile refresh, connection errors, HTTP errors and validation errors (root, *The lifespan order is load-bearing*), and any other failure aborts the boot, that `ValueError` and the `JSONDecodeError` of a 200 answer that is not JSON among them.
+
+### The management shared secret
+
+The shared secret authenticates the controller to the shard, the reverse direction of the signature. It sends it as the `Authorization` header with its requests to `/core/management/...`, today for an operator-issued pairing code and for `notify`. Traefik's `auth-management` middleware passes that header, with every other request header since it names no `authRequestHeaders` ([Traefik ForwardAuth](https://doc.traefik.io/traefik/v2.11/middlewares/http/forwardauth/)), to `/internal/authenticate_management`, which calls `validate_shared_secret`.
+
+The shard fetches the secret from the controller the first time it needs one and stores it in `kv_store` under `freeshard_controller_shared_key`, from where it travels in the database snapshot. An unauthenticated request must not be able to make the shard call the controller without a bound on how often it may and without a timeout on the call *(Convention — https://owasp.org/API-Security/editions/2023/en/0xa4-unrestricted-resource-consumption/ and https://pages.nist.gov/800-63-3/sp800-63b.html#throttle)*; today it can.
+
+### The owner's address and mail to the owner
+
+Three calls serve People and owner email, which owns their order (agents.md, *The Owner's Email Address*). `relay_email_to_owner` asks the controller to mail the owner a subject and paragraphs, and the recipient is always the address the controller holds for the shard; the shard cannot name one. `send_verification_email` asks it to mail a confirmation link to a candidate address. The shard supplies the address and an opaque token, and the controller supplies the template and builds the link from the domain it holds for the shard, so no URL the shard supplies is ever mailed. `set_owner_email` mirrors a confirmed address, or a cleared one, to the controller's copy. The controller checks a new address against its own verification record (freeshard-controller#434). Everything the controller mails to the owner goes to that copy.
+
+The notices and the mirror are owed to the owner even across a controller outage: a call that fails because the controller is unreachable is retried, or reconciled on a later profile refresh, within the controller's verification window or after the address is verified again. That duty belongs to People and owner email, which owns the address and its transitions and records the duty in its own theory; this module only carries the calls. Today the callers log a failed notice or mirror and let the change go ahead without retrying it, so the duty is not met yet. *(Confirmed 2026-11-10.)*
+
+### The backup storage URL
+
+`get_backup_sas_url` returns what Backup needs to write: the name of a container the controller chooses and creates for the shard, `shard-backup-<short ID>`, and a shared access signature (SAS) URL scoped to that container, which expires an hour after it is issued. The shard uses the name as given. Backup fetches one URL per run and uses it for every directory and for the marker blob it writes last, so a run has to finish within that hour.
+
+### Telemetry
+
+While `telemetry.enabled` is set, `record_request` counts every terminal authentication (`on_terminal_auth`) and every admitted request to an app (`on_request_to_app`). A request to an app that carries a valid terminal cookie sends both signals and counts twice, so the number is an activity signal and not a request count; telemetry was introduced to spot inactive shards (#75). Every `telemetry.send_interval_seconds`, 300 by default, `send_telemetry` sends the window that began at the previous send or at the process start, the count, and the pause-tier block built from App runtime's `pause_metrics`, which is absent when the window saw no pause-tier activity. A batch is discarded only once the controller has accepted it. An exception keeps the counters and the window's start, so the next send covers both intervals. A rejection is not handled that way yet: no status is checked, so a 4xx or 5xx answer resets the counters as if the batch had arrived (#269 names the 422 case). All of it lives in memory and starts over at a restart (root, *Work that must survive a restart is a row*). The controller stores each batch and shows it in the shard's record; nothing the controller does depends on it. `config.toml` leaves telemetry off, and the **core-version compose file**, the compose file the controller ships with each core version, switches it on for hosted shards (#208). That telemetry should be the owner's opt-in, off by default and controlled from the UI (#75), is a stated intent the code does not yet meet: there is no owner-facing switch, so on a hosted shard the core-version compose file decides it.
+
+### App usage
+
+At `apps.usage_reporting.tracking_schedule`, 02:00 daily, `track_currently_installed_apps` stores one row in `app_usage_tracks` that lists the name of every `installed_apps` row, whatever its status. At `apps.usage_reporting.reporting_schedule`, 03:00 on the first of each month, `report_app_usage` counts for every app the tracks of the previous calendar month that list it, one for each day the shard was up at 02:00, and posts the counts, signed, to the old backend's `management.api_url`. The tracks are never pruned, on purpose, so that a later report can still send old months (#208). The report body is the shard's own model, because the controller has no request model for it yet; the `AppUsageReport` in the copy is the row the controller stores. The previous management backend that `management.api_url` still names is dead (root, *The controller is one signed counterparty*), which is why these reports reach nothing (#208).
+
+Three things about this exchange are recorded in #208 and freeshard-controller#432: its host no longer resolves, the controller has no route that receives it, and `telemetry.enabled` does not gate it. Today a 409 ends the run, an HTTP error is tried up to ten times, and a connection error, the case every shard meets now, ends the run at once.
+
+### Calls the HTTP surface makes in the shard's name
+
+Three web handlers reach the controller with the default identity's signature. Who may call them is the HTTP surface's to decide; what they send is listed here.
+
+`/protected/feedback/quick` posts the text to `POST /api/feedback` with its own `signed_request` call.
+
+`/protected/management/{rest}` forwards any method and any path below the base URL through `call_freeshard_controller`, so its callers write the `api/` prefix themselves. It forwards the raw body without a Content-Type (#269) and returns the controller's status and body without its headers; Sundial parses such an untyped answer itself. It is deliberately generic, so the UIs reach a new controller route without a shard_core release. Their calls through it today are `api/shards/self/prices`, `api/shards/self/resize`, `api/shards/self/resize/cancel` and `api/shards/self/subscribe`. The route beside it, `GET /protected/management/profile`, serves the stored profile and refreshes it on request.
+
+`/internal/call_backend/{rest}` forwards any method, path, query and body with the caller's Content-Type (#93), and streams the controller's answer back with its headers. No app in the app store uses it.
+
+The root's *The controller is one signed counterparty* holds that a signed request carries shard_core's and the owner's authority and must be lent to callers narrowly. These handlers lend it broadly: `/internal/call_backend` and the management passthrough each forward every method and path to a signed controller call, and `/internal/call_peer` does the same toward a peer. Narrowing them belongs to the planned app-isolation hardening (#126).
+
+### Deployment mode
+
+No exchange knows the deployment mode. `config.toml` points `freeshard_controller.base_url` at Freeshard's production controller, the self-hosting `docker-compose.yml` does not change it, and `email.enabled` turns off the shard's mail and nothing else: the verification mail and the change notices. Every other exchange is attempted on a self-hosted shard as well, and the controller refuses it with 401 because it does not know the shard. Such a shard therefore sends signed requests to Freeshard's controller at boot, on its first pairing, at every backup start, whenever a UI asks for a fresh profile, and whenever its owner sets or clears an address, and those last requests carry the address. The root's *Deployment mode is explicit* asks for one switch that every feature keys on; none exists yet.
+
+The controller recognises a shard by its signature's key ID, the short ID. A hosted shard whose default identity changes is unknown to it from then on: every exchange answers 401, and the next refresh stores `None`, which the size gate reads the way it reads a self-hosted shard.
+
+### The copy of the controller's models
+
+`just get-types` regenerates `data_model/backend/`: it deletes the directory, copies every file of the controller's `data_model/` into it, and puts a `DO NOT MODIFY` line at the top of each, except an empty `__init__.py`, which has no first line for the header to go before. At the controller's current `main` the copy matches file for file. CI's drift job reruns the recipe against controller `main` on every pull request and fails on a difference in tracked files, so it catches a changed or deleted model and misses a model the controller adds that was never copied (#232).
+
+The shard imports seven of the copied models: `ShardResponse` for the profile, `ShardDb` for the shared secret, `SasUrlResponse` for the backup URL, `ShardBase` and `ShardSubscriptionSummary` for the profile's projection and its subscription field, and `Telemetry` with `PauseTierTelemetry` for the telemetry body. `shard_model` loads `permission_model`, `subscription_model` and `telemetry_model` with it. The remaining files are copied and never imported, because the copy takes the whole directory; #231 accepted controller-only code arriving that way. The shard writes its own models where its side of an exchange has no model in the copy: the profile, and the usage track and report. One hand-written model duplicates a copied one, `VMSize`.
+
+### Import order
+
+`signed_call` imports `identity` for the default identity, `identity` imports `portal_controller` for its first-pairing receiver, and `portal_controller` imports `signed_call`. So `signed_call`, `portal_controller`, `freeshard_controller` and `telemetry` cannot be the first of these to be imported: each raises `ImportError` in a fresh interpreter, and the process works because something imports `identity` first. `pause_metrics` is kept apart from `telemetry` for this reason, so that App runtime can record transitions without importing the client.
+
+### Constraints
+
+From the written record, each with its source:
+
+- `data_model/backend/` is never hand-edited, only regenerated by `just get-types` (the `DO NOT MODIFY` header on each file; agents.md).
+- The mail capability is never inferred from a failed delivery; it is read from `email.enabled` alone (the comment on `EmailSettings` in `settings.py`).
+- Rejected: a mail switch named after the deployment, such as `selfhosted`. It would lie in both directions, since a hosted shard may want mail off and a self-hosted one may configure its own SMTP (5101509, PR #221).
+- Release order: a controller change that adds a value to an enum the shard parses reaches every shard in a released copy before the controller emits it (#231); a shard change that needs a new controller route ships after the controller has it (PR #221).
+
+### Boundaries
+
+Controller integration owns the shard's side of the exchanges in the table, the two `kv_store` entries `profile` and `freeshard_controller_shared_key`, telemetry's counters and window, the usage tracks and report, and the rule by which the copy of the controller's models is made.
+
+It relies on Identity and signing for `signed_request` and the default identity, and on the controller for every route above. It relies on Database for `kv_store` and `app_usage_tracks`, and on Installation's rows for the daily track. It relies on the HTTP surface to send `on_terminal_auth` and `on_request_to_app`. It relies on App runtime for the pause-tier accumulators, which it reads and resets after an accepted send. And it relies on the composition root for the boot refresh and for the periodic and cron tasks that send telemetry and usage.
+
+Others rely on it in turn. App runtime's size gate reads the stored profile. People and owner email sends its three calls through it, and Identity and signing's first-pairing receiver refreshes the profile through it. Backup gets its storage URL from it. The HTTP surface uses it for the shared-secret check behind forwardAuth, for the generic call behind the management passthrough, and for the profile route.
+
+Of the root invariants it keeps true:
+
+- *The controller is one signed counterparty*: every call it builds goes through `signed_request`. The telemetry body and the generic call still declare no Content-Type (#269), and the usage report still goes to `management.api_url` (#208).
+- *Types shared with the controller are copied, never written*: the copy is regenerated and never edited; `VMSize` is a hand-written twin of a copied type.
+- *The lifespan order is load-bearing*: the boot refresh is step 6, holds up the boot while the controller does not answer, and aborts it on any failure outside the three tolerated kinds.
+- *Deployment mode is explicit*: not met, since no exchange keys on the mode.
