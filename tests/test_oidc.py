@@ -46,11 +46,13 @@ async def expected_issuer() -> str:
     return f"https://{identity.domain}/core/public/oidc"
 
 
-async def make_client(public_client: bool = False, scope: str = None) -> OidcClient:
+async def make_client(
+    public_client: bool = False, scope: str = None, app_name: str = "testapp"
+) -> OidcClient:
     kwargs = {"scope": scope} if scope else {}
-    await _ensure_app_row("testapp")
+    await _ensure_app_row(app_name)
     return await oidc_provider.register_client(
-        "testapp", [REDIRECT_URI], public_client=public_client, **kwargs
+        app_name, [REDIRECT_URI], public_client=public_client, **kwargs
     )
 
 
@@ -572,6 +574,73 @@ async def test_token_endpoint_rate_limited(app_client: AsyncClient):
         )
         statuses.append(r.status_code)
     assert 429 in statuses, "token endpoint must rate-limit bursts"
+
+
+async def test_token_rate_limit_is_per_client(app_client: AsyncClient):
+    """The core fairness fix (#215): one client's exhausted budget must not
+    429 a different client's legitimate request."""
+    await pair_new_terminal(app_client)
+    noisy = await make_client(app_name="noisy-app")
+    other = await make_client(app_name="other-app")
+
+    for _ in range(oidc_provider.TOKEN_RATE_LIMIT):
+        r = await exchange_code(
+            app_client, noisy, "no-such-code", secrets.token_urlsafe(32)
+        )
+        assert r.status_code == 400, r.text
+
+    r = await exchange_code(
+        app_client, noisy, "no-such-code", secrets.token_urlsafe(32)
+    )
+    assert r.status_code == 429, "the noisy client's own budget must be exhausted"
+
+    verifier = secrets.token_urlsafe(32)
+    code = await get_code(app_client, other, verifier)
+    r = await exchange_code(app_client, other, code, verifier)
+    assert (
+        r.status_code == 200
+    ), "a different client's request must not be caught by someone else's limit"
+
+
+async def test_successful_refreshes_do_not_consume_the_rate_limit(
+    app_client: AsyncClient,
+):
+    """Only a failed grant attempt may charge the budget (#215) — a
+    legitimate burst of refresh rotations, well past the per-window limit,
+    must all succeed."""
+    await pair_new_terminal(app_client)
+    oidc_client = await make_client()
+    tok, _ = await run_code_flow(app_client, oidc_client)
+    auth = (oidc_client.client_id, oidc_client.client_secret)
+
+    refresh_token = tok["refresh_token"]
+    for _ in range(oidc_provider.TOKEN_RATE_LIMIT + 5):
+        r = await app_client.post(
+            TOKEN,
+            data={"grant_type": "refresh_token", "refresh_token": refresh_token},
+            auth=auth,
+        )
+        assert r.status_code == 200, r.text
+        refresh_token = r.json()["refresh_token"]
+
+
+async def test_rate_limit_exceeded_returns_bare_429(app_client: AsyncClient):
+    """429 must be bare, not the RFC 8628 device-grant 'slow_down' body —
+    that error code doesn't apply to the authorization-code/refresh grants
+    this endpoint actually serves (#215)."""
+    await pair_new_terminal(app_client)
+    oidc_client = await make_client()
+
+    for _ in range(oidc_provider.TOKEN_RATE_LIMIT):
+        await exchange_code(
+            app_client, oidc_client, "no-such-code", secrets.token_urlsafe(32)
+        )
+
+    r = await exchange_code(
+        app_client, oidc_client, "no-such-code", secrets.token_urlsafe(32)
+    )
+    assert r.status_code == 429
+    assert r.content == b"", "429 must carry no JSON error body"
 
 
 @pytest.mark.config_override({"oidc": {"enabled": False}})

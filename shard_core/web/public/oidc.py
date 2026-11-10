@@ -16,6 +16,7 @@ from urllib.parse import quote
 
 from authlib.oauth2.rfc6749 import AuthorizationServer, OAuth2Request
 from authlib.oauth2.rfc6749.requests import BasicOAuth2Payload
+from authlib.oauth2.rfc6749.util import extract_basic_authorization
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from requests.structures import CaseInsensitiveDict
@@ -151,7 +152,7 @@ async def _get_server(request: Request) -> StarletteAuthorizationServer:
                 issuer = f"{app.state.oidc_public_base}/public/oidc"
                 jwk = await ensure_jwk()
                 configure(issuer, jwk, asyncio.get_running_loop())
-                _token_limit.reset()
+                _token_limits.clear()
                 app.state.oidc_server = build_authorization_server(
                     StarletteAuthorizationServer
                 )
@@ -180,7 +181,48 @@ async def _session_user(authorization: str | None) -> ShardUser | None:
 
 # --- token endpoint rate limit ------------------------------------------------------
 
-_token_limit = SlidingWindow(limit=TOKEN_RATE_LIMIT, window=60)
+# Per-client (not per-shard) buckets — one SlidingWindow per client_id, created
+# lazily. This deliberately overrides SlidingWindow's own rationale ("a shard
+# has one owner, so splitting the budget per client would only offer an
+# attacker a fresh budget per source address", shard_core/util/misc.py): that
+# comment is about brute-force resistance, but the problem on this endpoint is
+# availability between the owner's *own* clients — a shard runs several of the
+# owner's apps against this one /token endpoint, and one misbehaving or
+# retry-looping app must not be able to exhaust a shared budget and 429 every
+# other app's logins (#215). A confidential client's client_id is already
+# authenticated at the point its secret is checked; a public client's is not,
+# same caveat every public-client flow already has.
+#
+# Only a *failed* grant attempt charges a client's bucket — see the `token`
+# route below, which checks the outcome after calling into Authlib rather than
+# gating before it. A legitimate burst of logins or refresh rotations never
+# trips it.
+#
+# In-process and single-worker, like SlidingWindow itself: resets on restart,
+# and a second uvicorn worker would keep its own independent set of buckets,
+# doubling the effective per-client budget. Fine while shard_core runs one
+# worker; nothing here changes that pre-existing assumption.
+_token_limits: dict[str, SlidingWindow] = {}
+
+
+def _token_limit_for(client_id: str) -> SlidingWindow:
+    if client_id not in _token_limits:
+        _token_limits[client_id] = SlidingWindow(limit=TOKEN_RATE_LIMIT, window=60)
+    return _token_limits[client_id]
+
+
+def _client_id_from_request(oreq: OAuth2Request) -> str | None:
+    """Best-effort client_id for rate-limit keying, read the same way
+    Authlib's own client authenticators read it: the form for
+    client_secret_post/none, the Basic auth header for client_secret_basic.
+    Done by hand, before any grant validation, so the budget can be checked
+    cheaply before doing the expensive work (DB round trips, secret
+    comparison) that full grant processing involves.
+    """
+    if client_id := oreq.payload.client_id:
+        return client_id
+    client_id, _ = extract_basic_authorization(oreq.headers)
+    return client_id
 
 
 # --- endpoints -------------------------------------------------------------------
@@ -213,10 +255,26 @@ async def authorize(request: Request, authorization: str = Cookie(None)):
 @router.post("/token")
 async def token(request: Request):
     server = await _get_server(request)
-    if not _token_limit.try_acquire():
-        return JSONResponse({"error": "slow_down"}, status_code=429)
     oreq = await _build_oauth2_request(request)
-    return await asyncio.to_thread(server.create_token_response, oreq)
+    client_id = _client_id_from_request(oreq)
+
+    # Reject already-exhausted clients before paying for full grant
+    # processing — a peek, not a charge (see SlidingWindow.exhausted).
+    if client_id is not None and _token_limit_for(client_id).exhausted():
+        return Response(status_code=429)
+
+    response = await asyncio.to_thread(server.create_token_response, oreq)
+
+    # Charge the budget now that the outcome is known: a 4xx here is exactly
+    # the failure classes this endpoint can produce (wrong client secret,
+    # bad/expired/reused code, bad/expired/reused refresh token) — an
+    # unauthenticated caller submitting a secret and learning from the
+    # response whether it was right. A successful issuance or refresh
+    # (2xx) never reaches this branch, so it never consumes the budget.
+    if client_id is not None and 400 <= response.status_code < 500:
+        _token_limit_for(client_id).try_acquire()
+
+    return response
 
 
 @router.get("/userinfo")
