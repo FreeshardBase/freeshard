@@ -82,7 +82,7 @@ Postgres data is not part of the rclone backup set (which only syncs `core/`/`us
 ### Authentication (4 levels)
 - `/public/*` — No auth
 - `/protected/*` — JWT in `authorization` cookie (from terminal pairing)
-- `/internal/*` — HTTP Message Signature verification, `RSA_PSS_SHA512` (for app-to-shard and peer-to-shard calls)
+- `/internal/*` — reachable only from the same machine (the `portal` network), no caller auth of its own; peer calls additionally carry an HTTP Message Signature, `RSA_PSS_SHA512`. Serves `app_error`, `auth` (Traefik forwardAuth), `call_backend`, `call_peer`, and `owner` (the owner's id/username/display_name and verified email, for app sidecars)
 - `/management/*` — Management API auth (hosted shards only)
 
 ### Background Tasks
