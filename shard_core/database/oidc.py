@@ -261,6 +261,19 @@ async def mark_outbox_failed(conn: AsyncConnection, id_: int, attempts: int, err
     await conn.execute(sql, (attempts, error, id_))
 
 
+async def get_apps_with_pending_backchannel_logout(conn: AsyncConnection) -> list[str]:
+    """App names that still owe a back-channel logout — a row in the outbox
+    not yet delivered or failed ('pending' or 'in_flight'). Rebuilds the
+    in-process barrier set; see service/oidc_backchannel_barrier.py."""
+    sql: LiteralString = """SELECT DISTINCT c.app_name
+        FROM oidc_backchannel_logout_outbox o
+        JOIN oidc_clients c ON c.client_id = o.client_id
+        WHERE o.status IN ('pending', 'in_flight')"""
+    async with conn.cursor() as cur:
+        await cur.execute(sql)
+        return [row[0] for row in await cur.fetchall()]
+
+
 async def get_outbox_entries_by_status(conn: AsyncConnection, status: str) -> list[dict]:
     """Outbox rows filtered by delivery status."""
     sql: LiteralString = """SELECT o.*, c.app_name
