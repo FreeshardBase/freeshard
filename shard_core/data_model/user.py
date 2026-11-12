@@ -44,10 +44,11 @@ class OutputUser(BaseModel):
 class OutputOwner(BaseModel):
     """The owner fields an app sidecar may read over /internal.
 
-    email is users.email, so a verified address or None. pending_email, the
-    token hash and its expiry are deliberately absent: a sidecar must never act
-    on an unverified address, since the OIDC email matching rests on "verified"
-    meaning verified.
+    email is users.email: an address confirmed by a delivered link, or
+    owner-asserted directly when the shard sends no mail (email.enabled =
+    false). It is None when there is no such address. pending_email, the token
+    hash and its expiry are deliberately absent: they are an unverified
+    candidate a sidecar must never act on.
     """
 
     id: int
