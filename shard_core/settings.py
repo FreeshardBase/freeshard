@@ -113,6 +113,15 @@ class FreeshardControllerSettings(BaseModel):
     base_url: str
 
 
+class DiskFullNotificationSettings(BaseModel):
+    enabled: bool = True
+    threshold_percent: float = 90.0
+
+
+class EventNotificationsSettings(BaseModel):
+    disk_full: DiskFullNotificationSettings = DiskFullNotificationSettings()
+
+
 class DatabaseSettings(BaseModel):
     host: str = "postgres"
     port: int = 5432
@@ -148,6 +157,8 @@ class Settings(BaseSettings):
     oidc: OidcSettings = OidcSettings()
     sundial: SundialSettings = SundialSettings()
     email: EmailSettings = EmailSettings()
+
+    event_notifications: EventNotificationsSettings = EventNotificationsSettings()
     management: ManagementSettings
     freeshard_controller: FreeshardControllerSettings
     log: LogSettings = LogSettings()
