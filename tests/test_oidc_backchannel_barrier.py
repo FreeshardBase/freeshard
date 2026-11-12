@@ -29,7 +29,8 @@ from shard_core.service import (
     oidc_backchannel_barrier as barrier,
     oidc_provider,
 )
-from tests.util import pair_new_terminal
+from shard_core.util import signals
+from tests.util import pair_new_terminal, install_app
 
 LOGOUT_URI = "https://bc_app.example/backchannel-logout"
 REDIRECT_URI = "https://bc_app.example/oauth/callback"
@@ -94,9 +95,12 @@ async def make_app_with_pending_logout(app_name: str, *, app_status: str = "stop
 
 
 async def test_enforce_passes_through_when_no_logout_is_pending(app_client: AsyncClient):
-    # No raise, no exception: an app with an empty pending set is a plain
-    # membership miss.
+    # No raise, and no state touched: an app with an empty pending set is a
+    # plain membership miss — the #89 promise that the empty hot path does no
+    # work (no hold timer, no lock, no DB).
     await barrier.enforce("some_app")
+    assert "some_app" not in barrier._hold_since
+    assert "some_app" not in barrier._locks
 
 
 # --- hold while undelivered, with the load-bearing 503 ----------------------
@@ -225,22 +229,31 @@ async def test_barrier_fails_open_after_the_deadline(app_client: AsyncClient, mo
 # --- rebuilding the set from the outbox -------------------------------------
 
 
-async def test_rebuild_includes_pending_excludes_delivered(app_client: AsyncClient):
+@pytest.mark.parametrize(
+    "status_, owes",
+    [
+        ("pending", True),  # waiting for a delivery attempt
+        ("in_flight", True),  # claimed, mid-delivery — still owes until it lands
+        ("delivered", False),  # done
+        ("failed", False),  # retries exhausted; the barrier gives up, not holds
+    ],
+)
+async def test_rebuild_membership_follows_outbox_status(
+    app_client: AsyncClient, status_: str, owes: bool
+):
     client = await make_client("bc_app")
     await enqueue_one(client.client_id)
+    await rows(
+        "UPDATE oidc_backchannel_logout_outbox SET status = %s "
+        "WHERE client_id = %s RETURNING id",
+        status_,
+        client.client_id,
+    )
 
     barrier._pending_apps.clear()
     await barrier.rebuild_pending_apps()
-    assert "bc_app" in barrier._pending_apps
 
-    # A delivered row no longer owes anything, so the rebuild drops it.
-    await rows(
-        "UPDATE oidc_backchannel_logout_outbox SET status = 'delivered' "
-        "WHERE client_id = %s RETURNING id",
-        client.client_id,
-    )
-    await barrier.rebuild_pending_apps()
-    assert "bc_app" not in barrier._pending_apps
+    assert ("bc_app" in barrier._pending_apps) is owes
 
 
 async def test_rebuild_clears_stale_hold_and_fail_open_markers(app_client: AsyncClient):
@@ -300,3 +313,50 @@ async def _grant_token(client_id: str, *, terminal_id: str, sid: str = "sid-1"):
                 "expires_in": 3600,
             },
         )
+
+
+# --- end-to-end through the real forwardAuth endpoint -----------------------
+
+
+async def test_forward_auth_holds_then_releases(api_client: AsyncClient, mocker):
+    """The wire-up: /internal/auth itself must answer 503 while a logout is
+    undelivered and 200 once it drains. api_client because the endpoint needs
+    the app's metadata on disk (path matching) and a real installed_apps row.
+    """
+    post = mocker.patch(
+        "shard_core.service.oidc_backchannel_logout._post_logout_token",
+        return_value=None,
+    )
+    # Keep the wake a no-op so the app stays stopped and the test stays
+    # deterministic — we flip the status by hand to drive delivery.
+    mocker.patch(
+        "shard_core.service.app_lifecycle.start_app",
+        new=mocker.AsyncMock(return_value=None),
+    )
+    await install_app(api_client, "mock_app")
+
+    client = await oidc_provider.register_client(
+        "mock_app", [REDIRECT_URI], backchannel_logout_uri=LOGOUT_URI
+    )
+    async with db_conn() as conn:
+        cur = await conn.execute("SELECT id FROM users LIMIT 1")
+        user_sub = (await cur.fetchone())[0]
+        await db_oidc.enqueue_backchannel_logout(
+            conn, "terminal-x", [{"client_id": client.client_id, "sid": "sid-1", "user_sub": user_sub}]
+        )
+    await signals.on_backchannel_outbox_update.send_async()
+
+    held = await api_client.get(
+        "internal/auth",
+        headers={"X-Forwarded-Host": "mock_app.myshard.org", "X-Forwarded-Uri": "/pub"},
+    )
+    assert held.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    post.assert_not_called()
+
+    await set_app_status("mock_app", "running")
+    released = await api_client.get(
+        "internal/auth",
+        headers={"X-Forwarded-Host": "mock_app.myshard.org", "X-Forwarded-Uri": "/pub"},
+    )
+    assert released.status_code == status.HTTP_200_OK
+    post.assert_called_once()
