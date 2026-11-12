@@ -98,7 +98,7 @@ async def test_enforce_passes_through_when_no_logout_is_pending():
     # No raise, and no state touched: an app with an empty pending set is a
     # plain membership miss — the empty hot path does no work (no hold timer,
     # no lock, no DB).
-    await barrier.enforce("some_app")
+    await barrier.enforce("some_app", app_running=False)
     assert "some_app" not in barrier._hold_since
     assert "some_app" not in barrier._locks
 
@@ -113,7 +113,7 @@ async def test_barrier_holds_with_503_while_logout_is_undelivered(
     await make_app_with_pending_logout("bc_app", app_status="stopped")
 
     with pytest.raises(HTTPException) as exc_info:
-        await barrier.enforce("bc_app")
+        await barrier.enforce("bc_app", app_running=False)
 
     # 503 specifically: app_error maps it to the auto-reloading splash, while
     # a 401 would strand the user on an "Access Denied" dead end.
@@ -138,7 +138,7 @@ async def test_barrier_releases_once_the_logout_is_delivered(
     # No raise: the running app receives its logout during the drain the
     # barrier drives, the drain's signal clears the set, and the request falls
     # through.
-    await barrier.enforce("bc_app")
+    await barrier.enforce("bc_app", app_running=True)
 
     post.assert_called_once()
     assert "bc_app" not in barrier._pending_apps
@@ -167,7 +167,7 @@ async def test_concurrent_requests_drive_a_single_delivery(
 
     # Ten simultaneous requests to a waking app must share one delivery, not
     # fire ten POSTs at the relying party.
-    await asyncio.gather(*(barrier.enforce("bc_app") for _ in range(10)))
+    await asyncio.gather(*(barrier.enforce("bc_app", app_running=True) for _ in range(10)))
 
     assert calls == 1
     assert "bc_app" not in barrier._pending_apps
@@ -196,7 +196,7 @@ async def test_enforce_does_not_deliver_another_apps_logout(
 
     # A request to bc_app must not pay to deliver other_app's logout on the
     # auth hot path, even though it is due and other_app is running.
-    await barrier.enforce("bc_app")
+    await barrier.enforce("bc_app", app_running=True)
 
     assert posted == [LOGOUT_URI]
     assert "other_app" in barrier._pending_apps
@@ -215,15 +215,32 @@ async def test_enforce_does_not_deliver_another_apps_logout(
 async def test_barrier_fails_open_after_the_deadline(app_client: AsyncClient, mocker):
     post = mocker.patch("shard_core.service.oidc_backchannel_logout._post_logout_token")
     await make_app_with_pending_logout("bc_app", app_status="running")
-    # Pretend this app has been held past the fail-open deadline already.
+    # Pretend this running app has been held past the fail-open deadline already.
     barrier._hold_since["bc_app"] = time.monotonic() - (barrier.BARRIER_TIMEOUT_SECONDS + 1)
 
     # No raise: a wedged logout must not brick the app for everyone forever.
-    await barrier.enforce("bc_app")
+    await barrier.enforce("bc_app", app_running=True)
 
     # Failing open skips delivery entirely and serves the request.
     post.assert_not_called()
     assert "bc_app" in barrier._failed_open
+
+
+async def test_stopped_app_does_not_burn_its_fail_open_budget(
+    app_client: AsyncClient, mocker
+):
+    mocker.patch("shard_core.service.oidc_backchannel_logout._post_logout_token")
+    await make_app_with_pending_logout("bc_app", app_status="stopped")
+    # Even "held" long past the deadline, a not-yet-woken app must stay HELD,
+    # not fail open: the deadline bounds a broken running endpoint, not a slow
+    # cold start. A heavy app (Immich) can take longer than 60s to wake.
+    barrier._hold_since["bc_app"] = time.monotonic() - (barrier.BARRIER_TIMEOUT_SECONDS + 1)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await barrier.enforce("bc_app", app_running=False)
+
+    assert exc_info.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    assert "bc_app" not in barrier._failed_open
 
 
 # --- rebuilding the set from the outbox -------------------------------------

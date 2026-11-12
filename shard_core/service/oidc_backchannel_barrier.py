@@ -34,20 +34,27 @@ _pending_apps: set[str] = set()
 _locks: dict[str, asyncio.Lock] = {}
 _hold_since: dict[str, float] = {}
 _failed_open: set[str] = set()
+_rebuild_lock = asyncio.Lock()
 
 
 async def rebuild_pending_apps() -> None:
     """Replace the in-process pending set with the apps that currently have
     an undelivered logout in the outbox. Must be called at boot and after
     every outbox change; it is what keeps the request-path membership test
-    truthful without the request path touching the database."""
+    truthful without the request path touching the database.
+
+    Serialized on _rebuild_lock: the set gates auth decisions, and the many
+    uncoordinated triggers (per-request drains, on_apps_update, the periodic
+    backstop, un-pair) could otherwise let a rebuild reading older state
+    overwrite one reading newer state."""
     global _pending_apps
-    async with db_conn() as conn:
-        apps = await db_oidc.get_apps_with_pending_backchannel_logout(conn)
-    _pending_apps = set(apps)
-    for app_name in _hold_since.keys() - _pending_apps:
-        _hold_since.pop(app_name, None)
-        _failed_open.discard(app_name)
+    async with _rebuild_lock:
+        async with db_conn() as conn:
+            apps = await db_oidc.get_apps_with_pending_backchannel_logout(conn)
+        _pending_apps = set(apps)
+        for app_name in _hold_since.keys() - _pending_apps:
+            _hold_since.pop(app_name, None)
+            _failed_open.discard(app_name)
 
 
 @signals.on_backchannel_outbox_update.connect
@@ -62,13 +69,17 @@ def _lock_for(app_name: str) -> asyncio.Lock:
     return lock
 
 
-async def enforce(app_name: str) -> None:
+async def enforce(app_name: str, app_running: bool) -> None:
     """Hold traffic to an app that still owes a back-channel logout.
 
     Raises HTTPException(503) while the logout is undelivered and the
     fail-open deadline has not passed. Returns -- letting the request through
     -- when the app owes no logout, when delivery completes, or when the
     deadline has passed and the barrier fails open.
+
+    The fail-open deadline only runs while app_running is True: the deadline
+    bounds how long a reachable-but-broken logout endpoint may block the app,
+    not how long a stopped app takes to wake and become deliverable.
 
     Single-flight: concurrent callers for the same app serialize on one lock,
     so a waking app hit by dozens of requests drives one delivery attempt,
@@ -77,17 +88,18 @@ async def enforce(app_name: str) -> None:
     if app_name not in _pending_apps:
         return
 
-    started = _hold_since.setdefault(app_name, time.monotonic())
-    if time.monotonic() - started >= BARRIER_TIMEOUT_SECONDS:
-        if app_name not in _failed_open:
-            _failed_open.add(app_name)
-            log.error(
-                "back-channel logout to app %s still undelivered after %ds; "
-                "failing OPEN and serving traffic without it",
-                app_name,
-                BARRIER_TIMEOUT_SECONDS,
-            )
-        return
+    if app_running:
+        started = _hold_since.setdefault(app_name, time.monotonic())
+        if time.monotonic() - started >= BARRIER_TIMEOUT_SECONDS:
+            if app_name not in _failed_open:
+                _failed_open.add(app_name)
+                log.error(
+                    "back-channel logout to app %s still undelivered after %ds; "
+                    "failing OPEN and serving traffic without it",
+                    app_name,
+                    BARRIER_TIMEOUT_SECONDS,
+                )
+            return
 
     async with _lock_for(app_name):
         if app_name not in _pending_apps:
