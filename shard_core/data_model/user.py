@@ -41,6 +41,22 @@ class OutputUser(BaseModel):
         return cls(**user.model_dump())
 
 
+class OutputOwner(BaseModel):
+    """The owner fields an app sidecar may read over /internal.
+
+    email is users.email: an address confirmed by a delivered link, or
+    owner-asserted directly when the shard sends no mail (email.enabled =
+    false). It is None when there is no such address. pending_email, the token
+    hash and its expiry are deliberately absent: they are an unverified
+    candidate a sidecar must never act on.
+    """
+
+    id: int
+    username: str
+    display_name: str
+    email: Optional[str] = None
+
+
 class InputUser(BaseModel):
     display_name: Optional[str] = Field(default=None, max_length=200)
     email: Optional[str] = Field(default=None, max_length=254)
