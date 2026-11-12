@@ -11,7 +11,7 @@ from shard_core.database import identities as db_identities
 from shard_core.data_model.app_meta import InstalledApp, Access, Path
 from shard_core.data_model.auth import AuthState
 from shard_core.data_model.identity import Identity, SafeIdentity
-from shard_core.service import pairing, peer as peer_service
+from shard_core.service import pairing, peer as peer_service, oidc_backchannel_barrier
 from shard_core.service.app_tools import get_app_metadata
 from shard_core.service.freeshard_controller import (
     validate_shared_secret,
@@ -109,6 +109,7 @@ async def authenticate_and_authorize(
     )
 
     await on_request_to_app.send_async(app)
+    await oidc_backchannel_barrier.enforce(app.name)
 
 
 async def _match_app(x_forwarded_host) -> InstalledApp:

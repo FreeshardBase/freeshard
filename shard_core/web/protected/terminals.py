@@ -10,7 +10,7 @@ from shard_core.database import terminals as db_terminals
 from shard_core.data_model.terminal import Terminal, InputTerminal
 from shard_core.service import oidc_backchannel_logout, pairing
 from shard_core.service.pairing import PairingCode
-from shard_core.util.signals import on_terminals_update
+from shard_core.util.signals import on_terminals_update, on_backchannel_outbox_update
 
 log = logging.getLogger(__name__)
 
@@ -69,6 +69,10 @@ async def delete_terminal_by_id(id_: str):
         await db_oidc.revoke_for_terminal(conn, id_)
         await db_terminals.remove(conn, id_)
     await on_terminals_update.send_async()
+    # Fired after the transaction commits so the barrier's rebuild query sees
+    # the freshly enqueued rows and holds this app's traffic on the very next
+    # request.
+    await on_backchannel_outbox_update.send_async()
 
 
 @router.get(

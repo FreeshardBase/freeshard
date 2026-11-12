@@ -168,6 +168,10 @@ async def drain_due_outbox() -> None:
                 entry["sid"],
                 e,
             )
+    if entries:
+        # Membership of the barrier's pending set may have changed (rows
+        # delivered/failed drop out, retried rows stay); let it rebuild.
+        await signals.on_backchannel_outbox_update.send_async()
 
 
 @signals.on_apps_update.connect
