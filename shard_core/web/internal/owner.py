@@ -13,4 +13,4 @@ async def get_owner():
         owner = await db_users.get_owner(conn)
     if owner is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND)
-    return OutputOwner.from_user(owner)
+    return owner

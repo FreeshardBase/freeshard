@@ -56,15 +56,6 @@ class OutputOwner(BaseModel):
     display_name: str
     email: Optional[str] = None
 
-    @classmethod
-    def from_user(cls, user: User) -> "OutputOwner":
-        return cls(
-            id=user.id,
-            username=user.username,
-            display_name=user.display_name,
-            email=user.email,
-        )
-
 
 class InputUser(BaseModel):
     display_name: Optional[str] = Field(default=None, max_length=200)
