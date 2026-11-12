@@ -192,9 +192,6 @@ async def claim_due_outbox_entries(
     strand the row forever.
 
     app_name scopes the claim to a single app when given (NULL = every app).
-    The forwardAuth barrier drains on the request hot path and must not pay
-    to deliver an unrelated, possibly wedged, app's logouts there; the
-    periodic backstop and the on_apps_update drain stay global.
     """
     claim_sql: LiteralString = """UPDATE oidc_backchannel_logout_outbox
         SET status = 'in_flight', updated = now()

@@ -94,10 +94,10 @@ async def make_app_with_pending_logout(app_name: str, *, app_status: str = "stop
 # --- the hot path does nothing when nothing is pending ----------------------
 
 
-async def test_enforce_passes_through_when_no_logout_is_pending(app_client: AsyncClient):
+async def test_enforce_passes_through_when_no_logout_is_pending():
     # No raise, and no state touched: an app with an empty pending set is a
-    # plain membership miss — the #89 promise that the empty hot path does no
-    # work (no hold timer, no lock, no DB).
+    # plain membership miss — the empty hot path does no work (no hold timer,
+    # no lock, no DB).
     await barrier.enforce("some_app")
     assert "some_app" not in barrier._hold_since
     assert "some_app" not in barrier._locks

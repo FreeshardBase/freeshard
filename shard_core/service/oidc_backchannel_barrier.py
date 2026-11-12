@@ -1,31 +1,18 @@
 """Fail-closed barrier that holds HTTP traffic to an app while it still owes
-an OIDC back-channel logout.
+an OIDC back-channel logout, so an un-paired device is never served ahead of
+its own logout. Held traffic gets a 503, which the app-error splash renders
+as the auto-reloading wake-up page; once the logout lands, the app is
+released.
 
-shard_core sits in the wake path: /internal/auth (web/internal/auth.py) is
-the forwardAuth endpoint Traefik calls for every request to an app, and
-on_request_to_app -- fired from there -- is what starts a stopped app. That
-makes logout-before-serve enforceable rather than hoped for. While an app
-has an undelivered logout, its traffic is answered with a 503, which renders
-the same auto-reloading "Starting..." splash a cold app already shows
-(web/internal/app_error.py maps 503 through neither the 401 nor the 500
-branch, so do_reload stays True). Once the logout lands, the app is released.
-
-Only HTTP is gated. MQTT rides a Traefik TCP router with no middleware, so
-it bypasses this barrier entirely.
+Only HTTP is gated. MQTT rides a Traefik TCP router with no middleware, so it
+bypasses this barrier entirely.
 
 The set of app names with an undelivered logout is kept in process and never
-read from the database on the request path -- #89: per-request DB lookups in
-the auth endpoint exhausted the pool under bursts. It is rebuilt from the
-outbox at boot and whenever the outbox changes (on_backchannel_outbox_update),
-the same cache-plus-signal-invalidation pattern the auth endpoint already
-uses for _app_cache / _identity_cache. The request-path cost on the normal,
-empty-set case is one membership test.
+queried from the database on the request path. It is rebuilt from the outbox
+at boot and on on_backchannel_outbox_update.
 
-If an app's logout endpoint is genuinely broken, holding would strand that
-app for everyone. The hold is therefore bounded by BARRIER_TIMEOUT_SECONDS:
-past the deadline the barrier fails OPEN with a loud log, trading the logout
-guarantee for availability rather than bricking the app until an operator
-intervenes.
+The hold is bounded by BARRIER_TIMEOUT_SECONDS: past the deadline the barrier
+fails open and serves traffic, logging at error.
 """
 
 import asyncio

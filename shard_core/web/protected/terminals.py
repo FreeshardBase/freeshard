@@ -69,9 +69,7 @@ async def delete_terminal_by_id(id_: str):
         await db_oidc.revoke_for_terminal(conn, id_)
         await db_terminals.remove(conn, id_)
     await on_terminals_update.send_async()
-    # Fired after the transaction commits so the barrier's rebuild query sees
-    # the freshly enqueued rows and holds this app's traffic on the very next
-    # request.
+    # After commit, so the rebuild query sees the enqueued rows.
     await on_backchannel_outbox_update.send_async()
 
 

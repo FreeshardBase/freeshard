@@ -155,9 +155,7 @@ async def drain_due_outbox(app_name: str | None = None) -> None:
     returns, so two overlapping calls to this function split the due rows
     between them instead of racing on the same one.
 
-    app_name scopes the drain to one app (None = every app). The barrier
-    passes it so a request on the auth hot path only ever drives its own
-    app's delivery, never an unrelated app's."""
+    app_name scopes the drain to one app (None = every app)."""
     async with db_conn() as conn:
         entries = await db_oidc.claim_due_outbox_entries(conn, app_name=app_name)
     for entry in entries:
@@ -173,8 +171,7 @@ async def drain_due_outbox(app_name: str | None = None) -> None:
                 e,
             )
     if entries:
-        # Membership of the barrier's pending set may have changed (rows
-        # delivered/failed drop out, retried rows stay); let it rebuild.
+        # Delivery outcomes changed the outbox; let the barrier set rebuild.
         await signals.on_backchannel_outbox_update.send_async()
 
 
