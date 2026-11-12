@@ -41,6 +41,30 @@ class OutputUser(BaseModel):
         return cls(**user.model_dump())
 
 
+class OwnerInfo(BaseModel):
+    """The owner fields an app sidecar may read over /internal.
+
+    email is users.email, so a verified address or None. pending_email, the
+    token hash and its expiry are deliberately absent: a sidecar must never act
+    on an unverified address, since the OIDC email matching rests on "verified"
+    meaning verified.
+    """
+
+    id: int
+    username: str
+    display_name: str
+    email: Optional[str] = None
+
+    @classmethod
+    def from_user(cls, user: User) -> "OwnerInfo":
+        return cls(
+            id=user.id,
+            username=user.username,
+            display_name=user.display_name,
+            email=user.email,
+        )
+
+
 class InputUser(BaseModel):
     display_name: Optional[str] = Field(default=None, max_length=200)
     email: Optional[str] = Field(default=None, max_length=254)
