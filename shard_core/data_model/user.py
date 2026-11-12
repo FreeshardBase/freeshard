@@ -41,7 +41,7 @@ class OutputUser(BaseModel):
         return cls(**user.model_dump())
 
 
-class OwnerInfo(BaseModel):
+class OutputOwner(BaseModel):
     """The owner fields an app sidecar may read over /internal.
 
     email is users.email, so a verified address or None. pending_email, the
@@ -56,7 +56,7 @@ class OwnerInfo(BaseModel):
     email: Optional[str] = None
 
     @classmethod
-    def from_user(cls, user: User) -> "OwnerInfo":
+    def from_user(cls, user: User) -> "OutputOwner":
         return cls(
             id=user.id,
             username=user.username,
