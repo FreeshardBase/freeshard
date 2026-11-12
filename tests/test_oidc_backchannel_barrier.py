@@ -169,6 +169,42 @@ async def test_concurrent_requests_drive_a_single_delivery(
     assert "bc_app" not in barrier._pending_apps
 
 
+# --- the request path only drives its own app's delivery --------------------
+
+
+async def test_enforce_does_not_deliver_another_apps_logout(
+    app_client: AsyncClient, mocker
+):
+    posted: list[str] = []
+
+    async def record(url, token):
+        posted.append(url)
+
+    mocker.patch(
+        "shard_core.service.oidc_backchannel_logout._post_logout_token",
+        side_effect=record,
+    )
+    await make_app_with_pending_logout("bc_app", app_status="running")
+    other = await make_client("other_app", backchannel_logout_uri="https://other.example/blco")
+    await set_app_status("other_app", "running")
+    await enqueue_one(other.client_id)
+    await barrier.rebuild_pending_apps()
+
+    # A request to bc_app must not pay to deliver other_app's logout on the
+    # auth hot path, even though it is due and other_app is running.
+    await barrier.enforce("bc_app")
+
+    assert posted == [LOGOUT_URI]
+    assert "other_app" in barrier._pending_apps
+    other_row = (
+        await rows(
+            "SELECT status FROM oidc_backchannel_logout_outbox WHERE client_id = %s",
+            other.client_id,
+        )
+    )[0]
+    assert other_row["status"] == "pending"
+
+
 # --- fail open after the bounded wait ---------------------------------------
 
 

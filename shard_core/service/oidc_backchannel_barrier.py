@@ -106,7 +106,7 @@ async def enforce(app_name: str) -> None:
         if app_name not in _pending_apps:
             return
         try:
-            await oidc_backchannel_logout.drain_due_outbox()
+            await oidc_backchannel_logout.drain_due_outbox(app_name)
         except Exception:
             log.exception("drain during logout barrier for app %s failed", app_name)
         if app_name not in _pending_apps:

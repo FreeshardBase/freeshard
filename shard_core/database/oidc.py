@@ -167,7 +167,9 @@ async def enqueue_backchannel_logout(conn: AsyncConnection, terminal_id: str, gr
         await conn.execute(sql, {**grant, "terminal_id": terminal_id})
 
 
-async def claim_due_outbox_entries(conn: AsyncConnection, stuck_after_seconds: int = 120) -> list[dict]:
+async def claim_due_outbox_entries(
+    conn: AsyncConnection, stuck_after_seconds: int = 120, app_name: str | None = None
+) -> list[dict]:
     """Atomically claim pending outbox rows whose backoff has elapsed and
     whose app is currently RUNNING — flipping them to 'in_flight' in the same
     statement that selects them.
@@ -188,6 +190,11 @@ async def claim_due_outbox_entries(conn: AsyncConnection, stuck_after_seconds: i
     crashed between claiming it and calling mark_outbox_delivered/retry/
     failed) is reclaimed the same way — otherwise a single crash would
     strand the row forever.
+
+    app_name scopes the claim to a single app when given (NULL = every app).
+    The forwardAuth barrier drains on the request hot path and must not pay
+    to deliver an unrelated, possibly wedged, app's logouts there; the
+    periodic backstop and the on_apps_update drain stay global.
     """
     claim_sql: LiteralString = """UPDATE oidc_backchannel_logout_outbox
         SET status = 'in_flight', updated = now()
@@ -197,6 +204,7 @@ async def claim_due_outbox_entries(conn: AsyncConnection, stuck_after_seconds: i
             JOIN oidc_clients c ON c.client_id = o.client_id
             JOIN installed_apps ia ON ia.name = c.app_name
             WHERE ia.status = 'running'
+              AND (%(app_name)s::text IS NULL OR c.app_name = %(app_name)s)
               AND (
                 (o.status = 'pending' AND o.next_attempt_at <= now())
                 OR (o.status = 'in_flight'
@@ -206,7 +214,7 @@ async def claim_due_outbox_entries(conn: AsyncConnection, stuck_after_seconds: i
         )
         RETURNING id"""
     async with conn.cursor() as cur:
-        await cur.execute(claim_sql, {"stuck_after": stuck_after_seconds})
+        await cur.execute(claim_sql, {"stuck_after": stuck_after_seconds, "app_name": app_name})
         claimed_ids = [row[0] for row in await cur.fetchall()]
     if not claimed_ids:
         return []
