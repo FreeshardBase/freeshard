@@ -77,6 +77,50 @@ async def test_splash_error_status_overrides_version_message(mocker):
     assert behaviour.do_reload is False
 
 
+async def test_splash_503_reloads_on_the_starting_page(mocker):
+    # The barrier answers held traffic with 503. It must land on the
+    # auto-reloading wake-up splash, NOT the 401 "Access Denied" dead end: 503
+    # matches neither the 401 nor the 500 branch, so a running container falls
+    # through to "Starting..." with do_reload True.
+    mocker.patch.object(app_error, "get_app_name", return_value="test")
+    mocker.patch.object(app_error, "get_app_metadata", return_value=_meta(None))
+    mocker.patch.object(app_error, "get_container_status", return_value="running")
+    mocker.patch.object(app_error, "data_url", return_value="data:,")
+    mocker.patch.object(
+        app_error, "size_is_compatible", new=AsyncMock(return_value=True)
+    )
+    mocker.patch.object(
+        app_error.disk,
+        "current_disk_usage",
+        app_error.disk.DiskUsage(total_gb=10, free_gb=9, disk_space_low=False),
+    )
+    request = SimpleNamespace(path_params={"status": "503"})
+    behaviour = await app_error.get_splash_behaviour(request)
+    assert behaviour.display_status == "Starting..."
+    assert behaviour.do_reload is True
+
+
+async def test_splash_503_reloads_for_a_not_yet_woken_app(mocker):
+    # The barrier holds stopped apps too; before the wake lands the container
+    # is absent ("unknown"). 503 must still auto-reload rather than dead-end.
+    mocker.patch.object(app_error, "get_app_name", return_value="test")
+    mocker.patch.object(app_error, "get_app_metadata", return_value=_meta(None))
+    mocker.patch.object(app_error, "get_container_status", return_value="unknown")
+    mocker.patch.object(app_error, "data_url", return_value="data:,")
+    mocker.patch.object(
+        app_error, "size_is_compatible", new=AsyncMock(return_value=True)
+    )
+    mocker.patch.object(
+        app_error.disk,
+        "current_disk_usage",
+        app_error.disk.DiskUsage(total_gb=10, free_gb=9, disk_space_low=False),
+    )
+    request = SimpleNamespace(path_params={"status": "503"})
+    behaviour = await app_error.get_splash_behaviour(request)
+    assert behaviour.display_status == "Initializing..."
+    assert behaviour.do_reload is True
+
+
 async def test_status_404(api_client):
     await install_app(api_client, "mock_app")
     response = await api_client.get(

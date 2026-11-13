@@ -17,6 +17,7 @@ from .service import (
     app_installation,
     identity,
     app_lifecycle,
+    oidc_backchannel_barrier,
     oidc_backchannel_logout,
     peer,
     app_usage_reporting,
@@ -90,6 +91,7 @@ async def lifespan(_):
     await render_all_docker_compose_templates()
     await app_installation.login_docker_registries()
     await migration.migrate()
+    await oidc_backchannel_barrier.rebuild_pending_apps()
     await app_installation.refresh_init_apps()
     await backup.ensure_backup_passphrase()
     try:

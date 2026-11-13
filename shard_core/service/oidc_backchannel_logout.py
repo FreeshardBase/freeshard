@@ -148,14 +148,16 @@ async def _attempt_delivery(entry: dict) -> None:
             await db_oidc.mark_outbox_retry(conn, entry["id"], attempts, next_attempt_at, error)
 
 
-async def drain_due_outbox() -> None:
+async def drain_due_outbox(app_name: str | None = None) -> None:
     """Attempt delivery of every outbox entry that is due and whose app is
     currently RUNNING. Cheap and safe to call often and from multiple
     triggers: claim_due_outbox_entries atomically claims each row it
     returns, so two overlapping calls to this function split the due rows
-    between them instead of racing on the same one."""
+    between them instead of racing on the same one.
+
+    app_name scopes the drain to one app (None = every app)."""
     async with db_conn() as conn:
-        entries = await db_oidc.claim_due_outbox_entries(conn)
+        entries = await db_oidc.claim_due_outbox_entries(conn, app_name=app_name)
     for entry in entries:
         try:
             await _attempt_delivery(entry)
@@ -168,6 +170,9 @@ async def drain_due_outbox() -> None:
                 entry["sid"],
                 e,
             )
+    if entries:
+        # Delivery outcomes changed the outbox; let the barrier set rebuild.
+        await signals.on_backchannel_outbox_update.send_async()
 
 
 @signals.on_apps_update.connect

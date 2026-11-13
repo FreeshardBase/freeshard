@@ -75,7 +75,7 @@ async with db_conn() as conn:
     await db_installed_apps.update_status(conn, "myapp", Status.RUNNING)
 ```
 
-Tables: `identities`, `users`, `terminals`, `installed_apps`, `peers`, `backups`, `tours`, `app_usage_tracks`, `kv_store`, `oidc_clients`, `oidc_codes`, `oidc_tokens`, `app_secrets`.
+Tables: `identities`, `users`, `terminals`, `installed_apps`, `peers`, `backups`, `tours`, `app_usage_tracks`, `kv_store`, `oidc_clients`, `oidc_codes`, `oidc_tokens`, `oidc_backchannel_logout_outbox`, `app_secrets`.
 
 Postgres data is not part of the rclone backup set (which only syncs `core/`/`user_data/`). To keep it, `database/db_snapshot.py` dumps all application tables to `core/db_snapshot.json` before each backup, and `init_database()` restores it on a fresh shard (before the default identity is generated, so the restored identity survives). Pre-0.38 backups are restored from TinyDB by `tinydb_migration.py` instead.
 
@@ -110,6 +110,7 @@ Blinker-based async signals defined in `util/signals.py`. DB-writing handlers ar
 - `on_terminal_auth` — terminal authenticated
 - `async_on_first_terminal_add` — first pairing complete
 - `async_on_peer_write` — peer added/updated
+- `on_backchannel_outbox_update` — OIDC back-channel logout outbox changed (rebuilds the barrier's in-process pending-app set)
 
 ### App Installation Flow
 0. Custom-app uploads (`POST /protected/apps`) are validated by `app_installation/app_zip.py` **before** any state is created: the zip is buffered to a temp dir, must carry `app_meta.json` + `docker-compose.yml.template` at its root (a single top-level directory is stripped), and the app name comes from the manifest, not the filename. Invalid uploads get a 400 and leave no row, no dir, no task. Extraction goes through `extract_app_zip`, which refuses members resolving outside the app dir.

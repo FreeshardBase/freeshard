@@ -9,6 +9,7 @@ on_apps_update = Signal()
 on_identity_update = Signal()
 on_request_to_app = Signal()
 on_app_install_error = Signal()
+on_backchannel_outbox_update = Signal()
 
 async_on_peer_write = Signal()
 on_peer_auth = Signal()
