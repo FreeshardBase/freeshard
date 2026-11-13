@@ -59,14 +59,15 @@ async def rebuild_pending_apps() -> None:
 
 @signals.on_backchannel_outbox_update.connect
 async def _rebuild_on_outbox_update(_):
+    # Can't decorate rebuild_pending_apps directly: blinker passes a sender
+    # positional arg to every receiver, but app_factory's boot call and the
+    # tests call it with zero args (same reason oidc_backchannel_logout.py's
+    # _drain_on_apps_update wraps drain_due_outbox instead of connecting it).
     await rebuild_pending_apps()
 
 
 def _lock_for(app_name: str) -> asyncio.Lock:
-    lock = _locks.get(app_name)
-    if lock is None:
-        lock = _locks[app_name] = asyncio.Lock()
-    return lock
+    return _locks.setdefault(app_name, asyncio.Lock())
 
 
 async def enforce(app_name: str, app_running: bool) -> None:
@@ -107,6 +108,14 @@ async def enforce(app_name: str, app_running: bool) -> None:
         try:
             await oidc_backchannel_logout.drain_due_outbox(app_name)
         except Exception:
+            # Deliberately broad, same reasoning as the catch in
+            # _attempt_delivery: this runs on the forwardAuth hot path, and
+            # ANY failure here (a DB hiccup in claim_due_outbox_entries, a
+            # bug in the rebuild this triggers) must still fall through to
+            # the 503 below rather than escape as an uncaught exception.
+            # log.exception keeps the full traceback visible; this only
+            # stops it from turning a deliberate fail-closed hold into an
+            # accidental 500.
             log.exception("drain during logout barrier for app %s failed", app_name)
         if app_name not in _pending_apps:
             return
