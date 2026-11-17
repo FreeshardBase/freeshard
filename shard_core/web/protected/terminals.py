@@ -30,7 +30,7 @@ async def list_unpaired_terminals():
     return await terminal_lockouts.list_unpaired_terminals()
 
 
-@router.get("/id/{id_}")
+@router.get("/id/{id_}", response_model=Terminal)
 async def get_terminal_by_id(id_: str):
     async with db_conn() as conn:
         t = await db_terminals.get_connected_by_id(conn, id_)
@@ -62,7 +62,12 @@ async def edit_terminal(id_: str, terminal: InputTerminal):
 
 
 @router.delete(
-    "/id/{id_}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response
+    "/id/{id_}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+    # Keep the public operationId stable despite the handler rename: generated
+    # clients (Sundial) key on it, and the path/method are unchanged.
+    operation_id="delete_terminal_by_id",
 )
 async def unpair_terminal_by_id(id_: str):
     """Unpair a connected device: enqueue its lockouts, revoke its OIDC grants,
