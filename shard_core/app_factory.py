@@ -181,7 +181,7 @@ async def print_welcome_log():
     params["shard_url_centered"] = _center(shard_url)
 
     async with db_conn() as conn:
-        terminal_count = await db_terminals.count(conn)
+        terminal_count = await db_terminals.count_connected(conn)
     is_first_start = terminal_count == 0
     params["is_first_start"] = is_first_start
     if is_first_start:
