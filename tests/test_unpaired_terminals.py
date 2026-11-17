@@ -185,6 +185,7 @@ async def test_unpair_with_lockouts_lists_state_then_is_gone_once_delivered(
     assert dev["id"] == tid
     assert dev["paired_at"] is not None
     assert dev["unpaired_at"] is not None
+    assert dev["paired_at"] <= dev["unpaired_at"]
     # app installed but not running
     assert dev["lockouts"] == [{"app_name": "bc_app", "state": "waiting_for_start"}]
 
@@ -257,7 +258,7 @@ async def test_lockout_survives_uninstall_and_targets_the_reinstalled_client(
 
 
 async def test_retry_resets_failed_lockouts(app_client: AsyncClient, mocker):
-    mocker.patch(
+    post = mocker.patch(
         "shard_core.service.oidc_backchannel_logout._post_logout_token",
         side_effect=httpx.ConnectError("always fails"),
     )
@@ -276,15 +277,26 @@ async def test_retry_resets_failed_lockouts(app_client: AsyncClient, mocker):
     [dev] = await get_unpaired(app_client)
     assert dev["lockouts"] == [{"app_name": "bc_app", "state": "failed"}]
 
+    calls_before = post.call_count
     r = await app_client.post(f"protected/terminals/unpaired/{tid}/retry")
     assert r.status_code == 204
 
-    # the failed row was reset; the drain the retry triggers re-attempts it, so
-    # it is pending again against a running app — no longer failed.
+    # The failed row was reset to pending AND due now, so the drain the retry
+    # triggers actually re-attempts it (one more delivery call). Asserting the
+    # re-attempt — not just the derived state — pins the "due now" reset: a row
+    # left at its old future next_attempt_at would read 'retrying' but never be
+    # re-drained.
+    assert post.call_count == calls_before + 1
     [dev] = await get_unpaired(app_client)
     assert dev["lockouts"] == [{"app_name": "bc_app", "state": "retrying"}]
 
     r = await app_client.post("protected/terminals/unpaired/does-not-exist/retry")
+    assert r.status_code == 404
+
+    # retry is unpaired-only: a connected device's id is a 404, not a 204
+    await pair_new_terminal(app_client, name="laptop")
+    connected = await connected_terminal_id("laptop")
+    r = await app_client.post(f"protected/terminals/unpaired/{connected}/retry")
     assert r.status_code == 404
 
 
@@ -296,7 +308,7 @@ async def test_dismiss_removes_the_device_and_releases_the_barrier(app_client: A
     await run_code_flow(app_client, oidc_client)
     await unpair(app_client, tid)
 
-    await barrier.rebuild_pending_apps()
+    # unpair's on_backchannel_outbox_update signal drove the barrier rebuild
     assert "bc_app" in barrier._pending_apps
 
     r = await app_client.delete(f"protected/terminals/unpaired/{tid}")
@@ -304,7 +316,7 @@ async def test_dismiss_removes_the_device_and_releases_the_barrier(app_client: A
 
     assert await rows("SELECT * FROM terminals WHERE id = %s", tid) == []
     assert await rows("SELECT * FROM oidc_backchannel_logout_outbox") == []
-    await barrier.rebuild_pending_apps()
+    # dismiss's signal must drive the release end-to-end, with no manual rebuild
     assert "bc_app" not in barrier._pending_apps
 
     r = await app_client.delete("protected/terminals/unpaired/does-not-exist")
