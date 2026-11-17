@@ -46,15 +46,12 @@ class InputTerminal(BaseModel):
 
 class LockoutState(str, Enum):
     """Per-app delivery state of one back-channel logout for an unpaired
-    device. Derived when read, never stored. Delivered rows are not reported."""
+    device. Derived when read (service/terminal_lockouts._derive_state), never
+    stored. Delivered rows are not reported."""
 
-    # pending; app installed but not running
     WAITING_FOR_START = "waiting_for_start"
-    # pending or in flight; app running
     RETRYING = "retrying"
-    # pending; app not installed
     WAITING_FOR_INSTALL = "waiting_for_install"
-    # retries exhausted
     FAILED = "failed"
 
 

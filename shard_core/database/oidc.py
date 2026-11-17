@@ -275,10 +275,9 @@ async def mark_outbox_failed(conn: AsyncConnection, id_: int, attempts: int, err
 
 async def get_apps_with_pending_backchannel_logout(conn: AsyncConnection) -> list[str]:
     """App names that still owe a back-channel logout — a row in the outbox
-    not yet delivered or failed ('pending' or 'in_flight'). Read from app_name
-    on the outbox, not via a join to oidc_clients, so it is correct while the
-    app is uninstalled. Rebuilds the in-process barrier set; see
-    service/oidc_backchannel_barrier.py."""
+    not yet delivered or failed ('pending' or 'in_flight'). Correct while the
+    app is uninstalled, since it reads app_name on the outbox. Rebuilds the
+    in-process barrier set; see service/oidc_backchannel_barrier.py."""
     sql: LiteralString = """SELECT DISTINCT app_name
         FROM oidc_backchannel_logout_outbox
         WHERE status IN ('pending', 'in_flight')"""

@@ -63,7 +63,7 @@ async def enqueue_for_terminal(conn, terminal_id: str) -> int:
     Caller contract: must run on the SAME connection/transaction as, and
     strictly before, oidc.revoke_for_terminal (which marks the grants read
     here as revoked, so reading them afterwards finds nothing). See
-    web/protected/terminals.py::delete_terminal_by_id.
+    web/protected/terminals.py::unpair_terminal_by_id.
     """
     grants = await db_oidc.get_live_grants_for_terminal(conn, terminal_id)
     return await db_oidc.enqueue_backchannel_logout(conn, terminal_id, grants)
@@ -171,9 +171,8 @@ async def drain_due_outbox(app_name: str | None = None) -> None:
                 e,
             )
     if entries:
-        # A device whose every lockout is now delivered is deleted here, which
-        # cascades its delivered rows away. Must precede the signal so the
-        # barrier rebuild and the unpaired-list push both see the reaped state.
+        # Must precede the signal so the barrier rebuild and the unpaired-list
+        # push both see the reaped state.
         async with db_conn() as conn:
             await db_oidc.reap_fully_delivered_unpaired_terminals(conn)
         # Delivery outcomes changed the outbox; let the barrier set rebuild.
