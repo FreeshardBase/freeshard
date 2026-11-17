@@ -77,7 +77,7 @@ async def test_tinydb_migration(place_tinydb_file, db):
 
         # terminals
         terminal_records = expected.get("terminals", {})
-        all_terminals = await db_terminals.get_all(conn)
+        all_terminals = await db_terminals.list_connected(conn)
         assert len(all_terminals) == len(terminal_records)
 
         # peers
