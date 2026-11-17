@@ -81,7 +81,7 @@ Postgres data is not part of the rclone backup set (which only syncs `core/`/`us
 
 ### Authentication (4 levels)
 - `/public/*` — No auth
-- `/protected/*` — JWT in `authorization` cookie (from terminal pairing)
+- `/protected/*` — JWT in `authorization` cookie (from terminal pairing). Unpairing (`DELETE /protected/terminals/id/{id}`) does not necessarily delete the device row: if the device owes back-channel logouts to its apps, the row is kept and flagged `unpaired_at`, then deleted once every logout is delivered. Revocation is the flag, not row deletion — `database/terminals.py` exposes only connected-only (`*_connected`) and unpaired-only accessors, with no unfiltered getter, so no auth or listing path can see a flagged device. `GET /protected/terminals/unpaired` plus retry/dismiss expose and act on the pending state.
 - `/internal/*` — reachable only from the same machine (the `portal` network), no caller auth of its own; peer calls additionally carry an HTTP Message Signature, `RSA_PSS_SHA512`. Serves `app_error`, `auth` (Traefik forwardAuth), `call_backend`, `call_peer`, and `owner` (the owner's id/username/display_name and verified email, for app sidecars)
 - `/management/*` — Management API auth (hosted shards only)
 
@@ -110,7 +110,7 @@ Blinker-based async signals defined in `util/signals.py`. DB-writing handlers ar
 - `on_terminal_auth` — terminal authenticated
 - `async_on_first_terminal_add` — first pairing complete
 - `async_on_peer_write` — peer added/updated
-- `on_backchannel_outbox_update` — OIDC back-channel logout outbox changed (rebuilds the barrier's in-process pending-app set)
+- `on_backchannel_outbox_update` — OIDC back-channel logout outbox changed (rebuilds the barrier's in-process pending-app set and pushes the `unpaired_terminals_update` websocket message)
 
 ### App Installation Flow
 0. Custom-app uploads (`POST /protected/apps`) are validated by `app_installation/app_zip.py` **before** any state is created: the zip is buffered to a temp dir, must carry `app_meta.json` + `docker-compose.yml.template` at its root (a single top-level directory is stripped), and the app name comes from the manifest, not the filename. Invalid uploads get a 400 and leave no row, no dir, no task. Extraction goes through `extract_app_zip`, which refuses members resolving outside the app dir.
