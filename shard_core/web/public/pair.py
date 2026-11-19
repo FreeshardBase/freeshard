@@ -44,7 +44,7 @@ async def add_terminal(code: str, terminal: InputTerminal, response: Response):
         owner = await db_users.get_owner(conn)
         new_terminal = Terminal.create(terminal.name, user_id=owner.id)
         await db_terminals.insert(conn, new_terminal.model_dump())
-        is_first_terminal = await db_terminals.count_connected(conn) == 1
+        is_first_terminal = await db_terminals.count_paired(conn) == 1
 
     async with db_conn() as conn:
         default_row = await db_identities.get_default(conn)

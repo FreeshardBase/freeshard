@@ -237,7 +237,7 @@ async def test_last_connection(api_client: AsyncClient):
 
     # Clear last_connection to test it gets set again on auth
     async with db_conn() as conn:
-        await db_terminals.update_connected(
+        await db_terminals.update_paired(
             conn,
             (await api_client.get(f"protected/terminals/name/{t_name}")).json()["id"],
             {"last_connection": None},

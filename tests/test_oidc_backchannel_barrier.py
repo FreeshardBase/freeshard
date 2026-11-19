@@ -310,7 +310,7 @@ async def test_rebuild_clears_stale_hold_and_fail_open_markers(app_client: Async
 async def test_unpair_populates_the_pending_set(app_client: AsyncClient):
     await pair_new_terminal(app_client, name="phone")
     async with db_conn() as conn:
-        tid = (await db_terminals.get_connected_by_name(conn, "phone"))["id"]
+        tid = (await db_terminals.get_paired_by_name(conn, "phone"))["id"]
     oidc_client = await make_client("bc_app")
     await _grant_token(oidc_client.client_id, terminal_id=tid)
 
@@ -318,7 +318,7 @@ async def test_unpair_populates_the_pending_set(app_client: AsyncClient):
     r = await app_client.delete(f"protected/terminals/id/{tid}")
     assert r.status_code == 204, r.text
 
-    # delete_terminal_by_id enqueues the logout and fires
+    # unpair_terminal_by_id enqueues the logout and fires
     # on_backchannel_outbox_update, which rebuilds the set.
     assert "bc_app" in barrier._pending_apps
 

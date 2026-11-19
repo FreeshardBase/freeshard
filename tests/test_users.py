@@ -70,5 +70,5 @@ async def test_pairing_binds_terminal_to_owner(app_client: AsyncClient):
 
     async with db_conn() as conn:
         owner = await db_users.get_owner(conn)
-        terminal = await db_terminals.get_connected_by_name(conn, "T1")
+        terminal = await db_terminals.get_paired_by_name(conn, "T1")
     assert terminal["user_id"] == owner.id

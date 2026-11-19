@@ -82,7 +82,7 @@ async def set_app_status(name: str, status: str):
 
 async def terminal_id(name: str) -> str:
     async with db_conn() as conn:
-        return (await db_terminals.get_connected_by_name(conn, name))["id"]
+        return (await db_terminals.get_paired_by_name(conn, name))["id"]
 
 
 async def unpair(client: AsyncClient, id_: str):

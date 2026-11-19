@@ -22,7 +22,7 @@ router = APIRouter(
 @router.get("", response_model=List[Terminal])
 async def list_all_terminals():
     async with db_conn() as conn:
-        return await db_terminals.list_connected(conn)
+        return await db_terminals.list_paired(conn)
 
 
 @router.get("/unpaired", response_model=List[UnpairedTerminal])
@@ -33,7 +33,7 @@ async def list_unpaired_terminals():
 @router.get("/id/{id_}", response_model=Terminal)
 async def get_terminal_by_id(id_: str):
     async with db_conn() as conn:
-        t = await db_terminals.get_connected_by_id(conn, id_)
+        t = await db_terminals.get_paired_by_id(conn, id_)
     if t:
         return t
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
@@ -42,7 +42,7 @@ async def get_terminal_by_id(id_: str):
 @router.get("/name/{name}", response_model=Terminal)
 async def get_terminal_by_name(name: str):
     async with db_conn() as conn:
-        t = await db_terminals.get_connected_by_name(conn, name)
+        t = await db_terminals.get_paired_by_name(conn, name)
     if t:
         return t
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
@@ -51,9 +51,9 @@ async def get_terminal_by_name(name: str):
 @router.put("/id/{id_}")
 async def edit_terminal(id_: str, terminal: InputTerminal):
     async with db_conn() as conn:
-        t = await db_terminals.get_connected_by_id(conn, id_)
+        t = await db_terminals.get_paired_by_id(conn, id_)
         if t:
-            await db_terminals.update_connected(
+            await db_terminals.update_paired(
                 conn, id_, {"name": terminal.name, "icon": terminal.icon}
             )
             await on_terminals_update.send_async()
@@ -65,16 +65,13 @@ async def edit_terminal(id_: str, terminal: InputTerminal):
     "/id/{id_}",
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
-    # Keep the public operationId stable despite the handler rename: generated
-    # clients (Sundial) key on it, and the path/method are unchanged.
-    operation_id="delete_terminal_by_id",
 )
 async def unpair_terminal_by_id(id_: str):
-    """Unpair a connected device: enqueue its lockouts, revoke its OIDC grants,
+    """Unpair a device: enqueue its lockouts, revoke its OIDC grants,
     and flag it unpaired. A device that owed no lockout is deleted outright;
     otherwise the flagged row stays until every lockout is delivered."""
     async with db_conn() as conn:
-        if not await db_terminals.get_connected_by_id(conn, id_):
+        if not await db_terminals.get_paired_by_id(conn, id_):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
         # Must run first: it reads the device's still-live OIDC grants, which
         # revoke_for_terminal then marks revoked.

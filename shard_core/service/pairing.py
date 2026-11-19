@@ -106,7 +106,7 @@ async def verify_terminal_session(token: str = None) -> TerminalSession:
         raise InvalidJwt
 
     async with db_conn() as conn:
-        terminal = await db_terminals.get_connected_by_id(conn, decoded_token["sub"])
+        terminal = await db_terminals.get_paired_by_id(conn, decoded_token["sub"])
         if terminal:
             return TerminalSession(Terminal(**terminal), int(paired_at))
         else:

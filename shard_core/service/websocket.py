@@ -120,8 +120,8 @@ def send_disk_usage_update(disk_usage: DiskUsage):
 @signals.on_terminals_update.connect
 async def send_terminals_update(_):
     async with db_conn() as conn:
-        connected_terminals = await db_terminals.list_connected(conn)
-    ws_worker.broadcast_message("terminals_update", connected_terminals)
+        paired_terminals = await db_terminals.list_paired(conn)
+    ws_worker.broadcast_message("terminals_update", paired_terminals)
 
 
 @signals.on_apps_update.connect

@@ -6,35 +6,35 @@ from psycopg.rows import dict_row
 
 _UPDATABLE_COLUMNS = {"name", "icon", "last_connection"}
 
-# A device is "connected" while unpaired_at is NULL. Once unpairing sets it,
+# A device is "paired" while unpaired_at is NULL. Once unpairing sets it,
 # the row is kept only until its back-channel logouts are delivered, and must
-# be invisible to every connected-device path meanwhile — so there is no
-# unfiltered general-purpose getter, only connected-only and unpaired-only
+# be invisible to every paired-device path meanwhile — so there is no
+# unfiltered general-purpose getter, only paired-only and unpaired-only
 # variants, and a caller cannot forget the filter.
 
 
-async def list_connected(conn: AsyncConnection) -> list[dict]:
+async def list_paired(conn: AsyncConnection) -> list[dict]:
     sql: LiteralString = "SELECT * FROM terminals WHERE unpaired_at IS NULL"
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(sql)
         return await cur.fetchall()
 
 
-async def get_connected_by_id(conn: AsyncConnection, id: str) -> dict | None:
+async def get_paired_by_id(conn: AsyncConnection, id: str) -> dict | None:
     sql: LiteralString = "SELECT * FROM terminals WHERE id = %s AND unpaired_at IS NULL"
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(sql, (id,))
         return await cur.fetchone()
 
 
-async def get_connected_by_name(conn: AsyncConnection, name: str) -> dict | None:
+async def get_paired_by_name(conn: AsyncConnection, name: str) -> dict | None:
     sql: LiteralString = "SELECT * FROM terminals WHERE name = %s AND unpaired_at IS NULL"
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(sql, (name,))
         return await cur.fetchone()
 
 
-async def count_connected(conn: AsyncConnection) -> int:
+async def count_paired(conn: AsyncConnection) -> int:
     sql: LiteralString = "SELECT COUNT(*) FROM terminals WHERE unpaired_at IS NULL"
     async with conn.cursor() as cur:
         await cur.execute(sql)
@@ -64,7 +64,7 @@ async def insert(conn: AsyncConnection, terminal: dict) -> dict:
         return await cur.fetchone()
 
 
-async def update_connected(conn: AsyncConnection, id: str, data: dict) -> dict | None:
+async def update_paired(conn: AsyncConnection, id: str, data: dict) -> dict | None:
     set_clauses = []
     params = {"_id": id}
     for key, value in data.items():
@@ -73,7 +73,7 @@ async def update_connected(conn: AsyncConnection, id: str, data: dict) -> dict |
         set_clauses.append(f"{key} = %({key})s")
         params[key] = value
     if not set_clauses:
-        return await get_connected_by_id(conn, id)
+        return await get_paired_by_id(conn, id)
     sql = (
         f"UPDATE terminals SET {', '.join(set_clauses)} "
         f"WHERE id = %(_id)s AND unpaired_at IS NULL RETURNING *"
@@ -84,8 +84,8 @@ async def update_connected(conn: AsyncConnection, id: str, data: dict) -> dict |
 
 
 async def mark_unpaired(conn: AsyncConnection, id: str) -> None:
-    """Flag a connected device as unpaired. Final: a flagged row never becomes
-    connected again (pairing the same device creates a new terminal)."""
+    """Flag a paired device as unpaired. Final: a flagged row never becomes
+    paired again (pairing the same device creates a new terminal)."""
     sql: LiteralString = "UPDATE terminals SET unpaired_at = %s WHERE id = %s AND unpaired_at IS NULL"
     await conn.execute(sql, (datetime.now(timezone.utc), id))
 

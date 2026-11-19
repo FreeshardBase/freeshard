@@ -3,7 +3,7 @@ exposing that per-app state, and surviving app uninstall.
 
 A lockout is one back-channel logout outbox row: one notification for one app
 session of an unpaired device. An unpaired device is kept (flagged
-unpaired_at) and hidden from every connected-device path until its lockouts
+unpaired_at) and hidden from every paired-device path until its lockouts
 are delivered, then reaped. See the issue (#314), service/terminal_lockouts.py
 and web/protected/terminals.py.
 
@@ -78,9 +78,9 @@ async def set_app_status(name: str, status: str):
         await conn.execute("UPDATE installed_apps SET status = %s WHERE name = %s", (status, name))
 
 
-async def connected_terminal_id(name: str) -> str:
+async def paired_terminal_id(name: str) -> str:
     async with db_conn() as conn:
-        return (await db_terminals.get_connected_by_name(conn, name))["id"]
+        return (await db_terminals.get_paired_by_name(conn, name))["id"]
 
 
 async def unpair(client: AsyncClient, id_: str):
@@ -141,7 +141,7 @@ async def get_unpaired(client: AsyncClient) -> list[dict]:
 async def test_unpaired_device_is_rejected_hidden_and_uncounted(app_client: AsyncClient):
     await pair_new_terminal(app_client, name="phone")
     phone_jwt = app_client.cookies["authorization"]
-    tid = await connected_terminal_id("phone")
+    tid = await paired_terminal_id("phone")
     oidc_client = await make_client("bc_app")
     await run_code_flow(app_client, oidc_client)
 
@@ -159,9 +159,9 @@ async def test_unpaired_device_is_rejected_hidden_and_uncounted(app_client: Asyn
 
     # 3. absent from the terminals_update broadcast (its data source)
     async with db_conn() as conn:
-        assert all(t["id"] != tid for t in await db_terminals.list_connected(conn))
+        assert all(t["id"] != tid for t in await db_terminals.list_paired(conn))
         # 4. does not count for the first-pairing owner check
-        assert await db_terminals.count_connected(conn) == 0
+        assert await db_terminals.count_paired(conn) == 0
 
 
 # --- unpair with and without lockouts ---------------------------------------
@@ -174,7 +174,7 @@ async def test_unpair_with_lockouts_lists_state_then_is_gone_once_delivered(
         "shard_core.service.oidc_backchannel_logout._post_logout_token", return_value=None
     )
     await pair_new_terminal(app_client, name="phone")
-    tid = await connected_terminal_id("phone")
+    tid = await paired_terminal_id("phone")
     oidc_client = await make_client("bc_app")
     await set_app_status("bc_app", "stopped")
     await run_code_flow(app_client, oidc_client)
@@ -200,7 +200,7 @@ async def test_unpair_with_lockouts_lists_state_then_is_gone_once_delivered(
 
 async def test_unpair_without_lockouts_deletes_the_device_immediately(app_client: AsyncClient):
     await pair_new_terminal(app_client, name="phone")
-    tid = await connected_terminal_id("phone")
+    tid = await paired_terminal_id("phone")
     # an app with no backchannel_logout_uri — nothing to deliver to
     oidc_client = await make_client("plain_app", backchannel_logout_uri=None)
     await run_code_flow(app_client, oidc_client)
@@ -226,7 +226,7 @@ async def test_lockout_survives_uninstall_and_targets_the_reinstalled_client(
         "shard_core.service.oidc_backchannel_logout._post_logout_token", side_effect=fake_post
     )
     await pair_new_terminal(app_client, name="phone")
-    tid = await connected_terminal_id("phone")
+    tid = await paired_terminal_id("phone")
     old_client = await make_client("bc_app")
     await run_code_flow(app_client, old_client)
     await unpair(app_client, tid)
@@ -263,7 +263,7 @@ async def test_retry_resets_failed_lockouts(app_client: AsyncClient, mocker):
         side_effect=httpx.ConnectError("always fails"),
     )
     await pair_new_terminal(app_client, name="phone")
-    tid = await connected_terminal_id("phone")
+    tid = await paired_terminal_id("phone")
     oidc_client = await make_client("bc_app")
     await set_app_status("bc_app", "running")
     await run_code_flow(app_client, oidc_client)
@@ -293,16 +293,16 @@ async def test_retry_resets_failed_lockouts(app_client: AsyncClient, mocker):
     r = await app_client.post("protected/terminals/unpaired/does-not-exist/retry")
     assert r.status_code == 404
 
-    # retry is unpaired-only: a connected device's id is a 404, not a 204
+    # retry is unpaired-only: a paired device's id is a 404, not a 204
     await pair_new_terminal(app_client, name="laptop")
-    connected = await connected_terminal_id("laptop")
-    r = await app_client.post(f"protected/terminals/unpaired/{connected}/retry")
+    paired = await paired_terminal_id("laptop")
+    r = await app_client.post(f"protected/terminals/unpaired/{paired}/retry")
     assert r.status_code == 404
 
 
 async def test_dismiss_removes_the_device_and_releases_the_barrier(app_client: AsyncClient):
     await pair_new_terminal(app_client, name="phone")
-    tid = await connected_terminal_id("phone")
+    tid = await paired_terminal_id("phone")
     oidc_client = await make_client("bc_app")
     await set_app_status("bc_app", "stopped")
     await run_code_flow(app_client, oidc_client)
@@ -323,9 +323,9 @@ async def test_dismiss_removes_the_device_and_releases_the_barrier(app_client: A
     assert r.status_code == 404
 
 
-async def test_dismiss_rejects_a_connected_device(app_client: AsyncClient):
+async def test_dismiss_rejects_a_paired_device(app_client: AsyncClient):
     await pair_new_terminal(app_client, name="phone")
-    tid = await connected_terminal_id("phone")
+    tid = await paired_terminal_id("phone")
     r = await app_client.delete(f"protected/terminals/unpaired/{tid}")
     assert r.status_code == 404
 
@@ -349,7 +349,7 @@ async def test_unpaired_terminals_update_is_broadcast_on_each_trigger(
         return [c for c in spy.call_args_list if c.args[0] == "unpaired_terminals_update"]
 
     await pair_new_terminal(app_client, name="phone")
-    tid = await connected_terminal_id("phone")
+    tid = await paired_terminal_id("phone")
     oidc_client = await make_client("bc_app")
     await set_app_status("bc_app", "running")
     await run_code_flow(app_client, oidc_client)

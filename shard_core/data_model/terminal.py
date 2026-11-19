@@ -76,6 +76,6 @@ async def update_terminal_last_connection(terminal: Terminal):
     from shard_core.database import terminals as db_terminals
 
     async with db_conn() as conn:
-        await db_terminals.update_connected(
+        await db_terminals.update_paired(
             conn, terminal.id, {"last_connection": datetime.now(timezone.utc)}
         )
