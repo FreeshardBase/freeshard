@@ -3,7 +3,7 @@
 #
 # Kept in step with the compose file hosted shards run; the differences are
 # deliberate: no Azure credentials, no telemetry, no mail, no image pruning,
-# Sundial as the only web interface, and no rollout flags.
+# and every feature that hosted shards roll out behind a flag is on.
 
 networks:
   portal:
@@ -80,6 +80,8 @@ services:
       # cannot use; the owner's address is taken without a confirmation mail.
       - FREESHARD_EMAIL__ENABLED=false
       - FREESHARD_SUNDIAL__ENABLED=true
+      - FREESHARD_OIDC__ENABLED=true
+      - FREESHARD_APPS__LIFECYCLE__PAUSE_ENABLED=true
     depends_on:
       postgres:
         condition: service_healthy
