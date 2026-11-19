@@ -7,7 +7,7 @@ The software running on each individual Freeshard. Manages installed apps, termi
 - **Framework**: FastAPI with uvicorn, Python 3.13+
 - **Database**: PostgreSQL with psycopg3 (async) + yoyo-migrations
 - **Container Orchestration**: Docker / Docker Compose (subprocess calls)
-- **Reverse Proxy**: Traefik v3 (configured dynamically per app)
+- **Reverse Proxy**: Traefik v2.11 (configured dynamically per app)
 - **Config**: Pydantic v2 BaseSettings, loaded from `config.toml` + `local_config.toml`, env prefix `FREESHARD_`
 - **Package Management**: uv
 - **Formatting/Linting**: ruff + black
