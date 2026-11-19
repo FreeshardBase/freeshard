@@ -8,9 +8,10 @@ This module closes that gap by pushing a logout_token to the app.
 Enqueue happens synchronously inside the un-pair transaction
 (web/protected/terminals.py, see enqueue_for_terminal): the terminal's live
 (unrevoked) OIDC grants are read and one outbox row is written per
-(client_id, sid) that has somewhere to go, BEFORE oidc.revoke_for_terminal
-marks those grants revoked and before the terminals row disappears (its FK is
-ON DELETE SET NULL — the linkage is gone afterwards).
+(app_name, sid) that has somewhere to go, BEFORE oidc.revoke_for_terminal
+marks those grants revoked (reading them afterwards finds nothing). The
+device row is kept, flagged unpaired, and deleted only once every lockout
+for it is delivered.
 
 Delivery is out-of-band and durable: migration shard-core-0008 gives the
 outbox a table, not an in-memory queue, so a row survives a restart and is
@@ -55,18 +56,17 @@ RETRY_DELAYS_SECONDS = [30, 60, 300, 900, 3600]
 DELIVERY_TIMEOUT = 10
 
 
-async def enqueue_for_terminal(conn, terminal_id: str) -> None:
-    """Snapshot the terminal's live grants and enqueue a delivery for each
-    one whose client has a backchannel_logout_uri.
+async def enqueue_for_terminal(conn, terminal_id: str) -> int:
+    """Snapshot the terminal's live grants and enqueue a lockout for each one
+    whose client has a backchannel_logout_uri. Returns the number enqueued.
 
     Caller contract: must run on the SAME connection/transaction as, and
-    strictly before, both oidc.revoke_for_terminal (which marks the grants
-    read here as revoked) and terminals.remove (whose ON DELETE SET NULL on
-    oidc_tokens.terminal_id severs the only way to find them). See
-    web/protected/terminals.py::delete_terminal_by_id.
+    strictly before, oidc.revoke_for_terminal (which marks the grants read
+    here as revoked, so reading them afterwards finds nothing). See
+    web/protected/terminals.py::unpair_terminal_by_id.
     """
     grants = await db_oidc.get_live_grants_for_terminal(conn, terminal_id)
-    await db_oidc.enqueue_backchannel_logout(conn, terminal_id, grants)
+    return await db_oidc.enqueue_backchannel_logout(conn, terminal_id, grants)
 
 
 def _next_delay_seconds(attempts_made: int) -> int:
@@ -171,6 +171,10 @@ async def drain_due_outbox(app_name: str | None = None) -> None:
                 e,
             )
     if entries:
+        # Must precede the signal so the barrier rebuild and the unpaired-list
+        # push both see the reaped state.
+        async with db_conn() as conn:
+            await db_oidc.reap_fully_delivered_unpaired_terminals(conn)
         # Delivery outcomes changed the outbox; let the barrier set rebuild.
         await signals.on_backchannel_outbox_update.send_async()
 

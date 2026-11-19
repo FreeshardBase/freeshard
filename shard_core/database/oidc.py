@@ -150,21 +150,24 @@ async def get_live_grants_for_terminal(conn: AsyncConnection, terminal_id: str) 
         return await cur.fetchall()
 
 
-async def enqueue_backchannel_logout(conn: AsyncConnection, terminal_id: str, grants: list[dict]) -> None:
-    """One outbox row per (client_id, sid) grant whose client declared a
-    backchannel_logout_uri — nothing to deliver to otherwise. Idempotent: a
-    (client_id, sid) pair already enqueued is left alone (ON CONFLICT DO
-    NOTHING), so calling this twice for the same grant is harmless."""
+async def enqueue_backchannel_logout(conn: AsyncConnection, terminal_id: str, grants: list[dict]) -> int:
+    """One outbox row per (app_name, sid) grant whose client declared a
+    backchannel_logout_uri — nothing to deliver to otherwise. The app is
+    resolved by name from the client at enqueue time and stored as app_name,
+    so the row survives the client being dropped on uninstall. Idempotent: an
+    (app_name, sid) pair already enqueued is left alone (ON CONFLICT DO
+    NOTHING). Returns the number of rows actually enqueued."""
     sql: LiteralString = """INSERT INTO oidc_backchannel_logout_outbox
-        (client_id, user_sub, sid, terminal_id)
-        SELECT %(client_id)s, %(user_sub)s, %(sid)s, %(terminal_id)s
-        WHERE EXISTS (
-            SELECT 1 FROM oidc_clients
-            WHERE client_id = %(client_id)s AND backchannel_logout_uri IS NOT NULL
-        )
-        ON CONFLICT (client_id, sid) DO NOTHING"""
+        (app_name, user_sub, sid, terminal_id)
+        SELECT c.app_name, %(user_sub)s, %(sid)s, %(terminal_id)s
+        FROM oidc_clients c
+        WHERE c.client_id = %(client_id)s AND c.backchannel_logout_uri IS NOT NULL
+        ON CONFLICT (app_name, sid) DO NOTHING"""
+    enqueued = 0
     for grant in grants:
-        await conn.execute(sql, {**grant, "terminal_id": terminal_id})
+        cur = await conn.execute(sql, {**grant, "terminal_id": terminal_id})
+        enqueued += cur.rowcount
+    return enqueued
 
 
 async def claim_due_outbox_entries(
@@ -198,10 +201,9 @@ async def claim_due_outbox_entries(
         WHERE id IN (
             SELECT o.id
             FROM oidc_backchannel_logout_outbox o
-            JOIN oidc_clients c ON c.client_id = o.client_id
-            JOIN installed_apps ia ON ia.name = c.app_name
+            JOIN installed_apps ia ON ia.name = o.app_name
             WHERE ia.status = 'running'
-              AND (%(app_name)s::text IS NULL OR c.app_name = %(app_name)s)
+              AND (%(app_name)s::text IS NULL OR o.app_name = %(app_name)s)
               AND (
                 (o.status = 'pending' AND o.next_attempt_at <= now())
                 OR (o.status = 'in_flight'
@@ -215,9 +217,14 @@ async def claim_due_outbox_entries(
         claimed_ids = [row[0] for row in await cur.fetchall()]
     if not claimed_ids:
         return []
-    fetch_sql: LiteralString = """SELECT o.*, c.backchannel_logout_uri, c.app_name
+    # client_id/backchannel_logout_uri come from the app's CURRENT client, not
+    # the one that existed at enqueue time: a reinstall registers a new
+    # client_id, and the logout token must be signed for whatever client the
+    # app has now. LEFT JOIN so a row whose app lost its client still returns
+    # (client_id NULL), to be failed by _attempt_delivery rather than dropped.
+    fetch_sql: LiteralString = """SELECT o.*, c.client_id, c.backchannel_logout_uri
         FROM oidc_backchannel_logout_outbox o
-        JOIN oidc_clients c ON c.client_id = o.client_id
+        LEFT JOIN oidc_clients c ON c.app_name = o.app_name
         WHERE o.id = ANY(%s)"""
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(fetch_sql, (claimed_ids,))
@@ -268,12 +275,12 @@ async def mark_outbox_failed(conn: AsyncConnection, id_: int, attempts: int, err
 
 async def get_apps_with_pending_backchannel_logout(conn: AsyncConnection) -> list[str]:
     """App names that still owe a back-channel logout — a row in the outbox
-    not yet delivered or failed ('pending' or 'in_flight'). Rebuilds the
+    not yet delivered or failed ('pending' or 'in_flight'). Correct while the
+    app is uninstalled, since it reads app_name on the outbox. Rebuilds the
     in-process barrier set; see service/oidc_backchannel_barrier.py."""
-    sql: LiteralString = """SELECT DISTINCT c.app_name
-        FROM oidc_backchannel_logout_outbox o
-        JOIN oidc_clients c ON c.client_id = o.client_id
-        WHERE o.status IN ('pending', 'in_flight')"""
+    sql: LiteralString = """SELECT DISTINCT app_name
+        FROM oidc_backchannel_logout_outbox
+        WHERE status IN ('pending', 'in_flight')"""
     async with conn.cursor() as cur:
         await cur.execute(sql)
         return [row[0] for row in await cur.fetchall()]
@@ -281,10 +288,48 @@ async def get_apps_with_pending_backchannel_logout(conn: AsyncConnection) -> lis
 
 async def get_outbox_entries_by_status(conn: AsyncConnection, status: str) -> list[dict]:
     """Outbox rows filtered by delivery status."""
-    sql: LiteralString = """SELECT o.*, c.app_name
-        FROM oidc_backchannel_logout_outbox o
-        JOIN oidc_clients c ON c.client_id = o.client_id
-        WHERE o.status = %s"""
+    sql: LiteralString = """SELECT * FROM oidc_backchannel_logout_outbox WHERE status = %s"""
     async with conn.cursor(row_factory=dict_row) as cur:
         await cur.execute(sql, (status,))
         return await cur.fetchall()
+
+
+async def get_undelivered_outbox_with_app_status(conn: AsyncConnection) -> list[dict]:
+    """Every outbox row not yet delivered, with its owning app's install
+    status (app_status NULL when the app is not installed). The input the
+    per-app lockout state is derived from; see service/terminal_lockouts.py."""
+    sql: LiteralString = """SELECT o.id, o.terminal_id, o.app_name, o.status, ia.status AS app_status
+        FROM oidc_backchannel_logout_outbox o
+        LEFT JOIN installed_apps ia ON ia.name = o.app_name
+        WHERE o.status IN ('pending', 'in_flight', 'failed')"""
+    async with conn.cursor(row_factory=dict_row) as cur:
+        await cur.execute(sql)
+        return await cur.fetchall()
+
+
+async def reset_failed_outbox_for_terminal(conn: AsyncConnection, terminal_id: str) -> int:
+    """Reset a device's exhausted ('failed') lockouts back to pending, due now,
+    so a drain retries them. Returns the number of rows reset."""
+    sql: LiteralString = """UPDATE oidc_backchannel_logout_outbox
+        SET status = 'pending', attempts = 0, next_attempt_at = now(),
+            last_error = NULL, updated = now()
+        WHERE terminal_id = %s AND status = 'failed'"""
+    cur = await conn.execute(sql, (terminal_id,))
+    return cur.rowcount
+
+
+async def reap_fully_delivered_unpaired_terminals(conn: AsyncConnection) -> list[str]:
+    """Delete every unpaired device whose lockouts are all delivered (no
+    pending/in_flight/failed row left). The cascade on terminal_id removes the
+    delivered rows with it, so delivered rows never accumulate. Returns the
+    deleted terminal ids."""
+    sql: LiteralString = """DELETE FROM terminals t
+        WHERE t.unpaired_at IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM oidc_backchannel_logout_outbox o
+            WHERE o.terminal_id = t.id AND o.status <> 'delivered'
+          )
+        RETURNING t.id"""
+    async with conn.cursor() as cur:
+        await cur.execute(sql)
+        return [row[0] for row in await cur.fetchall()]

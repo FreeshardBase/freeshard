@@ -6,7 +6,7 @@ prove the separate, harder half — that a durable notification gets queued
 for the app to kill its own session.
 
 Covers enqueue (reading the terminal's live grants and writing one outbox
-row per (client_id, sid) BEFORE the un-pair transaction revokes them /
+row per (app_name, sid) BEFORE the un-pair transaction revokes them /
 deletes the terminal row), registering a client's logout URI, and delivery
 itself: minting a fresh logout_token on every attempt, retrying with
 backoff, and the bounded-retry-then-permanently-failed path. Discovery
@@ -82,7 +82,7 @@ async def set_app_status(name: str, status: str):
 
 async def terminal_id(name: str) -> str:
     async with db_conn() as conn:
-        return (await db_terminals.get_by_name(conn, name))["id"]
+        return (await db_terminals.get_paired_by_name(conn, name))["id"]
 
 
 async def unpair(client: AsyncClient, id_: str):
@@ -122,10 +122,10 @@ async def run_code_flow(client: AsyncClient, oidc_client) -> dict:
     return r.json()
 
 
-async def outbox_row(client_id: str, sid: str) -> dict:
+async def outbox_row(app_name: str, sid: str) -> dict:
     found = await rows(
-        "SELECT * FROM oidc_backchannel_logout_outbox WHERE client_id = %s AND sid = %s",
-        client_id,
+        "SELECT * FROM oidc_backchannel_logout_outbox WHERE app_name = %s AND sid = %s",
+        app_name,
         sid,
     )
     assert len(found) == 1, found
@@ -160,7 +160,7 @@ async def test_unpair_enqueues_a_delivery_for_a_live_grant_with_a_logout_uri(
 
     await unpair(app_client, tid)
 
-    entry = await outbox_row(oidc_client.client_id, token_row["sid"])
+    entry = await outbox_row("bc_app", token_row["sid"])
     assert entry["status"] == "pending"
     assert entry["attempts"] == 0
     assert entry["terminal_id"] == tid
@@ -273,7 +273,7 @@ async def test_drain_does_not_wake_a_stopped_app(app_client: AsyncClient, mocker
 
     post.assert_not_called()
     entry = (await rows("SELECT * FROM oidc_backchannel_logout_outbox"))[0]
-    assert entry["client_id"] == oidc_client.client_id
+    assert entry["app_name"] == "bc_app"
     assert entry["status"] == "pending"
     assert entry["attempts"] == 0
 
@@ -298,8 +298,10 @@ async def test_drain_delivers_once_the_app_is_running(app_client: AsyncClient, m
 
     post.assert_called_once()
     assert post.call_args.args[0] == LOGOUT_URI
-    entry = (await rows("SELECT * FROM oidc_backchannel_logout_outbox"))[0]
-    assert entry["status"] == "delivered"
+    # Delivered rows are reaped with their unpaired device, so the outbox is
+    # empty and the device is gone once the last lockout lands.
+    assert await rows("SELECT * FROM oidc_backchannel_logout_outbox") == []
+    assert await rows("SELECT * FROM terminals WHERE id = %s", tid) == []
 
 
 async def test_on_apps_update_signal_drains_a_due_entry(app_client: AsyncClient, mocker):
@@ -319,8 +321,7 @@ async def test_on_apps_update_signal_drains_a_due_entry(app_client: AsyncClient,
     await signals.on_apps_update.send_async()
 
     post.assert_called_once()
-    entry = (await rows("SELECT * FROM oidc_backchannel_logout_outbox"))[0]
-    assert entry["status"] == "delivered"
+    assert await rows("SELECT * FROM oidc_backchannel_logout_outbox") == []
 
 
 async def test_logout_token_is_minted_fresh_on_each_delivery_attempt(app_client: AsyncClient, mocker):
@@ -373,8 +374,8 @@ async def test_logout_token_is_minted_fresh_on_each_delivery_attempt(app_client:
     assert "nonce" not in claims1 and "nonce" not in claims2
     assert claims1["events"] == {oidc_provider.BACKCHANNEL_LOGOUT_EVENT: {}}
 
-    final = (await rows("SELECT * FROM oidc_backchannel_logout_outbox"))[0]
-    assert final["status"] == "delivered"
+    # The successful second attempt reaps the delivered row with its device.
+    assert await rows("SELECT * FROM oidc_backchannel_logout_outbox") == []
 
 
 async def test_bounded_retry_then_permanent_failure_is_queryable(app_client: AsyncClient, mocker):

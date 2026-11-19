@@ -74,10 +74,23 @@ async def make_client(app_name: str, backchannel_logout_uri: str | None = LOGOUT
     )
 
 
-async def enqueue_one(client_id: str, *, sid: str = "sid-1", user_sub: int = 1):
+async def insert_unpaired_terminal(terminal_id: str = "terminal-x"):
+    """The outbox now has an FK to terminals(id); a lockout belongs to an
+    unpaired device. Create one so enqueue has something to reference."""
+    async with db_conn() as conn:
+        await conn.execute(
+            "INSERT INTO terminals (id, name, icon, user_id, unpaired_at) "
+            "VALUES (%s, %s, 'unknown', (SELECT id FROM users LIMIT 1), now()) "
+            "ON CONFLICT (id) DO NOTHING",
+            (terminal_id, terminal_id),
+        )
+
+
+async def enqueue_one(client_id: str, *, terminal_id: str = "terminal-x", sid: str = "sid-1", user_sub: int = 1):
+    await insert_unpaired_terminal(terminal_id)
     async with db_conn() as conn:
         await db_oidc.enqueue_backchannel_logout(
-            conn, "terminal-x", [{"client_id": client_id, "sid": sid, "user_sub": user_sub}]
+            conn, terminal_id, [{"client_id": client_id, "sid": sid, "user_sub": user_sub}]
         )
 
 
@@ -142,8 +155,8 @@ async def test_barrier_releases_once_the_logout_is_delivered(
 
     post.assert_called_once()
     assert "bc_app" not in barrier._pending_apps
-    entry = (await rows("SELECT * FROM oidc_backchannel_logout_outbox"))[0]
-    assert entry["status"] == "delivered"
+    # The delivered row is reaped with its (now fully-delivered) unpaired device.
+    assert await rows("SELECT * FROM oidc_backchannel_logout_outbox") == []
 
 
 # --- single-flight ----------------------------------------------------------
@@ -202,8 +215,8 @@ async def test_enforce_does_not_deliver_another_apps_logout(
     assert "other_app" in barrier._pending_apps
     other_row = (
         await rows(
-            "SELECT status FROM oidc_backchannel_logout_outbox WHERE client_id = %s",
-            other.client_id,
+            "SELECT status FROM oidc_backchannel_logout_outbox WHERE app_name = %s",
+            "other_app",
         )
     )[0]
     assert other_row["status"] == "pending"
@@ -262,9 +275,9 @@ async def test_rebuild_membership_follows_outbox_status(
     await enqueue_one(client.client_id)
     await rows(
         "UPDATE oidc_backchannel_logout_outbox SET status = %s "
-        "WHERE client_id = %s RETURNING id",
+        "WHERE app_name = %s RETURNING id",
         status_,
-        client.client_id,
+        "bc_app",
     )
 
     barrier._pending_apps.clear()
@@ -282,8 +295,8 @@ async def test_rebuild_clears_stale_hold_and_fail_open_markers(app_client: Async
 
     await rows(
         "UPDATE oidc_backchannel_logout_outbox SET status = 'delivered' "
-        "WHERE client_id = %s RETURNING id",
-        client.client_id,
+        "WHERE app_name = %s RETURNING id",
+        "bc_app",
     )
     await barrier.rebuild_pending_apps()
 
@@ -297,7 +310,7 @@ async def test_rebuild_clears_stale_hold_and_fail_open_markers(app_client: Async
 async def test_unpair_populates_the_pending_set(app_client: AsyncClient):
     await pair_new_terminal(app_client, name="phone")
     async with db_conn() as conn:
-        tid = (await db_terminals.get_by_name(conn, "phone"))["id"]
+        tid = (await db_terminals.get_paired_by_name(conn, "phone"))["id"]
     oidc_client = await make_client("bc_app")
     await _grant_token(oidc_client.client_id, terminal_id=tid)
 
@@ -305,7 +318,7 @@ async def test_unpair_populates_the_pending_set(app_client: AsyncClient):
     r = await app_client.delete(f"protected/terminals/id/{tid}")
     assert r.status_code == 204, r.text
 
-    # delete_terminal_by_id enqueues the logout and fires
+    # unpair_terminal_by_id enqueues the logout and fires
     # on_backchannel_outbox_update, which rebuilds the set.
     assert "bc_app" in barrier._pending_apps
 
@@ -355,6 +368,7 @@ async def test_forward_auth_holds_then_releases(api_client: AsyncClient, mocker)
     client = await oidc_provider.register_client(
         "mock_app", [REDIRECT_URI], backchannel_logout_uri=LOGOUT_URI
     )
+    await insert_unpaired_terminal("terminal-x")
     async with db_conn() as conn:
         cur = await conn.execute("SELECT id FROM users LIMIT 1")
         user_sub = (await cur.fetchone())[0]
