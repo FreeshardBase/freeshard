@@ -105,74 +105,11 @@ All communication is encrypted and authenticated using the shard IDs as trust an
 
 ## Hosting
 
-> [!WARNING]
-> We are currently working on making self-hosting possible and easy.
-> Expect some rough edges until then.
+Shard Core can run on your own machine instead of a hosted shard.
+The guide is on the documentation site: [Self-Hosting](https://docs.freeshard.net/self_hosting/).
+It covers the prerequisites, a local test, a full server deployment, certificates, updates, uninstalling, and what a self-hosted shard still gets from Freeshard's infrastructure.
 
-The Shard Core can be hosted on any machine that has access to the internet.
-It is recommended to use a machine that is always on, e.g. a virtual private server (VPS).
-
-### Where the apps come from
-
-A self-hosted shard is not self-contained. Both halves of the app catalogue are served by infrastructure Freeshard operates:
-
-- the catalogue metadata and the app packages come from an Azure blob container (`apps.app_store` in `config.toml`), and
-- the container images for the apps that do not use a public upstream image come from our container registry, `portalapps.azurecr.io`.
-
-Shard Core logs in to that registry at startup, using the credentials checked into `config.toml` under `[[apps.registries]]`. **Those credentials are committed on purpose.** The account is a Microsoft Entra service principal, `sp-apps-reader`, whose only role assignment anywhere in our subscription is `Reader`, scoped to that single registry — it can pull images and read registry metadata, and it can do nothing else: no push, no delete, no configuration change, no access to any other resource. It is shared with everyone who runs a shard because every shard needs it to install an app.
-
-If you would rather not depend on our infrastructure, note that this is what you would have to replace.
-
-### The owner's email address
-
-The owner's address lives on their user row and is verified by definition: a new address is only a candidate until somebody opens a confirmation link that was delivered to it. On a hosted shard the controller does that delivery, and it is also what mails the owner about disk space, billing and service notices.
-
-A self-hosted shard has no controller and therefore no way to send mail at all, so it cannot run that round trip. Set `email.enabled = false` in `local_config.toml` and the address is taken as given, with no candidate step and no confirmation mail — acceptable because you control the machine. Leave it at its default of `true` and setting an address fails with HTTP 502 — the address is kept as a candidate, but the confirmation mail that would promote it cannot be delivered.
-
-The address is what the built-in OIDC provider emits as the `email` claim, alongside `email_verified`. With no confirmed address it emits neither, and apps you log into through it will create fresh accounts rather than linking to an existing one by address.
-
-### Localhost
-
-In order to test freeshard, you might want to launch it on localhost first.
-
-1. Get the `docker-compose.yml` and the `.env.template`.
-2. Copy the `.env.template` to `.env` and fill in your information.
-   - `FREESHARD_DIR` is the directory where all data will be stored - internal data for freeshard to function and all user data.
-   - `DNS_ZONE` is the domain name of your Shard. Leave it at `localhost` for now.
-   - `EMAIL` is the email address that will be used to request SSL certificates. You can leave the defalt value for now since we are not using SSL yet. 
-   - `DISABLE_SSL` is for local testing only. It prevents certificates from being requested and allows you to use the Shard without SSL. Set it to `true` for now.
-3. Start the Shard Core with `docker-compose up`.
-4. Look for the Freeshard logo in the logs for the details of your shard. On first startup, there is a link including a pairing code to pair your first device. Open it in your browser.
-5. You can always get a fresh pairing code by running this command from your CLI: `docker run --rm -it --network portal curlimages/curl "http://shard_core/protected/terminals/pairing-code"`
-
-### Full Server Deployment
-
-For a full server deployment, follow these steps.
-
-1. Use a server that can be reached with a domain name.
-2. Copy the `docker-compose.yml` and the `.env.template` on your server into a directory of your choice.
-3. Copy the `.env.template` to `.env` and fill in your information.
-    - `FREESHARD_DIR` is the directory where all data will be stored - internal data for freeshard to function and all user data.
-    - `DNS_ZONE` is the domain name of your Shard. Enter the domain name of your server here. Your Shard will be accessible at `https://<shard_id>.<DNS_ZONE>`.
-    - `EMAIL` is the email address that will be used to request SSL certificates.
-   - `DISABLE_SSL` is for local testing only. Do not use the option in production!
-4. Provide the environment variables for your DNS provider to the Traefik service in the `docker-compose.yml` file. [Here is a list of providers](https://doc.traefik.io/traefik/https/acme/#providers) and the required variables. See [Let's Encrypt](#letsencrypt) for why this is necessary.
-5. Start the Shard Core with `docker-compose up -d`.
-6. Look for the Freeshard logo in the logs for the details of your shard. On first startup, there is a link including a pairing code to pair your first device. Open it in your browser.
-7. You can always get a fresh pairing code by running this command from your CLI: `docker run --rm -it --network portal curlimages/curl "http://shard_core/protected/terminals/pairing-code"`
-
-### Let's Encrypt
-<a name="letsencrypt"></a>
-
-Shard Core uses Traefik as a reverse proxy.
-This is a fixed part of the setup and cannot be changed.
-
-Traefik is configured to automatically request and renew SSL certificates from Let's Encrypt.
-However, since the apps that are run by Shard Core are routed to subdomains of the Shard's domain, the certificate needs to be a wildcard certificate.
-That means that a [DNS challenge must be used](https://doc.traefik.io/traefik/https/acme/#wildcard-domains) to prove ownership of the domain.
-And that requires some manual configuration.
-
-In the `docker-compose.yml`, you need to add some environment variables to the Traefik service depending on your DNS provider. [Here is a list of providers](https://doc.traefik.io/traefik/https/acme/#providers) and the required variables.
+The [`docker-compose.yml`](docker-compose.yml) and [`.env.template`](.env.template) in this repository are the files the guide uses.
 
 ## Backup and Restore
 

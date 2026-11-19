@@ -1,16 +1,49 @@
+# Self-hosting stack for a single shard. Setup and configuration:
+# https://docs.freeshard.net/self_hosting/
+#
+# Kept in step with the compose file hosted shards run; the differences are
+# deliberate: no Azure credentials, no telemetry, no mail, no image pruning,
+# and every feature that hosted shards roll out behind a flag is on.
+
 networks:
   portal:
     name: portal
 
-volumes:
-  postgres_data:
-
 services:
+
+  traefik:
+    image: traefik:v2.11.50
+    container_name: traefik
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8883:8883"
+    environment:
+      - XDG_CONFIG_HOME=/core
+      # Certificates are requested through an Azure DNS challenge. Fill these in
+      # if your domain's DNS is hosted in Azure DNS; other providers are not
+      # supported yet (#292).
+      #- AZURE_CLIENT_ID=
+      #- AZURE_CLIENT_SECRET=
+      #- AZURE_SUBSCRIPTION_ID=
+      #- AZURE_TENANT_ID=
+      #- AZURE_RESOURCE_GROUP=
+      #- LEGO_AZURE_BYPASS_DEPRECATION=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${FREESHARD_DIR:?}/core:/core
+    networks:
+      - portal
+    depends_on:
+      shard_core:
+        condition: service_healthy
 
   postgres:
     image: postgres:17
     container_name: postgres
     restart: always
+    stop_grace_period: 30s
     environment:
       - POSTGRES_DB=shard_core
       - POSTGRES_USER=shard_core
@@ -25,39 +58,17 @@ services:
       timeout: 5s
       retries: 5
 
-  traefik:
-    image: traefik:v3.6
-    container_name: traefik
-    restart: always
-    ports:
-      - "80:80"
-      - "443:443"
-      - "8883:8883"
-    environment:
-      - XDG_CONFIG_HOME=/core
-      #- AZURE_CLIENT_ID=todo
-      #- AZURE_CLIENT_SECRET=todo
-      #- AZURE_SUBSCRIPTION_ID=todo
-      #- AZURE_TENANT_ID=todo
-      #- AZURE_RESOURCE_GROUP=todo
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ${FREESHARD_DIR:?}/core:/core
-    networks:
-      - portal
-    depends_on:
-      shard_core:
-        condition: service_healthy
-
   shard_core:
     image: ghcr.io/freeshardbase/freeshard:0.42.0
     container_name: shard_core
     restart: always
-    stop_grace_period: 30s
+    stop_grace_period: 120s
     volumes:
       - ${FREESHARD_DIR:?}/core:/core
       - ${FREESHARD_DIR:?}/user_data:/user_data
       - /var/run/docker.sock:/var/run/docker.sock
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - /proc/pressure:/host/pressure:ro
     networks:
       - portal
     environment:
@@ -65,22 +76,18 @@ services:
       - FREESHARD_TRAEFIK__ACME_EMAIL=${EMAIL:?}
       - FREESHARD_TRAEFIK__DISABLE_SSL=${DISABLE_SSL:-false}
       - FREESHARD_PATH_ROOT_HOST=${FREESHARD_DIR:?}
-      - FREESHARD_APPS__LIFECYCLE__PAUSE_ENABLED=${PAUSE_ENABLED:-false}
-      - FREESHARD_OIDC__ENABLED=${OIDC_ENABLED:-false}
-      - FREESHARD_SUNDIAL__ENABLED=${SUNDIAL_ENABLED:-false}
+      # Mail goes out through Freeshard's controller, which a self-hosted shard
+      # cannot use; the owner's address is taken without a confirmation mail.
+      - FREESHARD_EMAIL__ENABLED=false
+      - FREESHARD_SUNDIAL__ENABLED=true
+      - FREESHARD_OIDC__ENABLED=true
+      - FREESHARD_APPS__LIFECYCLE__PAUSE_ENABLED=true
     depends_on:
       postgres:
         condition: service_healthy
 
-  web-terminal:
-    image: ghcr.io/freeshardbase/web-terminal:0.37.4
-    container_name: web-terminal
-    restart: always
-    networks:
-      - portal
-
   sundial:
-    image: ghcr.io/freeshardbase/sundial:0.1.0
+    image: ghcr.io/freeshardbase/sundial:0.2.0
     container_name: sundial
     restart: always
     networks:
