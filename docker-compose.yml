@@ -2,7 +2,8 @@
 # https://docs.freeshard.net/self_hosting/
 #
 # Kept in step with the compose file hosted shards run; the differences are
-# deliberate: no Azure credentials, no telemetry, and mail switched off by default.
+# deliberate: no Azure credentials, no telemetry, no mail, no image pruning,
+# Sundial as the only web interface, and no rollout flags.
 
 networks:
   portal:
@@ -75,21 +76,13 @@ services:
       - FREESHARD_TRAEFIK__ACME_EMAIL=${EMAIL:?}
       - FREESHARD_TRAEFIK__DISABLE_SSL=${DISABLE_SSL:-false}
       - FREESHARD_PATH_ROOT_HOST=${FREESHARD_DIR:?}
-      - FREESHARD_EMAIL__ENABLED=${EMAIL_ENABLED:-false}
-      - FREESHARD_APPS__PRUNING__ENABLED=${PRUNE_IMAGES:-true}
-      - FREESHARD_APPS__LIFECYCLE__PAUSE_ENABLED=${PAUSE_ENABLED:-false}
-      - FREESHARD_SUNDIAL__ENABLED=${SUNDIAL_ENABLED:-false}
-      - FREESHARD_OIDC__ENABLED=${OIDC_ENABLED:-false}
+      # Mail goes out through Freeshard's controller, which a self-hosted shard
+      # cannot use; the owner's address is taken without a confirmation mail.
+      - FREESHARD_EMAIL__ENABLED=false
+      - FREESHARD_SUNDIAL__ENABLED=true
     depends_on:
       postgres:
         condition: service_healthy
-
-  web-terminal:
-    image: ghcr.io/freeshardbase/web-terminal:0.40.0
-    container_name: web-terminal
-    restart: always
-    networks:
-      - portal
 
   sundial:
     image: ghcr.io/freeshardbase/sundial:0.2.0
