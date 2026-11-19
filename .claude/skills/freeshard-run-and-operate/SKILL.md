@@ -1,6 +1,6 @@
 ---
 name: freeshard-run-and-operate
-description: "Running, deploying, and operating shard_core. Use when you need to start the app (dev server or full docker compose stack), pair a first device, find where data lands on disk (FREESHARD_DIR/core, user_data, postgres_data), run or restore a backup, cut a release, or understand hosted-vs-self-hosted behavior. TRIGGER on: 'just run-dev', 'docker compose up', .env / .env.template, pairing code, welcome log, FREESHARD_DIR, rclone / backup / restore / download_backup.sh, 'just set-version', release checklist, ghcr.io image tags, 'is this fix deployed?', self-hosting, Let's Encrypt / DISABLE_SSL. SKIP when: editing config values or env-override mechanics (use freeshard-config-and-flags), setting up the Python dev environment / uv / worktrees (use freeshard-build-and-env), writing or running tests (use freeshard-testing-and-qa), diagnosing a live failure (use freeshard-debugging-playbook), or changing CI workflows themselves (use freeshard-change-control)."
+description: "Running, deploying, and operating shard_core. Use when you need to start the app (dev server or full docker compose stack), pair a first device, find where data lands on disk (FREESHARD_DIR/core, user_data, postgres_data), run or restore a backup, cut a release, or understand hosted-vs-self-hosted behavior. TRIGGER on: 'just run-dev', 'docker compose up', .env / .env.template, pairing code, welcome log, FREESHARD_DIR, rclone / backup / restore / scripts/download_backup.sh, 'just set-version', release checklist, ghcr.io image tags, 'is this fix deployed?', self-hosting, Let's Encrypt / DISABLE_SSL. SKIP when: editing config values or env-override mechanics (use freeshard-config-and-flags), setting up the Python dev environment / uv / worktrees (use freeshard-build-and-env), writing or running tests (use freeshard-testing-and-qa), diagnosing a live failure (use freeshard-debugging-playbook), or changing CI workflows themselves (use freeshard-change-control)."
 ---
 
 # Freeshard: Run and Operate
@@ -150,7 +150,7 @@ The backup set is `['core', 'user_data']` only. `postgres_data/` is a sibling di
 ### Restore-for-debugging runbook (run a customer backup locally)
 
 1. Get the shard's backup container name, a read SAS URL (controller-side), and the passphrase (route above, or ask the owner).
-2. Fill the three variables at the top of `download_backup.sh` (repo root) and run it — it rclone-decrypts the whole container into `./$CONTAINER/` (containing `core/` and `user_data/`).
+2. Fill the three variables at the top of `scripts/download_backup.sh` and run it — it rclone-decrypts the whole container into `./$CONTAINER/` (containing `core/` and `user_data/`).
 3. Zip it so `core/` and `user_data/` sit at the zip root, then load it into the dev data dir:
 
 ```bash

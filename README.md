@@ -6,10 +6,6 @@
 </picture>
 </p>
 
-> [!NOTE]
-> Freeshard used to be called _Portal_. Don't be confused if you see the old name in the code or documentation.
-> Our goal is to update everything as soon as possible.
-
 # Freeshard
 
 Freeshard is a personal cloud computer that a consumer can rent for a small monthly fee (or selfhost) and which is as simple to use as a smartphone. Its aim is to restore people's sovereignty regarding the data they consume and produce - to give them a home on the internet.
@@ -17,32 +13,23 @@ Freeshard is a personal cloud computer that a consumer can rent for a small mont
 It is built by a small team working with coding agents. [ai-declaration.md](ai-declaration.md) states where AI is used and how far it goes.
 
 <div align="center" style="display: flex; flex-wrap: wrap; gap: 10px;">
-    <a href="readme/gallery/pairing.png" target="_blank">
-        <img src="readme/gallery/pairing.png" alt="Image 1" style="width: 150px; height: 100px; object-fit: cover;">
-    </a>
-    <a href="readme/gallery/welcome.png" target="_blank">
-        <img src="readme/gallery/welcome.png" alt="Image 2" style="width: 150px; height: 100px; object-fit: cover;">
-    </a>
     <a href="readme/gallery/home.png" target="_blank">
-        <img src="readme/gallery/home.png" alt="Image 3" style="width: 150px; height: 100px; object-fit: cover;">
+        <img src="readme/gallery/home.png" alt="Home screen" style="width: 150px; height: 100px; object-fit: cover;">
     </a>
-    <a href="readme/gallery/appstore.png" target="_blank">
-        <img src="readme/gallery/appstore.png" alt="Image 4" style="width: 150px; height: 100px; object-fit: cover;">
+    <a href="readme/gallery/apps.png" target="_blank">
+        <img src="readme/gallery/apps.png" alt="App store" style="width: 150px; height: 100px; object-fit: cover;">
     </a>
-    <a href="readme/gallery/app.png" target="_blank">
-        <img src="readme/gallery/app.png" alt="Image 5" style="width: 150px; height: 100px; object-fit: cover;">
-    </a>
-    <a href="readme/gallery/devices.png" target="_blank">
-        <img src="readme/gallery/devices.png" alt="Image 6" style="width: 150px; height: 100px; object-fit: cover;">
-    </a>
-    <a href="readme/gallery/pairnew.png" target="_blank">
-        <img src="readme/gallery/pairnew.png" alt="Image 7" style="width: 150px; height: 100px; object-fit: cover;">
-    </a>
-    <a href="readme/gallery/public.png" target="_blank">
-        <img src="readme/gallery/public.png" alt="Image 8" style="width: 150px; height: 100px; object-fit: cover;">
+    <a href="readme/gallery/app-details.png" target="_blank">
+        <img src="readme/gallery/app-details.png" alt="App details" style="width: 150px; height: 100px; object-fit: cover;">
     </a>
     <a href="readme/gallery/settings.png" target="_blank">
-        <img src="readme/gallery/settings.png" alt="Image 9" style="width: 150px; height: 100px; object-fit: cover;">
+        <img src="readme/gallery/settings.png" alt="Settings" style="width: 150px; height: 100px; object-fit: cover;">
+    </a>
+    <a href="readme/gallery/home-dark.png" target="_blank">
+        <img src="readme/gallery/home-dark.png" alt="Home screen in dark mode" style="width: 150px; height: 100px; object-fit: cover;">
+    </a>
+    <a href="readme/gallery/home-mobile.png" target="_blank">
+        <img src="readme/gallery/home-mobile.png" alt="Home screen on a phone" style="width: 150px; height: 100px; object-fit: cover;">
     </a>
 </div>
 
@@ -136,7 +123,7 @@ Or - if you use [Just](https://just.systems/) - run `just run-dev`.
 
 Then, access API-doc at [http://localhost:8080/docs](http://localhost:8080/docs)
 
-If you also want to run the web UI locally, pull it from [here](https://github.com/FreeshardBase/web-terminal) and follow the instructions in its README.
+The web UI is [Sundial](https://github.com/FreeshardBase/sundial). Its README explains how to run it locally, against a mock API or a running shard.
 
 > [!NOTE]
 > When developing, you will typically run backend and frontend locally and without a reverse proxy. This means that you will not be able to start apps, since they rely on being accessed through the reverse proxy.
