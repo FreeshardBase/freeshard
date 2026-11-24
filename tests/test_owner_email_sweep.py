@@ -127,3 +127,38 @@ async def test_a_failed_send_does_not_stop_the_sweep_from_processing_others(
     # startup), the other succeeded and must now have one
     assert tokens.count(None) == 1
     assert sum(t is not None for t in tokens) == 1
+
+
+async def test_a_non_delivery_failure_does_not_stop_the_sweep_from_processing_others(
+    requests_mock, db, mocker
+):
+    """The except clause around each row must not be narrowed to just
+    DeliveryFailed/SendRateLimited: a failure in the write that persists the
+    token *after* a successful delivery (a dropped DB connection, say) is
+    just as much "this one user's turn went wrong" and must not abort the
+    rest of the sweep — nor leave the loop having silently skipped whoever
+    was still due after it."""
+    owner = await _seed_owner_with_unsent_pending("first@example.org")
+    member = await _seed_member_with_unsent_pending("second@example.org", "member1")
+
+    real_update = db_users.update
+    calls = {"n": 0}
+
+    async def flaky_update(conn, user_id, data):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("connection dropped")
+        return await real_update(conn, user_id, data)
+
+    mocker.patch.object(db_users, "update", side_effect=flaky_update)
+
+    await owner_email.send_missing_verifications()
+
+    assert calls["n"] == 2
+    updated_owner = await _get(owner.id)
+    updated_member = await _get(member.id)
+    tokens = [updated_owner.email_token_hash, updated_member.email_token_hash]
+    # the row whose persist failed keeps no token (retried next startup,
+    # same as a delivery failure), the other one got through
+    assert tokens.count(None) == 1
+    assert sum(t is not None for t in tokens) == 1

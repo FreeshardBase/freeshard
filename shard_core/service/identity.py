@@ -6,6 +6,7 @@ from shard_core.database import users as db_users
 from shard_core.data_model.identity import Identity
 from shard_core.service import owner_email
 from shard_core.service.portal_controller import refresh_profile
+from shard_core.settings import settings
 from shard_core.util.signals import async_on_first_terminal_add, on_identity_update
 
 log = logging.getLogger(__name__)
@@ -71,33 +72,50 @@ async def enrich_identity_from_profile(_):
 
         owner = await db_users.get_owner(conn) if profile.owner_email else None
 
-    if owner and owner.email is None:
-        # set_email() is what actually mints a token and sends the
-        # confirmation — writing pending_email directly, as this used to do,
-        # created a candidate nothing ever notified the owner about. This
-        # handler re-fires whenever the last terminal is re-paired, and
-        # set_email() replacing any existing candidate is exactly the right
-        # behavior there too: the token is bound to whatever pending_email
-        # holds when it is opened, so a new candidate must retire the old one.
-        try:
-            await owner_email.set_email(owner, profile.owner_email)
-        except (owner_email.SendRateLimited, owner_email.DeliveryFailed) as e:
-            # This handler runs synchronously inside the pairing request, and
-            # pairing a device must succeed no matter what happens to this
-            # best-effort enrichment. Fall back to the old raw write so the
-            # owner at least sees a pending candidate in Settings and can
-            # resend manually, rather than ending up with nothing at all.
-            log.warning(
-                f"could not send a verification email while enriching identity "
-                f"from profile, falling back to an unsent candidate: {e}"
-            )
-            async with db_conn() as conn:
-                await db_users.update(
-                    conn,
-                    owner.id,
-                    {
-                        "pending_email": profile.owner_email,
-                        "email_token_hash": None,
-                        "email_token_expires": None,
-                    },
+    # This handler re-fires whenever the last terminal is re-paired, with the
+    # same profile.owner_email as before every time nothing actually changed
+    # — skip in that case, or a repeated unpair/re-pair cycle would mint a
+    # fresh token (invalidating any link already delivered) and spend the
+    # shared send budget on each cycle for no reason.
+    if owner and owner.email is None and owner.pending_email != profile.owner_email:
+        if not settings().email.enabled:
+            # set_email()'s "disabled" branch promotes straight to the
+            # verified email column with no confirmation at all — correct
+            # for an owner who typed an address into Settings themselves and
+            # knowingly accepted it won't be confirmed, not for one lifted
+            # automatically from the controller's profile that nobody at the
+            # shard ever typed or confirmed through any UI action.
+            await _write_unsent_candidate(owner.id, profile.owner_email)
+        else:
+            try:
+                await owner_email.set_email(owner, profile.owner_email)
+            except (owner_email.SendRateLimited, owner_email.DeliveryFailed) as e:
+                # This handler runs synchronously inside the pairing request,
+                # and pairing a device must succeed no matter what happens to
+                # this best-effort enrichment. Fall back to the old raw write
+                # so the owner at least sees a pending candidate in Settings
+                # and can resend manually, rather than ending up with
+                # nothing at all.
+                log.warning(
+                    f"could not send a verification email while enriching "
+                    f"identity from profile, falling back to an unsent "
+                    f"candidate: {e}"
                 )
+                await _write_unsent_candidate(owner.id, profile.owner_email)
+
+
+async def _write_unsent_candidate(owner_id: int, address: str):
+    """The pre-fix raw write, now only a fallback: a pending candidate with
+    no token, which the owner can still resend manually from Settings, or
+    that the startup sweep (owner_email.send_missing_verifications) will
+    catch up on for them."""
+    async with db_conn() as conn:
+        await db_users.update(
+            conn,
+            owner_id,
+            {
+                "pending_email": address,
+                "email_token_hash": None,
+                "email_token_expires": None,
+            },
+        )

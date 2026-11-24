@@ -162,7 +162,15 @@ async def send_missing_verifications() -> None:
                     },
                 )
             log.info(f"sent a missing verification email for {user}")
-        except (DeliveryFailed, SendRateLimited) as e:
+        except Exception as e:
+            # Deliberately broad: a DB hiccup on the post-delivery write is
+            # just as much "one user's turn went wrong" as a DeliveryFailed
+            # or SendRateLimited, and must not abort the rest of the sweep.
+            # The row stays tokenless either way, so it is retried next
+            # startup — including the case where the mail already went out
+            # but the write that would have recorded its token failed; that
+            # costs a second, different link rather than an untracked first
+            # one.
             log.warning(f"could not send a missing verification email for {user}: {e}")
 
 

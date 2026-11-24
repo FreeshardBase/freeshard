@@ -568,6 +568,24 @@ async def test_clearing_tells_the_old_address_first(
 # --- self-hosted, where no mail can be sent --------------------------------------
 
 
+async def test_pairing_without_verification_leaves_the_address_pending(
+    requests_mock, app_client: AsyncClient
+):
+    """enrich_identity_from_profile lifts profile.owner_email automatically —
+    unlike a PATCH /me the owner typed themselves, it must not be promoted
+    straight to the verified email column just because the shard can't mail
+    a confirmation right now; nobody at the shard ever typed or confirmed
+    this address through any UI action."""
+    with settings_override({"email": {"enabled": False}}):
+        await pair_new_terminal(app_client)
+
+    owner = await get_owner()
+    assert owner.email is None
+    assert owner.pending_email == PROFILE_ADDRESS
+    assert owner.email_token_hash is None
+    assert calls_to(requests_mock, VERIFY_PATH) == []
+
+
 async def test_without_verification_the_address_is_set_directly(
     requests_mock, app_client: AsyncClient
 ):
