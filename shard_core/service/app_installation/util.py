@@ -183,7 +183,10 @@ async def _write_to_yaml(spec: pydantic.BaseModel, output_path: Path, tmp_path: 
     a config consumer watches.
     """
     output_path.parent.mkdir(exist_ok=True, parents=True)
-    async with aiofiles.open(tmp_path, "w") as f:
-        await f.write("# == DO NOT MODIFY ==\n# this file is auto-generated\n\n")
-        await f.write(yaml.dump(spec.model_dump(exclude_none=True)))
-    os.replace(tmp_path, output_path)
+    try:
+        async with aiofiles.open(tmp_path, "w") as f:
+            await f.write("# == DO NOT MODIFY ==\n# this file is auto-generated\n\n")
+            await f.write(yaml.dump(spec.model_dump(exclude_none=True)))
+        os.replace(tmp_path, output_path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
