@@ -65,6 +65,18 @@ async def get_all_with_pending_email_token(conn: AsyncConnection) -> list[User]:
         return await cur.fetchall()
 
 
+async def get_all_with_unsent_pending_email(conn: AsyncConnection) -> list[User]:
+    """Every user holding a candidate address that never got a confirmation
+    token — i.e. one written directly rather than through set_email(), such
+    as migration 0005's carryover or a pre-fix signal handler run."""
+    sql: LiteralString = (
+        "SELECT * FROM users WHERE pending_email IS NOT NULL AND email_token_hash IS NULL"
+    )
+    async with conn.cursor(row_factory=class_row(User)) as cur:
+        await cur.execute(sql)
+        return await cur.fetchall()
+
+
 async def claim_email_token(conn: AsyncConnection, id: int, token_hash: str):
     """Spend the confirmation token, returning the row it was spent on.
 

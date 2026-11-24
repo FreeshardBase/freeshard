@@ -19,6 +19,7 @@ from .service import (
     app_lifecycle,
     oidc_backchannel_barrier,
     oidc_backchannel_logout,
+    owner_email,
     peer,
     app_usage_reporting,
     websocket,
@@ -98,6 +99,14 @@ async def lifespan(_):
         await portal_controller.refresh_profile()
     except (ConnectionError, HTTPError, ValidationError) as e:
         log.error(f"could not refresh profile: {e}")
+
+    try:
+        await owner_email.send_missing_verifications()
+    except Exception as e:
+        # One-time catch-up sweep for candidates a bypassed send left
+        # dangling (see shard_core/service/owner_email.py). Best-effort: it
+        # must never be the reason a shard fails to start.
+        log.error(f"could not send missing verification emails: {e}")
 
     background_tasks = _make_background_tasks()
     for t in background_tasks:

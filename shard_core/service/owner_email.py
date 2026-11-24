@@ -121,6 +121,51 @@ async def resend_verification(user: User) -> None:
     await _deliver_verification(user.pending_email, token)
 
 
+async def send_missing_verifications() -> None:
+    """Catch up on confirmation sends that a tokenless pending_email skipped.
+
+    Run once at startup. Targets rows left by anything that ever wrote
+    pending_email directly instead of through set_email() — migration 0005's
+    one-time carryover of the old Public-page address is the known case, but
+    this also mops up any future instance of the same bypass. Naturally
+    idempotent: once a row gets a token it stops matching the query, so a
+    later restart will not refire it for that row. A delivery failure for one
+    user must not stop the others — leave that row's token unset so the next
+    startup retries it, same as leaving a crashed send for later rather than
+    losing it.
+    """
+    if not settings().email.enabled:
+        return
+
+    async with db_conn() as conn:
+        pending = await db_users.get_all_with_unsent_pending_email(conn)
+
+    for user in pending:
+        try:
+            _require_send_budget()
+            token = secrets.token_urlsafe(32)
+            # Deliver before persisting the token — the reverse of
+            # set_email()/resend_verification(), and deliberately so: those
+            # are triggered by an owner who can just click resend again, but
+            # this sweep is unattended, so a failure must leave the row
+            # exactly as unsent as it already was, or the next startup's
+            # query would skip it and nothing would ever retry it.
+            await _deliver_verification(user.pending_email, token)
+            async with db_conn() as conn:
+                await db_users.update(
+                    conn,
+                    user.id,
+                    {
+                        "email_token_hash": hash_token(token),
+                        "email_token_expires": datetime.now(timezone.utc)
+                        + TOKEN_LIFETIME,
+                    },
+                )
+            log.info(f"sent a missing verification email for {user}")
+        except (DeliveryFailed, SendRateLimited) as e:
+            log.warning(f"could not send a missing verification email for {user}: {e}")
+
+
 async def discard_pending(user: User) -> User:
     async with db_conn() as conn:
         return await db_users.update(conn, user.id, dict(_CLEARED_PENDING))
