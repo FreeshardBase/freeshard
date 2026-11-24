@@ -1,7 +1,9 @@
 import json
 import logging
+import os
 import shutil
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 import yaml
@@ -169,6 +171,51 @@ async def test_uninstalling_app_is_not_routed(app_client):
     await write_traefik_dyn_config()
 
     assert "uninstalling_app_http" not in _read_traefik_dyn_config()["http"]["routers"]
+
+
+async def test_failed_write_leaves_previous_config_intact(api_client):
+    """A write that fails part-way must not destroy the config already in place —
+    Traefik would otherwise drop every route until the next successful write —
+    and must leave no staging file behind."""
+    traefik_dyn_dir = Path(settings().path_root) / "core" / "traefik_dyn"
+    config_path = traefik_dyn_dir / "traefik_dyn.yml"
+    original = config_path.read_text()
+    assert "routers" in original
+
+    with patch(
+        "shard_core.service.app_installation.util.yaml.dump",
+        side_effect=RuntimeError("serialization blew up"),
+    ):
+        with pytest.raises(RuntimeError):
+            await write_traefik_dyn_config()
+
+    assert config_path.read_text() == original
+    assert not (traefik_dyn_dir.parent / "traefik_dyn.yml.tmp").exists()
+
+
+async def test_config_is_staged_outside_the_watched_directory(api_client):
+    """Traefik's file provider watches the whole traefik_dyn directory, so the
+    staging file must live outside it (and be renamed in) — a partial file inside
+    it would be loaded as a second, stale config."""
+    traefik_dyn_dir = Path(settings().path_root) / "core" / "traefik_dyn"
+    config_path = traefik_dyn_dir / "traefik_dyn.yml"
+
+    real_replace = os.replace
+    staged_from: list[Path] = []
+
+    def recording_replace(src, dst):
+        staged_from.append(Path(src))
+        real_replace(src, dst)
+
+    with patch(
+        "shard_core.service.app_installation.util.os.replace",
+        side_effect=recording_replace,
+    ):
+        await write_traefik_dyn_config()
+
+    assert staged_from, "the config was not written via an atomic rename"
+    assert staged_from[0].parent == traefik_dyn_dir.parent
+    assert "routers" in config_path.read_text()
 
 
 def _covers(status_spec: list[str], code: int) -> bool:

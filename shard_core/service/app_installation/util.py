@@ -1,4 +1,5 @@
 import logging
+import os
 from pathlib import Path
 
 import aiofiles
@@ -162,14 +163,29 @@ async def write_traefik_dyn_config():
     default_identity = Identity(**default_row)
     portal = SafeIdentity.from_identity(default_identity)
 
-    traefik_dyn_filename = (
-        Path(settings().path_root) / "core" / "traefik_dyn" / "traefik_dyn.yml"
-    )
-    await _write_to_yaml(compile_config(app_infos, portal), traefik_dyn_filename)
+    traefik_dyn_dir = Path(settings().path_root) / "core" / "traefik_dyn"
+    output_path = traefik_dyn_dir / "traefik_dyn.yml"
+    # Traefik's file provider watches traefik_dyn_dir, so the staging file cannot
+    # live there: stage it one level up in core/, on the same mount, where the
+    # provider never scans it but os.replace() still avoids an EXDEV cross-device
+    # rename.
+    tmp_path = traefik_dyn_dir.parent / (output_path.name + ".tmp")
+    await _write_to_yaml(compile_config(app_infos, portal), output_path, tmp_path)
 
 
-async def _write_to_yaml(spec: pydantic.BaseModel, output_path: Path):
+async def _write_to_yaml(spec: pydantic.BaseModel, output_path: Path, tmp_path: Path):
+    """Serialize spec to YAML at output_path atomically.
+
+    A watcher of output_path reads either the previous complete file or the next
+    one, never a truncated or half-written config. tmp_path must be on the same
+    filesystem as output_path and should sit outside any directory a config
+    consumer watches.
+    """
     output_path.parent.mkdir(exist_ok=True, parents=True)
-    async with aiofiles.open(output_path, "w") as f:
-        await f.write("# == DO NOT MODIFY ==\n# this file is auto-generated\n\n")
-        await f.write(yaml.dump(spec.model_dump(exclude_none=True)))
+    try:
+        async with aiofiles.open(tmp_path, "w") as f:
+            await f.write("# == DO NOT MODIFY ==\n# this file is auto-generated\n\n")
+            await f.write(yaml.dump(spec.model_dump(exclude_none=True)))
+        os.replace(tmp_path, output_path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
