@@ -2,6 +2,7 @@ import json
 import logging
 import shutil
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 import yaml
@@ -169,6 +170,35 @@ async def test_uninstalling_app_is_not_routed(app_client):
     await write_traefik_dyn_config()
 
     assert "uninstalling_app_http" not in _read_traefik_dyn_config()["http"]["routers"]
+
+
+async def test_failed_write_leaves_previous_config_intact(api_client):
+    """A write that fails part-way must not destroy the config already in place —
+    Traefik would otherwise drop every route until the next successful write."""
+    config_path = (
+        Path(settings().path_root) / "core" / "traefik_dyn" / "traefik_dyn.yml"
+    )
+    original = config_path.read_text()
+    assert "routers" in original
+
+    with patch(
+        "shard_core.service.app_installation.util.yaml.dump",
+        side_effect=RuntimeError("serialization blew up"),
+    ):
+        with pytest.raises(RuntimeError):
+            await write_traefik_dyn_config()
+
+    assert config_path.read_text() == original
+
+
+async def test_no_temp_file_is_left_in_the_watched_directory(api_client):
+    """The staging file must never appear in traefik_dyn, which Traefik watches:
+    a leftover there would be loaded as a second, stale config."""
+    traefik_dyn_dir = Path(settings().path_root) / "core" / "traefik_dyn"
+
+    await write_traefik_dyn_config()
+
+    assert [p.name for p in traefik_dyn_dir.iterdir() if p.suffix == ".tmp"] == []
 
 
 def _covers(status_spec: list[str], code: int) -> bool:
