@@ -156,6 +156,14 @@ are either not there yet or already being removed. For every other status
 app with a warning if it is missing — so a half-installed row can no longer raise
 `MetadataNotFound` out of the lifespan and boot-loop core.
 
+The config is written atomically: `write_traefik_dyn_config` stages the full file
+in `core/` (outside the `traefik_dyn` directory Traefik watches, same mount) and
+`os.replace()`es it into place. Traefik's file provider watches that directory with
+`watch: true`, so a non-atomic rewrite — truncate then two awaited writes — would
+let a reload read an empty or header-only file and 404 every route (apps,
+shard_core's own API, the web terminal) until the write finished; a write that
+failed part-way would leave the file truncated for good.
+
 ### App compose template context
 `render_docker_compose_template` (`app_installation/util.py`) exposes four things to an
 app's `docker-compose.yml.template`: `fs.*` (host data paths), `portal` (the shard
