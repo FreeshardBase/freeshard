@@ -38,6 +38,7 @@ shard_core/
     telemetry.py        Usage metrics reporting
     disk.py             Disk space monitoring
     metrics.py          Per-app + shard CPU/memory sampler (cgroup v2 + /proc) for the resource-monitor API
+    disk_full_notification.py  Owner email when disk crosses threshold (via controller relay, deduped)
     migration.py        Database schema migrations
     websocket.py        WebSocket connection lifecycle
   database/           → PostgreSQL access layer (per-entity modules, conn-first-arg pattern)
@@ -90,6 +91,7 @@ Started at app lifespan startup, stopped at shutdown:
 - `InstallationWorker` — async task queue for app install/uninstall
 - `PeriodicTask(control_apps, 30s)` — app idle lifecycle. With `apps.lifecycle.pause_enabled` (default off): RUNNING pauses after `idle_for_pause` (cgroup freeze + page-out to swap), PAUSED stops after `idle_for_stop`, and high memory PSI demotes the LRU app one tier per cycle. Flag off: legacy stop-only. Independent of the flag, an `always_on` app is handed to `start_app` on every tick unless disk is low or the app is too big for the shard; `start_app` decides from the real container state and still skips non-revivable statuses, so a `RUNNING` row whose containers are gone (shard_core killed mid-shutdown) comes back
 - `PeriodicTask(update_disk_space, 30s)` — disk monitoring
+- `PeriodicTask(disk_full_notification.run_check, 30s)` — owner email when disk usage ≥ `event_notifications.disk_full.threshold_percent` (default 90%), deduped via kv_store (sent once, re-armed when usage drops below threshold), opt-out via `event_notifications.disk_full.enabled`. Runs as its own task so a slow controller relay call can never stall disk monitoring
 - `PeriodicTask(update_stats, metrics.sample_interval_seconds=5s)` — samples per-app + shard CPU/memory into a snapshot served by `GET /protected/stats` and `GET /protected/apps/{name}/stats`
 - `CronTask(start_backup, "0 3 * * *")` — daily backup with random delay
 - `CronTask(docker_prune_images, daily)` — image cleanup

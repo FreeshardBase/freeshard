@@ -26,6 +26,7 @@ from .service import (
     portal_controller,
     backup,
     disk,
+    disk_full_notification,
     telemetry,
     metrics,
     user,
@@ -140,6 +141,7 @@ def _make_background_tasks() -> List[BackgroundTask]:
             max_random_delay=s.services.backup.timing.max_random_delay,
         ),
         PeriodicTask(disk.update_disk_space, 30),
+        PeriodicTask(disk_full_notification.run_check, 30),
         PeriodicTask(metrics.update_stats, s.metrics.sample_interval_seconds),
         # Backstop for OIDC backchannel-logout retries: the on_apps_update
         # signal (service/oidc_backchannel_logout.py) drains the outbox as
