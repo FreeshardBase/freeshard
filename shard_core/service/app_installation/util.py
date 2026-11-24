@@ -176,11 +176,10 @@ async def write_traefik_dyn_config():
 async def _write_to_yaml(spec: pydantic.BaseModel, output_path: Path, tmp_path: Path):
     """Serialize spec to YAML at output_path atomically.
 
-    The content is written in full to tmp_path and then os.replace()d onto
-    output_path, so a watcher of output_path reads either the previous complete
-    file or the next one, never a truncated or half-written config. tmp_path must
-    be on the same filesystem as output_path and should sit outside any directory
-    a config consumer watches.
+    A watcher of output_path reads either the previous complete file or the next
+    one, never a truncated or half-written config. tmp_path must be on the same
+    filesystem as output_path and should sit outside any directory a config
+    consumer watches.
     """
     output_path.parent.mkdir(exist_ok=True, parents=True)
     try:

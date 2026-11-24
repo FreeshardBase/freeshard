@@ -214,7 +214,7 @@ async def test_config_is_staged_outside_the_watched_directory(api_client):
         await write_traefik_dyn_config()
 
     assert staged_from, "the config was not written via an atomic rename"
-    assert staged_from[0].parent != traefik_dyn_dir
+    assert staged_from[0].parent == traefik_dyn_dir.parent
     assert "routers" in config_path.read_text()
 
 
