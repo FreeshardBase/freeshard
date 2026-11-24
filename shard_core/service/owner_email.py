@@ -166,7 +166,11 @@ async def confirm_email(token: str) -> bool:
     The token is spent before anything else happens, so the notification and the
     controller calls in the middle cannot be replayed by a second click. The
     old address is told before the switch is mirrored, because the controller's
-    relay only ever reaches the address it currently has on file.
+    relay only ever reaches the address it currently has on file — but only
+    when there was an old address: every shard starts with email = None (the
+    0005-migration invariant), so a user's very first confirmation has nothing
+    to warn away from, and sending that notice there just duplicates the
+    "confirmed" one that follows, usually to the very same inbox.
 
     Returns whether anything was promoted. Callers must not pass that on to an
     unauthenticated client: the answer says whether an address was pending.
@@ -176,14 +180,15 @@ async def confirm_email(token: str) -> bool:
         return False
 
     address = claimed.pending_email
-    await _notify(
-        "The contact address for your Freeshard is changing",
-        [
-            f"The contact address for your Freeshard was just changed to "
-            f"{address}. This is the last message going to this address.",
-            "If this was not you, open your terminal and set the address back.",
-        ],
-    )
+    if claimed.email is not None:
+        await _notify(
+            "The contact address for your Freeshard is changing",
+            [
+                f"The contact address for your Freeshard was just changed to "
+                f"{address}. This is the last message going to this address.",
+                "If this was not you, open your terminal and set the address back.",
+            ],
+        )
 
     async with db_conn() as conn:
         updated = await db_users.promote_pending_email(conn, claimed.id, address)

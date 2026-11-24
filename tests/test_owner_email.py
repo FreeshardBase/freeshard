@@ -57,6 +57,14 @@ async def set_address(client: AsyncClient, address=NEW_ADDRESS):
     return response.json()
 
 
+async def set_confirmed_email_directly(address: str):
+    """Seed an already-verified address, bypassing set/confirm, for tests whose
+    precondition is a genuine previous address rather than a fresh shard's
+    default None (see the 0005-migration invariant in owner_email.py)."""
+    async with db_conn() as conn:
+        await db_users.update(conn, (await get_owner()).id, {"email": address})
+
+
 def sent_token(requests_mock) -> str:
     calls = calls_to(requests_mock, VERIFY_PATH)
     assert calls, "no verification email was requested"
@@ -277,8 +285,11 @@ async def test_the_old_address_is_told_before_the_switch_is_mirrored(
     requests_mock, app_client: AsyncClient
 ):
     """The relay only ever reaches the address the controller currently holds,
-    so a notification after the mirror would go to the new address."""
+    so a notification after the mirror would go to the new address. This is a
+    genuine change (a prior confirmed address exists) — see the first-
+    confirmation test below for why that precondition matters here."""
     await pair_new_terminal(app_client)
+    await set_confirmed_email_directly("old@example.org")
     await set_address(app_client)
     token = sent_token(requests_mock)
 
@@ -292,6 +303,26 @@ async def test_the_old_address_is_told_before_the_switch_is_mirrored(
     assert json.loads(calls_to(requests_mock, MIRROR_PATH)[0].request.body) == {
         "address": NEW_ADDRESS
     }
+
+
+async def test_a_first_confirmation_does_not_warn_about_a_change(
+    requests_mock, app_client: AsyncClient
+):
+    """A fresh shard's owner has no prior address to warn away from (the
+    0005-migration invariant: every shard starts with email = None). Sending
+    the "this is changing" notice anyway duplicates the "confirmed" one that
+    follows it, usually to the very same inbox — the owner only ever verifies
+    one address, the one they gave at signup."""
+    await pair_new_terminal(app_client)
+    assert (await get_owner()).email is None
+    await set_address(app_client)
+    token = sent_token(requests_mock)
+
+    await app_client.post(CONFIRM, json={"token": token})
+
+    assert len(calls_to(requests_mock, RELAY_PATH)) == 1
+    body = json.loads(calls_to(requests_mock, RELAY_PATH)[0].request.body)
+    assert body["subject"] == "Your Freeshard contact address is confirmed"
 
 
 async def test_confirming_survives_a_controller_that_cannot_send_mail(
@@ -315,8 +346,10 @@ async def test_confirming_survives_a_controller_that_cannot_mirror(
 ):
     """The shard owns the address; a failed mirror must not undo a confirmation
     the owner already completed — but it must suppress the success mail, which
-    the relay would otherwise send to the address we just abandoned."""
+    the relay would otherwise send to the address we just abandoned. Needs a
+    genuine prior address, or there is no "changing" notice to count here."""
     await pair_new_terminal(app_client)
+    await set_confirmed_email_directly("old@example.org")
     await set_address(app_client)
     token = sent_token(requests_mock)
     requests_mock.replace(
