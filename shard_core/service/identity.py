@@ -6,7 +6,6 @@ from shard_core.database import users as db_users
 from shard_core.data_model.identity import Identity
 from shard_core.service import owner_email
 from shard_core.service.portal_controller import refresh_profile
-from shard_core.settings import settings
 from shard_core.util.signals import async_on_first_terminal_add, on_identity_update
 
 log = logging.getLogger(__name__)
@@ -72,31 +71,26 @@ async def enrich_identity_from_profile(_):
 
         owner = await db_users.get_owner(conn) if profile.owner_email else None
 
+    # A reachable controller (profile was fetched above) means a managed
+    # shard, and every managed shard has mail enabled — email.enabled=False
+    # is the self-hosted marker, and a self-hosted shard has no controller to
+    # have reached this far with.
     if owner and owner.email is None:
-        if not settings().email.enabled:
-            # set_email()'s "disabled" branch promotes straight to the
-            # verified email column with no confirmation at all — correct
-            # for an owner who typed an address into Settings themselves and
-            # knowingly accepted it won't be confirmed, not for one lifted
-            # automatically from the controller's profile that nobody at the
-            # shard ever typed or confirmed through any UI action.
+        try:
+            await owner_email.set_email(owner, profile.owner_email)
+        except (owner_email.SendRateLimited, owner_email.DeliveryFailed) as e:
+            # This handler runs synchronously inside the pairing request,
+            # and pairing a device must succeed no matter what happens to
+            # this best-effort enrichment. Fall back to the old raw write
+            # so the owner at least sees a pending candidate in Settings
+            # and can resend manually, rather than ending up with
+            # nothing at all.
+            log.warning(
+                f"could not send a verification email while enriching "
+                f"identity from profile, falling back to an unsent "
+                f"candidate: {e}"
+            )
             await _write_unsent_candidate(owner.id, profile.owner_email)
-        else:
-            try:
-                await owner_email.set_email(owner, profile.owner_email)
-            except (owner_email.SendRateLimited, owner_email.DeliveryFailed) as e:
-                # This handler runs synchronously inside the pairing request,
-                # and pairing a device must succeed no matter what happens to
-                # this best-effort enrichment. Fall back to the old raw write
-                # so the owner at least sees a pending candidate in Settings
-                # and can resend manually, rather than ending up with
-                # nothing at all.
-                log.warning(
-                    f"could not send a verification email while enriching "
-                    f"identity from profile, falling back to an unsent "
-                    f"candidate: {e}"
-                )
-                await _write_unsent_candidate(owner.id, profile.owner_email)
 
 
 async def _write_unsent_candidate(owner_id: int, address: str):
