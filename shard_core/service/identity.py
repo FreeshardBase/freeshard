@@ -101,9 +101,7 @@ async def enrich_identity_from_profile(_):
 
 async def _write_unsent_candidate(owner_id: int, address: str):
     """The pre-fix raw write, now only a fallback: a pending candidate with
-    no token, which the owner can still resend manually from Settings, or
-    that the startup sweep (owner_email.send_missing_verifications) will
-    catch up on for them."""
+    no token, which the owner can still resend manually from Settings."""
     async with db_conn() as conn:
         await db_users.update(
             conn,

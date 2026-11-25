@@ -498,9 +498,8 @@ async def test_resending_mints_a_token_for_a_candidate_seeded_without_one(
 ):
     """Where every shard that has been through the 0005 migration starts: a
     candidate with no token, written directly rather than through
-    set_email(). Resend is the recovery an owner can trigger by hand; the
-    startup sweep in tests/test_owner_email_sweep.py is the one that doesn't
-    wait for the owner to notice."""
+    set_email(). There is no automatic catch-up for this — resend is the
+    only recovery, and it must work from this exact seeded shape."""
     await pair_new_terminal(app_client)
     owner = await get_owner()
     async with db_conn() as conn:
