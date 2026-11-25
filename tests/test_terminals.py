@@ -1,12 +1,15 @@
 from time import sleep
 
+import responses
 from httpx import AsyncClient
 from starlette import status
 
 from shard_core.data_model.backend.shard_model import ShardDb
 from shard_core.database.connection import db_conn
 from shard_core.database import terminals as db_terminals
+from shard_core.database import users as db_users
 from shard_core.data_model.terminal import Terminal, Icon
+from shard_core.settings import settings
 from tests.conftest import requests_mock_context, mock_shard
 from tests.util import get_pairing_code, add_terminal, pair_new_terminal
 
@@ -74,7 +77,9 @@ async def test_pairing_happy(requests_mock, app_client: AsyncClient):
     assert response.json()["id"] == terminal_id
     assert response.json()["name"] == t_name
 
-    assert len(requests_mock.calls) == 1
+    # one call to refresh the profile, one to send the real verification email
+    # for the controller's signup address (see test_owner_email.py)
+    assert len(requests_mock.calls) == 2
     response = await app_client.get("protected/identities/default")
     assert response.status_code == status.HTTP_200_OK
     assert response.json()["name"] == "test owner"
@@ -223,6 +228,28 @@ async def test_pairing_with_profile_missing_email(
         response = await app_client.get("protected/users/me")
         assert response.json()["email"] is None
         assert response.json()["pending_email"] is None
+
+
+async def test_pairing_still_succeeds_when_the_verification_send_fails(
+    requests_mock, app_client: AsyncClient
+):
+    """async_on_first_terminal_add is awaited synchronously inside the pairing
+    request (web/public/pair.py), so a controller that can't send mail right
+    now must not stop pairing from completing. The owner still ends up with a
+    pending candidate they can resend manually — see
+    tests/test_owner_email.py's resend-recovery tests."""
+    verify_url = f"{settings().freeshard_controller.base_url}/api/email_verification"
+    requests_mock.replace(responses.POST, verify_url, status=500, body="nope")
+
+    response = await pair_new_terminal(app_client)
+
+    assert response.status_code == 201
+    async with db_conn() as conn:
+        owner = await db_users.get_owner(conn)
+    assert owner.email is None
+    assert owner.pending_email == "testowner@foobar.com"
+    assert owner.email_token_hash is None
+    assert owner.email_token_expires is None
 
 
 async def test_last_connection(api_client: AsyncClient):
