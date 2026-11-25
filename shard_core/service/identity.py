@@ -72,12 +72,7 @@ async def enrich_identity_from_profile(_):
 
         owner = await db_users.get_owner(conn) if profile.owner_email else None
 
-    # This handler re-fires whenever the last terminal is re-paired, with the
-    # same profile.owner_email as before every time nothing actually changed
-    # — skip in that case, or a repeated unpair/re-pair cycle would mint a
-    # fresh token (invalidating any link already delivered) and spend the
-    # shared send budget on each cycle for no reason.
-    if owner and owner.email is None and owner.pending_email != profile.owner_email:
+    if owner and owner.email is None:
         if not settings().email.enabled:
             # set_email()'s "disabled" branch promotes straight to the
             # verified email column with no confirmation at all — correct

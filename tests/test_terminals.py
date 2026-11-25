@@ -1,5 +1,4 @@
 from time import sleep
-from urllib.parse import urlparse
 
 import responses
 from httpx import AsyncClient
@@ -251,32 +250,6 @@ async def test_pairing_still_succeeds_when_the_verification_send_fails(
     assert owner.pending_email == "testowner@foobar.com"
     assert owner.email_token_hash is None
     assert owner.email_token_expires is None
-
-
-async def test_repairing_with_the_same_profile_address_does_not_resend(
-    requests_mock, app_client: AsyncClient
-):
-    """async_on_first_terminal_add fires again whenever the last terminal is
-    removed and a new one paired, not just on the very first pairing. With
-    the same profile.owner_email already the pending candidate, nothing
-    actually changed, so there is nothing to re-send — re-sending would mint
-    a fresh token (orphaning the one already delivered) and spend the
-    shared send budget for no reason."""
-    await pair_new_terminal(app_client, "T1")
-    t_id = (await app_client.get("protected/terminals/name/T1")).json()["id"]
-    await _delete_terminal(app_client, t_id)
-
-    await pair_new_terminal(app_client, "T2")
-
-    async with db_conn() as conn:
-        owner = await db_users.get_owner(conn)
-    assert owner.pending_email == "testowner@foobar.com"
-    verify_calls = [
-        c
-        for c in requests_mock.calls
-        if urlparse(c.request.url).path == "/api/email_verification"
-    ]
-    assert len(verify_calls) == 1
 
 
 async def test_last_connection(api_client: AsyncClient):

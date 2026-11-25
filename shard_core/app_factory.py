@@ -100,13 +100,7 @@ async def lifespan(_):
     except (ConnectionError, HTTPError, ValidationError) as e:
         log.error(f"could not refresh profile: {e}")
 
-    try:
-        await owner_email.send_missing_verifications()
-    except Exception as e:
-        # One-time catch-up sweep for candidates a bypassed send left
-        # dangling (see shard_core/service/owner_email.py). Best-effort: it
-        # must never be the reason a shard fails to start.
-        log.error(f"could not send missing verification emails: {e}")
+    await owner_email.send_missing_verifications()
 
     background_tasks = _make_background_tasks()
     for t in background_tasks:
