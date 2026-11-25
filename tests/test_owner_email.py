@@ -99,6 +99,31 @@ async def test_me_hides_the_confirmation_token(requests_mock, app_client: AsyncC
     assert "email_token_expires" not in body
 
 
+async def test_me_exposes_whether_the_pending_candidate_was_ever_sent(
+    requests_mock, app_client: AsyncClient
+):
+    """pending_email_sent is what a UI needs to word its action correctly: a
+    candidate nobody ever attempted to deliver (migration 0005's carryover,
+    or a failed enrichment falling back to a raw write) must not be offered
+    as a "resend" — nothing has gone out to resend."""
+    await pair_new_terminal(app_client)
+    # pairing already seeded a real, sent candidate via the controller profile
+    assert (await app_client.get(ME)).json()["pending_email_sent"] is True
+
+    owner = await get_owner()
+    async with db_conn() as conn:
+        await db_users.update(
+            conn,
+            owner.id,
+            {
+                "pending_email": PROFILE_ADDRESS,
+                "email_token_hash": None,
+                "email_token_expires": None,
+            },
+        )
+    assert (await app_client.get(ME)).json()["pending_email_sent"] is False
+
+
 async def test_pairing_seeds_the_controller_address_as_a_candidate(
     requests_mock, app_client: AsyncClient
 ):

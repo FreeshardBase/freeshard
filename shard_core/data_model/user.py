@@ -34,11 +34,21 @@ class OutputUser(BaseModel):
     display_name: str
     email: Optional[str] = None
     pending_email: Optional[str] = None
+    # Whether any delivery was ever attempted for pending_email, regardless of
+    # whether it succeeded — the token is minted before delivery is attempted,
+    # so this is the earliest-available signal, not a delivered/arrived flag.
+    # False means pending_email was written directly (migration 0005's
+    # carryover, or a failed enrichment falling back to an unsent candidate):
+    # nothing has been sent, so a UI must not word its action as a repeat.
+    pending_email_sent: bool = False
     role: Role
 
     @classmethod
     def from_user(cls, user: User) -> "OutputUser":
-        return cls(**user.model_dump())
+        return cls(
+            **user.model_dump(),
+            pending_email_sent=user.email_token_hash is not None,
+        )
 
 
 class OutputOwner(BaseModel):
