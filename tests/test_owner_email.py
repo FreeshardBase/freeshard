@@ -183,7 +183,9 @@ async def test_setting_an_address_passes_the_owners_stored_language(
 
     await set_address(app_client)
 
-    requested = json.loads(calls_to(requests_mock, VERIFY_PATH)[0].request.body)
+    # [-1]: pairing already sent one verification, for the controller's
+    # signup address candidate (see test_pairing_seeds_the_controller_...)
+    requested = json.loads(calls_to(requests_mock, VERIFY_PATH)[-1].request.body)
     assert requested["language"] == "de"
 
 
