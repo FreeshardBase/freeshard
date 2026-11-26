@@ -41,14 +41,18 @@ async def relay_email_to_owner(subject: str, body: list[str]):
     response.raise_for_status()
 
 
-async def send_verification_email(address: str, token: str):
+async def send_verification_email(address: str, token: str, language: str | None):
     """Ask the controller to mail a confirmation link to an unconfirmed address.
 
     The controller owns the template and builds the link from the shard domain
     it already knows, so no shard-supplied URL is ever rendered into an email.
+    `language` is the owner's stored UI preference (`shard_core.data_model.
+    preferences`); the controller falls back to English when it is `None`, the
+    same as it does for a shard too old to send this field at all.
     """
     response = await post_json(
-        "api/email_verification", {"address": address, "token": token}
+        "api/email_verification",
+        {"address": address, "token": token, "language": language},
     )
     response.raise_for_status()
 

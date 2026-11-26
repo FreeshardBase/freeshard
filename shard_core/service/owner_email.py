@@ -93,7 +93,7 @@ async def set_email(user: User, address: str) -> User:
                 "email_token_expires": datetime.now(timezone.utc) + TOKEN_LIFETIME,
             },
         )
-    await _deliver_verification(address, token)
+    await _deliver_verification(address, token, user.language)
     return updated
 
 
@@ -118,7 +118,7 @@ async def resend_verification(user: User) -> None:
                 "email_token_expires": datetime.now(timezone.utc) + TOKEN_LIFETIME,
             },
         )
-    await _deliver_verification(user.pending_email, token)
+    await _deliver_verification(user.pending_email, token, user.language)
 
 
 async def discard_pending(user: User) -> User:
@@ -233,9 +233,9 @@ def _require_send_budget():
         raise SendRateLimited
 
 
-async def _deliver_verification(address: str, token: str):
+async def _deliver_verification(address: str, token: str, language: str | None):
     try:
-        await freeshard_controller.send_verification_email(address, token)
+        await freeshard_controller.send_verification_email(address, token, language)
     except Exception as e:
         log.error(f"could not send a verification email: {e}")
         raise DeliveryFailed from e
