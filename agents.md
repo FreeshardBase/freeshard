@@ -7,7 +7,7 @@ The software running on each individual Freeshard. Manages installed apps, termi
 - **Framework**: FastAPI with uvicorn, Python 3.13+
 - **Database**: PostgreSQL with psycopg3 (async) + yoyo-migrations
 - **Container Orchestration**: Docker / Docker Compose (subprocess calls)
-- **Reverse Proxy**: Traefik v3 (configured dynamically per app)
+- **Reverse Proxy**: Traefik v2.11 (configured dynamically per app)
 - **Config**: Pydantic v2 BaseSettings, loaded from `config.toml` + `local_config.toml`, env prefix `FREESHARD_`
 - **Package Management**: uv
 - **Formatting/Linting**: ruff + black
@@ -75,14 +75,14 @@ async with db_conn() as conn:
     await db_installed_apps.update_status(conn, "myapp", Status.RUNNING)
 ```
 
-Tables: `identities`, `users`, `terminals`, `installed_apps`, `peers`, `backups`, `tours`, `app_usage_tracks`, `kv_store`, `oidc_clients`, `oidc_codes`, `oidc_tokens`, `app_secrets`.
+Tables: `identities`, `users`, `terminals`, `installed_apps`, `peers`, `backups`, `tours`, `app_usage_tracks`, `kv_store`, `oidc_clients`, `oidc_codes`, `oidc_tokens`, `oidc_backchannel_logout_outbox`, `app_secrets`.
 
 Postgres data is not part of the rclone backup set (which only syncs `core/`/`user_data/`). To keep it, `database/db_snapshot.py` dumps all application tables to `core/db_snapshot.json` before each backup, and `init_database()` restores it on a fresh shard (before the default identity is generated, so the restored identity survives). Pre-0.38 backups are restored from TinyDB by `tinydb_migration.py` instead.
 
 ### Authentication (4 levels)
 - `/public/*` — No auth
-- `/protected/*` — JWT in `authorization` cookie (from terminal pairing)
-- `/internal/*` — HTTP Message Signature verification, `RSA_PSS_SHA512` (for app-to-shard and peer-to-shard calls)
+- `/protected/*` — JWT in `authorization` cookie (from terminal pairing). Unpairing (`DELETE /protected/terminals/id/{id}`) does not necessarily delete the device row: if the device owes back-channel logouts to its apps, the row is kept and flagged `unpaired_at`, then deleted once every logout is delivered. Revocation is the flag, not row deletion — `database/terminals.py` exposes only paired-only (`*_paired`) and unpaired-only accessors, with no unfiltered getter, so no auth or listing path can see a flagged device. `GET /protected/terminals/unpaired` plus retry/dismiss expose and act on the pending state.
+- `/internal/*` — reachable only from the same machine (the `portal` network), no caller auth of its own; peer calls additionally carry an HTTP Message Signature, `RSA_PSS_SHA512`. Serves `app_error`, `auth` (Traefik forwardAuth), `call_backend`, `call_peer`, and `owner` (the owner's id/username/display_name and verified email, for app sidecars)
 - `/management/*` — Management API auth (hosted shards only)
 
 ### Background Tasks
@@ -98,7 +98,7 @@ Started at app lifespan startup, stopped at shutdown:
 ### The Owner's Email Address
 `users.email` is the single home for a person's address and is **verified by definition**; `users.pending_email` is an unverified candidate, at most one in flight per user. That invariant is the only reason the OIDC provider may assert `email_verified: true` — with no verified address it emits neither claim, and there is deliberately no synthetic fallback.
 
-- `service/owner_email.py` owns every transition. Anything that writes `pending_email` must retire the token with it, or the token promotes an address it was never sent to.
+- `service/owner_email.py` owns the interactive transitions: set a candidate, confirm, promote, clear. Two other writers touch the column directly. Identity bootstrap seeds `pending_email` from the controller's profile (`service/identity.py`), and snapshot restore demotes an unverified address back to `pending_email` (`database/db_snapshot.py`). Anything that writes `pending_email` must retire the token with it, or the token promotes an address it was never sent to.
 - On confirmation, in this order: notify the old address, promote, mirror to `shards.owner_email`, notify the new one. The first step must precede the mirror — the controller's relay only ever reaches the address it currently has on file.
 - `POST /public/users/confirm-email` is unauthenticated by design and the token is its only credential. There is no `GET`: mail scanners and link prefetchers would burn a single-use token.
 - `email.enabled` (default `true`) says whether the shard can send mail at all, and is the explicit self-hosted signal — no controller means no mail, so the address is set directly. Never infer it from a failed delivery; a controller outage would silently downgrade a security control.
@@ -118,14 +118,15 @@ Blinker-based async signals defined in `util/signals.py`. DB-writing handlers ar
 - `on_terminal_auth` — terminal authenticated
 - `async_on_first_terminal_add` — first pairing complete
 - `async_on_peer_write` — peer added/updated
+- `on_backchannel_outbox_update` — OIDC back-channel logout outbox changed (rebuilds the barrier's in-process pending-app set and pushes the `unpaired_terminals_update` websocket message)
 
 ### App Installation Flow
 0. Custom-app uploads (`POST /protected/apps`) are validated by `app_installation/app_zip.py` **before** any state is created: the zip is buffered to a temp dir, must carry `app_meta.json` + `docker-compose.yml.template` at its root (a single top-level directory is stripped), and the app name comes from the manifest, not the filename. Invalid uploads get a 400 and leave no row, no dir, no task. Extraction goes through `extract_app_zip`, which refuses members resolving outside the app dir.
 1. Request queued → `InstallationWorker` picks it up
 2. Docker Compose template rendered with Jinja2 (shard domain, data paths, per-app secrets, etc.)
 3. Traefik dynamic config generated for the app's subdomain routing
-4. `docker-compose up -d` via subprocess
-5. Status updated in PostgreSQL
+4. `docker-compose up --no-start` via subprocess: the containers are created but not started
+5. Status set to `STOPPED` in PostgreSQL; the app starts on first access via `start_app`
 
 Reinstall tears the old stack down with `docker_shutdown_app(force=True)`: by then the
 status is `REINSTALLING`, which no teardown gate accepts, so without the force flag the
@@ -183,7 +184,7 @@ malicious template can escape and read any app's secrets. Closing that gap would
 `SandboxedEnvironment`; it is out of scope here.
 
 ### Async Fire-and-Forget
-Long operations use `asyncio.create_task()` with done callbacks. No thread pools.
+Long operations use `asyncio.create_task()` with done callbacks. Blocking library calls are run in worker threads via `asyncio.to_thread` or `run_in_executor`: the outbound signed HTTP in `signed_call.py` and `peer.py`, Authlib's synchronous OIDC server (`web/public/oidc.py`), and the cgroup page-out in `memory_pressure.py`.
 
 ### Service-to-Controller Communication
 `freeshard_controller.py` and `portal_controller.py` make HTTP calls to the central platform. Requests are signed with the shard's RSA key via `signed_call.py`, using HTTP Message Signatures with `RSA_PSS_SHA512`.
@@ -206,6 +207,28 @@ Host-side: `settings().path_root_host` (typically `/home/shard`).
 - `@computed_field` @property for derived values (e.g., `Identity.domain`, `Identity.public_key`)
 - Models in `data_model/backend/` are copied from freeshard-controller — do not edit directly, use `just get-types`
   - The CI `drift-check` job re-runs `get-types` against controller **`origin/main`** and fails if the diff is non-empty. To fix drift: check out the controller at `origin/main` (a local `main` may be many commits behind — `git fetch` first), then run `just SOURCE_DIR=<abs path to controller>/freeshard-controller-backend/freeshard_controller/data_model get-types` from this repo and commit only the regenerated files. Never hand-edit them.
+
+## Design changes start with the theory
+
+This repo records the theory it is built on in `CONCEPTS.md` at the root and in each module directory. The root file holds what the program is for, the invariants that span modules, and one line of responsibility per module. A module's file holds its responsibility, its elements, and its boundaries.
+
+**Before changing code, read the relevant `CONCEPTS.md`. If your change alters the theory, commit the theory change first, on its own, then adapt the code to the amended theory.** A separate commit keeps the theory diff out of the code diff, and the commit order is the evidence that the sequence actually happened.
+
+State which of these five cases your change is, in the pull request description. Without the declaration, "no theory change was needed" cannot be told apart from "never thought about the theory".
+
+| Case | Theory | Meaning |
+| --- | --- | --- |
+| Conforms | unchanged | Already accounted for by the theory. |
+| Extends | grows | New behaviour or concept the theory does not cover. |
+| Corrects | changes | The work revealed the theory was wrong. |
+| Shrinks | loses an element | A capability is removed, two concepts turn out to be one, or detail was never load-bearing. |
+| Reconciles | unchanged | Code brought back in line with a theory that was already right. |
+
+**Shrinks carries an extra requirement:** say what became of the behaviour the removed element described — deleted from the code, absorbed into a named surviving element, or moved to another module's theory. Shrinking is the only direction that can silently blind future audits: if an element disappears while the behaviour it described remains, that area stops being checked and an empty audit looks exactly like a clean one.
+
+An amendment should leave the theory **as elegant as possible, as specific as necessary**. Where your amendment makes it materially more complex, say so in the theory commit message. A theory that only ever grows has become a changelog.
+
+Every element in `CONCEPTS.md` must be an assertion the code can violate. "The worker handles jobs" is worthless; "exactly one notification is emitted per job, on every terminal path" is checkable. Write elements that way when you amend.
 
 ## Commits
 

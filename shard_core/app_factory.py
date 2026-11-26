@@ -17,6 +17,8 @@ from .service import (
     app_installation,
     identity,
     app_lifecycle,
+    oidc_backchannel_barrier,
+    oidc_backchannel_logout,
     peer,
     app_usage_reporting,
     websocket,
@@ -89,6 +91,7 @@ async def lifespan(_):
     await render_all_docker_compose_templates()
     await app_installation.login_docker_registries()
     await migration.migrate()
+    await oidc_backchannel_barrier.rebuild_pending_apps()
     await app_installation.refresh_init_apps()
     await backup.ensure_backup_passphrase()
     try:
@@ -138,6 +141,12 @@ def _make_background_tasks() -> List[BackgroundTask]:
         ),
         PeriodicTask(disk.update_disk_space, 30),
         PeriodicTask(metrics.update_stats, s.metrics.sample_interval_seconds),
+        # Backstop for OIDC backchannel-logout retries: the on_apps_update
+        # signal (service/oidc_backchannel_logout.py) drains the outbox as
+        # soon as an app reaches RUNNING, but a failed delivery's backoff
+        # elapses without any app status changing in between — this tick
+        # is what actually fires the retry.
+        PeriodicTask(oidc_backchannel_logout.drain_due_outbox, 30),
         websocket.ws_worker,
         PeriodicTask(telemetry.send_telemetry, s.telemetry.send_interval_seconds),
     ]
@@ -172,7 +181,7 @@ async def print_welcome_log():
     params["shard_url_centered"] = _center(shard_url)
 
     async with db_conn() as conn:
-        terminal_count = await db_terminals.count(conn)
+        terminal_count = await db_terminals.count_paired(conn)
     is_first_start = terminal_count == 0
     params["is_first_start"] = is_first_start
     if is_first_start:

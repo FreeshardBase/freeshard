@@ -10,6 +10,7 @@ import yaml
 from shard_core.database.connection import db_conn
 from shard_core.database import installed_apps as db_installed_apps
 from shard_core.database import identities as db_identities
+from shard_core.database import users as db_users
 from shard_core.data_model.app_meta import Status, InstalledApp
 from shard_core.data_model.identity import Identity, SafeIdentity
 from shard_core.service import oidc_provider
@@ -105,7 +106,9 @@ async def render_docker_compose_template(app: InstalledApp):
 
     async with db_conn() as conn:
         default_row = await db_identities.get_default(conn)
+        owner = await db_users.get_owner(conn)
     default_identity = Identity(**default_row)
+    owner_email = owner.email if owner is not None else None
     portal = SafeIdentity.from_identity(default_identity)
 
     oidc = None
@@ -128,6 +131,7 @@ async def render_docker_compose_template(app: InstalledApp):
     rendered = template.render(
         fs=fs,
         portal=portal,
+        owner_email=owner_email,
         oidc=oidc,
         secret=secret_resolver,
     )

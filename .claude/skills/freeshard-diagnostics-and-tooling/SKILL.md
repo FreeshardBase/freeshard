@@ -219,7 +219,6 @@ You cannot SSH into or `docker exec` on a customer shard from here. The sanction
 
 - `scripts/generate_traefik_dyn_config_model.py` — the generator that once produced the 1117-line `shard_core/data_model/traefik_dyn_config.py` from the Traefik v2 JSON schema. It deliberately `raise`s on run ("Do no use! Output file was manually changed by adding authResponseHeadersRegex.") and still points at the pre-rename `portal_core/model/` path. Do not run it; edit the model by hand and keep the manual patch.
 - `justfile` — check it before inventing commands: `just cleanup` (ruff --fix + black), `just run-dev`, `just get-types`, `just set-version X`.
-- `management_mock.py` (repo root) — a mock of the management API for local dev; see **freeshard-build-and-env** / **freeshard-run-and-operate** for how it's used.
 
 ## When NOT to use this skill
 

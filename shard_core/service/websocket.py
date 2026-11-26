@@ -12,6 +12,7 @@ from shard_core.database import terminals as db_terminals
 from shard_core.database import installed_apps as db_installed_apps
 from shard_core.data_model.app_meta import InstalledApp
 from shard_core.data_model.terminal import Terminal
+from shard_core.service import terminal_lockouts
 from shard_core.service.app_tools import enrich_installed_app_with_meta
 from shard_core.service.disk import DiskUsage
 from shard_core.util import signals
@@ -119,8 +120,19 @@ def send_disk_usage_update(disk_usage: DiskUsage):
 @signals.on_terminals_update.connect
 async def send_terminals_update(_):
     async with db_conn() as conn:
-        all_terminals = await db_terminals.get_all(conn)
-    ws_worker.broadcast_message("terminals_update", all_terminals)
+        paired_terminals = await db_terminals.list_paired(conn)
+    ws_worker.broadcast_message("terminals_update", paired_terminals)
+
+
+@signals.on_apps_update.connect
+@signals.on_backchannel_outbox_update.connect
+async def send_unpaired_terminals_update(_):
+    # Also on on_apps_update: a lockout's state depends on whether its app is
+    # installed and running, so install/uninstall/status changes move it.
+    unpaired = await terminal_lockouts.list_unpaired_terminals()
+    ws_worker.broadcast_message(
+        "unpaired_terminals_update", [t.model_dump(mode="json") for t in unpaired]
+    )
 
 
 @signals.on_terminal_add.connect

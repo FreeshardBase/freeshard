@@ -34,11 +34,37 @@ class OutputUser(BaseModel):
     display_name: str
     email: Optional[str] = None
     pending_email: Optional[str] = None
+    # Whether any delivery was ever attempted for pending_email, regardless of
+    # whether it succeeded — the token is minted before delivery is attempted,
+    # so this is the earliest-available signal, not a delivered/arrived flag.
+    # False means pending_email was written directly (migration 0005's
+    # carryover, or a failed enrichment falling back to an unsent candidate):
+    # nothing has been sent, so a UI must not word its action as a repeat.
+    pending_email_sent: bool = False
     role: Role
 
     @classmethod
     def from_user(cls, user: User) -> "OutputUser":
-        return cls(**user.model_dump())
+        return cls(
+            **user.model_dump(),
+            pending_email_sent=user.email_token_hash is not None,
+        )
+
+
+class OutputOwner(BaseModel):
+    """The owner fields an app sidecar may read over /internal.
+
+    email is users.email: an address confirmed by a delivered link, or
+    owner-asserted directly when the shard sends no mail (email.enabled =
+    false). It is None when there is no such address. pending_email, the token
+    hash and its expiry are deliberately absent: they are an unverified
+    candidate a sidecar must never act on.
+    """
+
+    id: int
+    username: str
+    display_name: str
+    email: Optional[str] = None
 
 
 class InputUser(BaseModel):

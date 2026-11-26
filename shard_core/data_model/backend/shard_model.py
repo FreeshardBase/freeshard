@@ -247,6 +247,7 @@ class ConfigOverrideKey(StrEnum):
 
     PAUSE_ENABLED = "PAUSE_ENABLED"
     SUNDIAL_ENABLED = "SUNDIAL_ENABLED"
+    OIDC_ENABLED = "OIDC_ENABLED"
 
 
 def _reject_newline(v: str | None) -> str | None:

@@ -63,6 +63,10 @@ class SlidingWindow:
         self._window = window
         self._attempts: deque[float] = deque()
 
+    def _evict_expired(self, now: float) -> None:
+        while self._attempts and self._attempts[0] < now - self._window:
+            self._attempts.popleft()
+
     def try_acquire(self) -> bool:
         """Take a slot if one is free, reporting whether it was granted.
 
@@ -70,12 +74,20 @@ class SlidingWindow:
         twice to branch, which silently spends two slots.
         """
         now = time.monotonic()
-        while self._attempts and self._attempts[0] < now - self._window:
-            self._attempts.popleft()
+        self._evict_expired(now)
         if len(self._attempts) >= self._limit:
             return False
         self._attempts.append(now)
         return True
+
+    def exhausted(self) -> bool:
+        """Lets a caller reject cheaply before doing expensive work, while
+        still deciding whether to *charge* the budget (try_acquire) only
+        once it knows that work's outcome — the classic
+        check-before-expensive-work / charge-after-failure split.
+        """
+        self._evict_expired(time.monotonic())
+        return len(self._attempts) >= self._limit
 
     def reset(self):
         self._attempts.clear()

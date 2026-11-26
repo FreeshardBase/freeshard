@@ -5,7 +5,13 @@ from pathlib import Path as FilePath
 from typing import Annotated, Optional, List, Dict, Union
 
 from packaging.specifiers import SpecifierSet
-from pydantic import BaseModel, BeforeValidator, PlainSerializer, model_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    PlainSerializer,
+    WithJsonSchema,
+    model_validator,
+)
 
 from shard_core.data_model import app_meta_migration
 from shard_core.settings import settings
@@ -18,10 +24,15 @@ CURRENT_VERSION = "1.3"
 # ValueError subclass, so pydantic turns it into a normal ValidationError).
 # PlainSerializer keeps model_dump()/model_dump_json() emitting the string
 # form, in case AppMeta is ever serialized rather than only read from disk.
+# WithJsonSchema gives the published app_meta schema a string type, which
+# pydantic cannot derive from SpecifierSet itself.
 VersionSpecifier = Annotated[
     SpecifierSet,
     BeforeValidator(lambda v: v if isinstance(v, SpecifierSet) else SpecifierSet(v)),
     PlainSerializer(str, return_type=str),
+    WithJsonSchema(
+        {"type": "string", "description": 'PEP 440 version specifier, e.g. ">=0.41.3"'}
+    ),
 ]
 
 

@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from . import auth, app_error, call_backend, call_peer
+from . import auth, app_error, call_backend, call_peer, owner
 
 router = APIRouter(
     prefix="/internal",
@@ -11,3 +11,4 @@ router.include_router(app_error.router)
 router.include_router(auth.router)
 router.include_router(call_backend.router)
 router.include_router(call_peer.router)
+router.include_router(owner.router)

@@ -1,0 +1,70 @@
+name: Pages
+
+# Publishes the API reference and the app_meta.json schema of one release to
+# GitHub Pages. Each deploy replaces the whole site, so it always shows the
+# release it was last run for.
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Release tag to publish
+        type: string
+        required: true
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install dependencies
+        run: |
+          pip install --break-system-packages uv
+          uv sync --frozen
+      - name: Generate app_meta.json schema
+        run: |
+          uv run python -m shard_core.data_model.app_meta
+          mkdir -p site/schemas
+          cp schemas/*.json site/schemas/
+      - name: Generate OpenAPI spec
+        run: |
+          # Written from Python, not via stdout: create_app() logs to stdout.
+          uv run python -c "import json; from shard_core.app_factory import create_app; json.dump(create_app().openapi(), open('site/openapi.json', 'w'))"
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build API reference
+        run: npx --yes @redocly/cli@2.73.0 build-docs site/openapi.json -o site/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

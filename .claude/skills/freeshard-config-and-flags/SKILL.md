@@ -146,7 +146,7 @@ kwarg (`tests/conftest.py:149`).
 
 | Section.option | Default | Prod | Consumer |
 |---|---|---|---|
-| `management.api_url` | REQUIRED | `https://ptlfunctionapp.azurewebsites.net/api/management` (legacy Azure function app) | ONLY `service/app_usage_reporting.py:54` (monthly `/app_usage` POST). `management_mock.py` mocks this API for local dev — point at it with `FREESHARD_MANAGEMENT__API_URL`. |
+| `management.api_url` | REQUIRED | `https://ptlfunctionapp.azurewebsites.net/api/management` (legacy Azure function app) | ONLY `service/app_usage_reporting.py:54` (monthly `/app_usage` POST). |
 | `freeshard_controller.base_url` | REQUIRED | `https://controller.freeshard.net` | `service/freeshard_controller.py:14`, `service/portal_controller.py:15` (yes — the *portal_controller module* reads the *freeshard_controller setting*), `web/protected/feedback.py:23`, `web/internal/call_backend.py:26` |
 
 ### [log] and [terminal]

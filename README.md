@@ -6,10 +6,6 @@
 </picture>
 </p>
 
-> [!NOTE]
-> Freeshard used to be called _Portal_. Don't be confused if you see the old name in the code or documentation.
-> Our goal is to update everything as soon as possible.
-
 # Freeshard
 
 Freeshard is a personal cloud computer that a consumer can rent for a small monthly fee (or selfhost) and which is as simple to use as a smartphone. Its aim is to restore people's sovereignty regarding the data they consume and produce - to give them a home on the internet.
@@ -17,32 +13,23 @@ Freeshard is a personal cloud computer that a consumer can rent for a small mont
 It is built by a small team working with coding agents. [ai-declaration.md](ai-declaration.md) states where AI is used and how far it goes.
 
 <div align="center" style="display: flex; flex-wrap: wrap; gap: 10px;">
-    <a href="readme/gallery/pairing.png" target="_blank">
-        <img src="readme/gallery/pairing.png" alt="Image 1" style="width: 150px; height: 100px; object-fit: cover;">
-    </a>
-    <a href="readme/gallery/welcome.png" target="_blank">
-        <img src="readme/gallery/welcome.png" alt="Image 2" style="width: 150px; height: 100px; object-fit: cover;">
-    </a>
     <a href="readme/gallery/home.png" target="_blank">
-        <img src="readme/gallery/home.png" alt="Image 3" style="width: 150px; height: 100px; object-fit: cover;">
+        <img src="readme/gallery/home.png" alt="Home screen" style="width: 150px; height: 100px; object-fit: cover;">
     </a>
-    <a href="readme/gallery/appstore.png" target="_blank">
-        <img src="readme/gallery/appstore.png" alt="Image 4" style="width: 150px; height: 100px; object-fit: cover;">
+    <a href="readme/gallery/apps.png" target="_blank">
+        <img src="readme/gallery/apps.png" alt="App store" style="width: 150px; height: 100px; object-fit: cover;">
     </a>
-    <a href="readme/gallery/app.png" target="_blank">
-        <img src="readme/gallery/app.png" alt="Image 5" style="width: 150px; height: 100px; object-fit: cover;">
-    </a>
-    <a href="readme/gallery/devices.png" target="_blank">
-        <img src="readme/gallery/devices.png" alt="Image 6" style="width: 150px; height: 100px; object-fit: cover;">
-    </a>
-    <a href="readme/gallery/pairnew.png" target="_blank">
-        <img src="readme/gallery/pairnew.png" alt="Image 7" style="width: 150px; height: 100px; object-fit: cover;">
-    </a>
-    <a href="readme/gallery/public.png" target="_blank">
-        <img src="readme/gallery/public.png" alt="Image 8" style="width: 150px; height: 100px; object-fit: cover;">
+    <a href="readme/gallery/app-details.png" target="_blank">
+        <img src="readme/gallery/app-details.png" alt="App details" style="width: 150px; height: 100px; object-fit: cover;">
     </a>
     <a href="readme/gallery/settings.png" target="_blank">
-        <img src="readme/gallery/settings.png" alt="Image 9" style="width: 150px; height: 100px; object-fit: cover;">
+        <img src="readme/gallery/settings.png" alt="Settings" style="width: 150px; height: 100px; object-fit: cover;">
+    </a>
+    <a href="readme/gallery/home-dark.png" target="_blank">
+        <img src="readme/gallery/home-dark.png" alt="Home screen in dark mode" style="width: 150px; height: 100px; object-fit: cover;">
+    </a>
+    <a href="readme/gallery/home-mobile.png" target="_blank">
+        <img src="readme/gallery/home-mobile.png" alt="Home screen on a phone" style="width: 150px; height: 100px; object-fit: cover;">
     </a>
 </div>
 
@@ -66,7 +53,7 @@ For hosted Shards, the ID is also part of the domain name.
 The Shard ID is a hash of the Shard's public key.
 Therefore, it can be used to authenticate the Shard during communication or to verify data signed by the Shard.
 
-Its full length is 96 characters, but it is usually shortened to 6 characters for easier handling.
+Its full length is 103 characters, but it is usually shortened to 6 characters for easier handling.
 This is seen as a compromise between security and usability.
 
 ### REST API
@@ -105,74 +92,11 @@ All communication is encrypted and authenticated using the shard IDs as trust an
 
 ## Hosting
 
-> [!WARNING]
-> We are currently working on making self-hosting possible and easy.
-> Expect some rough edges until then.
+Shard Core can run on your own machine instead of a hosted shard.
+The guide is on the documentation site: [Self-Hosting](https://docs.freeshard.net/self_hosting/).
+It covers the prerequisites, a local test, a full server deployment, certificates, updates, uninstalling, and what a self-hosted shard still gets from Freeshard's infrastructure.
 
-The Shard Core can be hosted on any machine that has access to the internet.
-It is recommended to use a machine that is always on, e.g. a virtual private server (VPS).
-
-### Where the apps come from
-
-A self-hosted shard is not self-contained. Both halves of the app catalogue are served by infrastructure Freeshard operates:
-
-- the catalogue metadata and the app packages come from an Azure blob container (`apps.app_store` in `config.toml`), and
-- the container images for the apps that do not use a public upstream image come from our container registry, `portalapps.azurecr.io`.
-
-Shard Core logs in to that registry at startup, using the credentials checked into `config.toml` under `[[apps.registries]]`. **Those credentials are committed on purpose.** The account is a Microsoft Entra service principal, `sp-apps-reader`, whose only role assignment anywhere in our subscription is `Reader`, scoped to that single registry — it can pull images and read registry metadata, and it can do nothing else: no push, no delete, no configuration change, no access to any other resource. It is shared with everyone who runs a shard because every shard needs it to install an app.
-
-If you would rather not depend on our infrastructure, note that this is what you would have to replace.
-
-### The owner's email address
-
-The owner's address lives on their user row and is verified by definition: a new address is only a candidate until somebody opens a confirmation link that was delivered to it. On a hosted shard the controller does that delivery, and it is also what mails the owner about disk space, billing and service notices.
-
-A self-hosted shard has no controller and therefore no way to send mail at all, so it cannot run that round trip. Set `email.enabled = false` in `local_config.toml` and the address is taken as given, with no candidate step and no confirmation mail — acceptable because you control the machine. Leave it at its default of `true` and setting an address fails with HTTP 502 — the address is kept as a candidate, but the confirmation mail that would promote it cannot be delivered.
-
-The address is what the built-in OIDC provider emits as the `email` claim, alongside `email_verified`. With no confirmed address it emits neither, and apps you log into through it will create fresh accounts rather than linking to an existing one by address.
-
-### Localhost
-
-In order to test freeshard, you might want to launch it on localhost first.
-
-1. Get the `docker-compose.yml` and the `.env.template`.
-2. Copy the `.env.template` to `.env` and fill in your information.
-   - `FREESHARD_DIR` is the directory where all data will be stored - internal data for freeshard to function and all user data.
-   - `DNS_ZONE` is the domain name of your Shard. Leave it at `localhost` for now.
-   - `EMAIL` is the email address that will be used to request SSL certificates. You can leave the defalt value for now since we are not using SSL yet. 
-   - `DISABLE_SSL` is for local testing only. It prevents certificates from being requested and allows you to use the Shard without SSL. Set it to `true` for now.
-3. Start the Shard Core with `docker-compose up`.
-4. Look for the Freeshard logo in the logs for the details of your shard. On first startup, there is a link including a pairing code to pair your first device. Open it in your browser.
-5. You can always get a fresh pairing code by running this command from your CLI: `docker run --rm -it --network portal curlimages/curl "http://shard_core/protected/terminals/pairing-code"`
-
-### Full Server Deployment
-
-For a full server deployment, follow these steps.
-
-1. Use a server that can be reached with a domain name.
-2. Copy the `docker-compose.yml` and the `.env.template` on your server into a directory of your choice.
-3. Copy the `.env.template` to `.env` and fill in your information.
-    - `FREESHARD_DIR` is the directory where all data will be stored - internal data for freeshard to function and all user data.
-    - `DNS_ZONE` is the domain name of your Shard. Enter the domain name of your server here. Your Shard will be accessible at `https://<shard_id>.<DNS_ZONE>`.
-    - `EMAIL` is the email address that will be used to request SSL certificates.
-   - `DISABLE_SSL` is for local testing only. Do not use the option in production!
-4. Provide the environment variables for your DNS provider to the Traefik service in the `docker-compose.yml` file. [Here is a list of providers](https://doc.traefik.io/traefik/https/acme/#providers) and the required variables. See [Let's Encrypt](#letsencrypt) for why this is necessary.
-5. Start the Shard Core with `docker-compose up -d`.
-6. Look for the Freeshard logo in the logs for the details of your shard. On first startup, there is a link including a pairing code to pair your first device. Open it in your browser.
-7. You can always get a fresh pairing code by running this command from your CLI: `docker run --rm -it --network portal curlimages/curl "http://shard_core/protected/terminals/pairing-code"`
-
-### Let's Encrypt
-<a name="letsencrypt"></a>
-
-Shard Core uses Traefik as a reverse proxy.
-This is a fixed part of the setup and cannot be changed.
-
-Traefik is configured to automatically request and renew SSL certificates from Let's Encrypt.
-However, since the apps that are run by Shard Core are routed to subdomains of the Shard's domain, the certificate needs to be a wildcard certificate.
-That means that a [DNS challenge must be used](https://doc.traefik.io/traefik/https/acme/#wildcard-domains) to prove ownership of the domain.
-And that requires some manual configuration.
-
-In the `docker-compose.yml`, you need to add some environment variables to the Traefik service depending on your DNS provider. [Here is a list of providers](https://doc.traefik.io/traefik/https/acme/#providers) and the required variables.
+The [`docker-compose.yml`](docker-compose.yml) and [`.env.template`](.env.template) in this repository are the files the guide uses.
 
 ## Backup and Restore
 
@@ -199,7 +123,7 @@ Or - if you use [Just](https://just.systems/) - run `just run-dev`.
 
 Then, access API-doc at [http://localhost:8080/docs](http://localhost:8080/docs)
 
-If you also want to run the web UI locally, pull it from [here](https://github.com/FreeshardBase/sundial) and follow the instructions in its README.
+The web UI is [Sundial](https://github.com/FreeshardBase/sundial). Its README explains how to run it locally, against a mock API or a running shard.
 
 > [!NOTE]
 > When developing, you will typically run backend and frontend locally and without a reverse proxy. This means that you will not be able to start apps, since they rely on being accessed through the reverse proxy.

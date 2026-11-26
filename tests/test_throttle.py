@@ -68,3 +68,16 @@ def test_sliding_window_reset_returns_the_whole_budget():
     window.reset()
 
     assert window.try_acquire() is True
+
+
+def test_sliding_window_exhausted_is_a_peek_not_a_charge():
+    """exhausted() lets a caller reject cheaply before doing expensive work;
+    it must not itself spend the slot it is reporting on."""
+    window = SlidingWindow(limit=1, window=60)
+
+    assert window.exhausted() is False
+    assert window.try_acquire() is True
+    assert window.exhausted() is True
+    # exhausted() above must not have consumed anything try_acquire() would
+    # otherwise have granted
+    assert window.try_acquire() is False
