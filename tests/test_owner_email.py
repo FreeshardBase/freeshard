@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 import responses
 from httpx import AsyncClient
 
+from shard_core.database import preferences as db_preferences
 from shard_core.database import users as db_users
 from shard_core.database.connection import db_conn
 from shard_core.settings import settings
@@ -169,6 +170,39 @@ async def test_setting_an_address_writes_a_candidate_and_sends_a_link(
     requested = json.loads(calls_to(requests_mock, VERIFY_PATH)[-1].request.body)
     assert requested["address"] == NEW_ADDRESS
     assert requested["token"]
+    assert requested["language"] is None, "a fresh owner has no stored language preference"
+
+
+async def test_setting_an_address_passes_the_owners_stored_language(
+    requests_mock, app_client: AsyncClient
+):
+    await pair_new_terminal(app_client)
+    owner = await get_owner()
+    async with db_conn() as conn:
+        await db_preferences.put(conn, owner.id, {"language": "de"})
+
+    await set_address(app_client)
+
+    # [-1]: pairing already sent one verification, for the controller's
+    # signup address candidate (see test_pairing_seeds_the_controller_...)
+    requested = json.loads(calls_to(requests_mock, VERIFY_PATH)[-1].request.body)
+    assert requested["language"] == "de"
+
+
+async def test_resending_also_passes_the_owners_stored_language(
+    requests_mock, app_client: AsyncClient
+):
+    await pair_new_terminal(app_client)
+    await set_address(app_client)
+    owner = await get_owner()
+    async with db_conn() as conn:
+        await db_preferences.put(conn, owner.id, {"language": "de"})
+
+    response = await app_client.post(RESEND)
+    assert response.status_code == 204, response.text
+
+    requested = json.loads(calls_to(requests_mock, VERIFY_PATH)[-1].request.body)
+    assert requested["language"] == "de"
 
 
 async def test_the_token_is_stored_only_as_a_digest(

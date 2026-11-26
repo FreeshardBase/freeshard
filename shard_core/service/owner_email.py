@@ -18,6 +18,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 from shard_core.data_model.user import User
+from shard_core.database import preferences as db_preferences
 from shard_core.database import users as db_users
 from shard_core.database.connection import db_conn
 from shard_core.service import freeshard_controller
@@ -93,7 +94,7 @@ async def set_email(user: User, address: str) -> User:
                 "email_token_expires": datetime.now(timezone.utc) + TOKEN_LIFETIME,
             },
         )
-    await _deliver_verification(address, token)
+    await _deliver_verification(address, token, await _stored_language(user.id))
     return updated
 
 
@@ -118,7 +119,9 @@ async def resend_verification(user: User) -> None:
                 "email_token_expires": datetime.now(timezone.utc) + TOKEN_LIFETIME,
             },
         )
-    await _deliver_verification(user.pending_email, token)
+    await _deliver_verification(
+        user.pending_email, token, await _stored_language(user.id)
+    )
 
 
 async def discard_pending(user: User) -> User:
@@ -238,9 +241,15 @@ def _require_send_budget():
         raise SendRateLimited
 
 
-async def _deliver_verification(address: str, token: str):
+async def _stored_language(user_id: int) -> str | None:
+    async with db_conn() as conn:
+        prefs = await db_preferences.get(conn, user_id)
+    return prefs.language
+
+
+async def _deliver_verification(address: str, token: str, language: str | None):
     try:
-        await freeshard_controller.send_verification_email(address, token)
+        await freeshard_controller.send_verification_email(address, token, language)
     except Exception as e:
         log.error(f"could not send a verification email: {e}")
         raise DeliveryFailed from e

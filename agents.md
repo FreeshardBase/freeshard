@@ -103,6 +103,14 @@ Started at app lifespan startup, stopped at shutdown:
 - `POST /public/users/confirm-email` is unauthenticated by design and the token is its only credential. There is no `GET`: mail scanners and link prefetchers would burn a single-use token.
 - `email.enabled` (default `true`) says whether the shard can send mail at all, and is the explicit self-hosted signal — no controller means no mail, so the address is set directly. Never infer it from a failed delivery; a controller outage would silently downgrade a security control.
 
+### The Owner's UI Preferences
+`GET`/`PUT /protected/preferences` is a UI client's home for the session user's preferences — today just the preferred language, in its own `user_preferences` table (one row per user, FK to `users.id`, migration 0007) rather than columns on `users`: identity and preferences are kept clearly apart, and the table grows into a fuller per-user profile once multi-user lands without crowding `users`. The response is an object so fields can be added without breaking clients, and every `InputPreferences` field is optional — an omitted field is left untouched (`model_dump(exclude_unset=True)`), so a future multi-field body can write just one; an *explicit* null is still rejected (no "clear it" use case exists yet), same idiom as `patch_me` in `web/protected/users.py`.
+
+- `GET` always answers `200` with `{"language": ...}` for a valid session; an unset language is `null`. A UI client treats that `null` exactly like the `404` an older shard (without this endpoint) returns — fall back to its own detection (`navigator.language`/English). `PUT {"language": "de"}` validates the tag and persists it.
+- The column is plain TEXT, not a PG enum: which UI languages exist is the client's concern, not the shard's. The shard validates only the *shape* of a BCP-47-ish tag (lowercased) so junk stays out of the column, without gatekeeping the set.
+- `service/owner_email.py` reads this same stored preference when it asks the controller to send a verification email, so the mail can be localized once the controller consumes that field (freeshard-controller#543) — see `_stored_language()`.
+- Cookie-to-user resolution for `/protected` routes that need the acting user lives in `web/protected/_auth.py` (`session_user`, leading underscore because it has no routes of its own), shared by the preferences and users routes so the 401/403 failure modes do not drift between copies.
+
 ### Signals (Event System)
 Blinker-based async signals defined in `util/signals.py`. DB-writing handlers are async and called via `await signal.send_async()`:
 - `on_apps_update` — app state changed
