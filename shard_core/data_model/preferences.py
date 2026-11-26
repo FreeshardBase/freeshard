@@ -5,11 +5,11 @@ from pydantic import BaseModel, Field, field_validator
 
 # A BCP-47-ish language tag: a 2-3 letter primary subtag, optionally followed by
 # region/script subtags ("en", "de", "en-us", "pt-br", "zh-hans"). The shard
-# only stores this preference on behalf of the web-terminal; it is the
-# web-terminal, not the shard, that decides which languages it actually offers.
-# So this validates the *shape* of a language tag — enough to keep junk and
-# injection out of the column — without gatekeeping the specific set, which
-# would turn every new UI language into a shard migration.
+# only stores this preference on behalf of its UI client; it is that client,
+# not the shard, that decides which languages it actually offers. So this
+# validates the *shape* of a language tag — enough to keep junk and injection
+# out of the column — without gatekeeping the specific set, which would turn
+# every new UI language into a shard migration.
 _LANGUAGE_TAG_RE = re.compile(r"^[a-z]{2,3}(-[a-z0-9]{2,8})*$")
 # Comfortably bounds a BCP-47-ish tag with a handful of subtags; the regex alone
 # allows unboundedly many, so this is the only thing keeping the column finite.
@@ -28,6 +28,13 @@ def _normalize_language(value: str) -> str:
     return normalized
 
 
+class PreferencesRow(BaseModel):
+    """The `user_preferences` row, including fields the API never exposes."""
+
+    user_id: int
+    language: Optional[str] = None
+
+
 class OutputPreferences(BaseModel):
     """The owner's stored UI preferences.
 
@@ -44,17 +51,22 @@ class OutputPreferences(BaseModel):
 class InputPreferences(BaseModel):
     """A write to the owner's UI preferences.
 
-    `language` is required here: the only writer today is the web-terminal's
-    language switcher, which always picks a concrete language. There is no
-    "clear it back to auto-detect" use case to support, so the explicit version
-    simply demands a language.
+    Every field is optional and omitted fields are left untouched (read via
+    `model_dump(exclude_unset=True)`), so a future client can PUT one field
+    without clobbering the others. `language` is nullable in that any value it
+    does carry must normalize, but an *explicit* null is still rejected by the
+    route: there is no "clear it back to auto-detect" use case to support, so
+    the only way to leave it alone is to omit it.
     """
 
-    language: str = Field(max_length=_MAX_LANGUAGE_LENGTH)
+    language: Optional[str] = Field(default=None, max_length=_MAX_LANGUAGE_LENGTH)
 
     @field_validator("language")
     @classmethod
-    def validate_language(cls, v: str) -> str:
+    def validate_language(cls, v: Optional[str]) -> Optional[str]:
         # Field(max_length) has already rejected an over-long raw value; this
-        # only has to settle the shape and canonical casing.
+        # only has to settle the shape and canonical casing. None passes
+        # through — the route decides whether an explicit null is allowed.
+        if v is None:
+            return None
         return _normalize_language(v)

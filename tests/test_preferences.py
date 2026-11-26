@@ -1,6 +1,6 @@
 """The owner's UI preferences endpoint.
 
-What is under test is the contract the web-terminal relies on: a session reads
+What is under test is the contract the UI client relies on: a session reads
 its stored language on load and writes it from the settings switcher, an unset
 language reads back as null (so the client falls back to its own detection just
 as it does against an older shard's 404), and a written value survives a reload
@@ -9,6 +9,7 @@ by actually landing in Postgres.
 
 from httpx import AsyncClient
 
+from shard_core.database import preferences as db_preferences
 from shard_core.database import users as db_users
 from shard_core.database.connection import db_conn
 from tests.util import pair_new_terminal
@@ -16,11 +17,13 @@ from tests.util import pair_new_terminal
 PREFERENCES = "protected/preferences"
 
 
-async def get_owner():
+async def owners_language():
     # the paired terminal binds to the owner today, so a write through the
-    # session lands on the owner row — that is what these tests read back
+    # session lands on the owner's row — that is what these tests read back
     async with db_conn() as conn:
-        return await db_users.get_owner(conn)
+        owner = await db_users.get_owner(conn)
+        prefs = await db_preferences.get(conn, owner.id)
+    return prefs.language
 
 
 # --- authentication --------------------------------------------------------------
@@ -69,7 +72,7 @@ async def test_put_persists_the_language(app_client: AsyncClient):
     assert response.json() == {"language": "de"}
     # it is not enough that the response echoes it: a reload reads the DB, so
     # the value has to be on the row, not just in the reply
-    assert (await get_owner()).language == "de"
+    assert (await owners_language()) == "de"
 
 
 async def test_put_overwrites_a_previous_language(app_client: AsyncClient):
@@ -79,7 +82,7 @@ async def test_put_overwrites_a_previous_language(app_client: AsyncClient):
     response = await app_client.put(PREFERENCES, json={"language": "en"})
 
     assert response.json() == {"language": "en"}
-    assert (await get_owner()).language == "en"
+    assert (await owners_language()) == "en"
 
 
 async def test_put_normalizes_case(app_client: AsyncClient):
@@ -90,7 +93,7 @@ async def test_put_normalizes_case(app_client: AsyncClient):
     response = await app_client.put(PREFERENCES, json={"language": "DE"})
 
     assert response.json() == {"language": "de"}
-    assert (await get_owner()).language == "de"
+    assert (await owners_language()) == "de"
 
 
 async def test_put_trims_surrounding_whitespace(app_client: AsyncClient):
@@ -101,11 +104,11 @@ async def test_put_trims_surrounding_whitespace(app_client: AsyncClient):
     response = await app_client.put(PREFERENCES, json={"language": " de "})
 
     assert response.json() == {"language": "de"}
-    assert (await get_owner()).language == "de"
+    assert (await owners_language()) == "de"
 
 
 async def test_put_accepts_a_region_subtag(app_client: AsyncClient):
-    """The shard is not the authority on which languages the web-terminal
+    """The shard is not the authority on which languages the UI client
     offers, so a well-formed tag it does not itself enumerate is still stored."""
     await pair_new_terminal(app_client)
 
@@ -126,7 +129,7 @@ async def test_put_rejects_non_language_text(app_client: AsyncClient):
     response = await app_client.put(PREFERENCES, json={"language": "english please"})
 
     assert response.status_code == 422
-    assert (await get_owner()).language is None
+    assert (await owners_language()) is None
 
 
 async def test_put_rejects_an_empty_language(app_client: AsyncClient):
@@ -167,17 +170,20 @@ async def test_put_rejects_a_well_formed_but_overlong_language(app_client: Async
     )
 
     assert response.status_code == 422
-    assert (await get_owner()).language is None
+    assert (await owners_language()) is None
 
 
-async def test_put_requires_the_language_field(app_client: AsyncClient):
-    """language is required: the only writer, the switcher, always picks one, so
-    there is no partial-write path to get wrong."""
+async def test_put_with_no_fields_changes_nothing(app_client: AsyncClient):
+    """Every field is optional and omitted fields are left untouched, so a
+    future client PUTting some other preference can leave language alone —
+    an empty body today is the degenerate case of that, not an error."""
     await pair_new_terminal(app_client)
+    await app_client.put(PREFERENCES, json={"language": "de"})
 
     response = await app_client.put(PREFERENCES, json={})
 
-    assert response.status_code == 422
+    assert response.status_code == 200
+    assert response.json() == {"language": "de"}
 
 
 async def test_put_rejects_an_explicit_null_language(app_client: AsyncClient):

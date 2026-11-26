@@ -199,7 +199,7 @@ Or - if you use [Just](https://just.systems/) - run `just run-dev`.
 
 Then, access API-doc at [http://localhost:8080/docs](http://localhost:8080/docs)
 
-If you also want to run the web UI locally, pull it from [here](https://github.com/FreeshardBase/web-terminal) and follow the instructions in its README.
+If you also want to run the web UI locally, pull it from [here](https://github.com/FreeshardBase/sundial) and follow the instructions in its README.
 
 > [!NOTE]
 > When developing, you will typically run backend and frontend locally and without a reverse proxy. This means that you will not be able to start apps, since they rely on being accessed through the reverse proxy.

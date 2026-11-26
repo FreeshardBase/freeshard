@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 import responses
 from httpx import AsyncClient
 
+from shard_core.database import preferences as db_preferences
 from shard_core.database import users as db_users
 from shard_core.database.connection import db_conn
 from shard_core.settings import settings
@@ -138,7 +139,7 @@ async def test_setting_an_address_passes_the_owners_stored_language(
     await pair_new_terminal(app_client)
     owner = await get_owner()
     async with db_conn() as conn:
-        await db_users.update(conn, owner.id, {"language": "de"})
+        await db_preferences.put(conn, owner.id, {"language": "de"})
 
     await set_address(app_client)
 
@@ -153,7 +154,7 @@ async def test_resending_also_passes_the_owners_stored_language(
     await set_address(app_client)
     owner = await get_owner()
     async with db_conn() as conn:
-        await db_users.update(conn, owner.id, {"language": "de"})
+        await db_preferences.put(conn, owner.id, {"language": "de"})
 
     response = await app_client.post(RESEND)
     assert response.status_code == 204, response.text

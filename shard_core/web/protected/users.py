@@ -7,7 +7,7 @@ from shard_core.data_model.user import InputUser, OutputUser, Role, User
 from shard_core.database import users as db_users
 from shard_core.database.connection import db_conn
 from shard_core.service import owner_email
-from shard_core.web.protected.session import session_user
+from shard_core.web.protected._auth import session_user
 
 log = logging.getLogger(__name__)
 

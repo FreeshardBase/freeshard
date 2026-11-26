@@ -14,7 +14,6 @@ _UPDATABLE_COLUMNS = {
     "email_token_expires",
     "role",
     "disabled",
-    "language",
 }
 
 
