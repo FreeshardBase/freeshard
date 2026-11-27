@@ -15,7 +15,9 @@ shard has no controller and therefore no mail at all, which is why
 import hashlib
 import logging
 import secrets
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from enum import Enum
 
 from shard_core.data_model.user import User
 from shard_core.database import preferences as db_preferences
@@ -59,6 +61,25 @@ class SendRateLimited(Exception):
 
 class VerificationDisabled(Exception):
     pass
+
+
+class TokenStatus(str, Enum):
+    """Outcome of redeeming a confirmation token. All three are safe to hand
+    an unauthenticated caller: reaching EXPIRED already requires the real
+    256-bit token to have matched a stored digest at some point, which costs a
+    guesser exactly as much as reaching CONFIRMED does — nothing distinguishes
+    EXPIRED from UNKNOWN that a guesser could exploit. Decided with Max,
+    2026-11-26, as the deliberate successor to the previous always-204 design."""
+
+    UNKNOWN = "unknown"
+    EXPIRED = "expired"
+    CONFIRMED = "confirmed"
+
+
+@dataclass
+class ConfirmResult:
+    status: TokenStatus
+    email: str | None = None
 
 
 def hash_token(token: str) -> str:
@@ -163,7 +184,7 @@ async def clear_email(user: User) -> User:
     return updated
 
 
-async def confirm_email(token: str) -> bool:
+async def confirm_email(token: str) -> ConfirmResult:
     """Promote the candidate belonging to *token*, if the token is still valid.
 
     The token is spent before anything else happens, so the notification and the
@@ -175,12 +196,15 @@ async def confirm_email(token: str) -> bool:
     to warn away from, and sending that notice there just duplicates the
     "confirmed" one that follows, usually to the very same inbox.
 
-    Returns whether anything was promoted. Callers must not pass that on to an
-    unauthenticated client: the answer says whether an address was pending.
+    Returns a ConfirmResult; see TokenStatus for which parts are safe to show
+    an unauthenticated caller. A candidate that moved on between the token
+    being spent and the promotion (vanishingly rare: another confirmation or a
+    fresh set_email in the same instant) is reported as EXPIRED — it is the
+    same "this one isn't live any more" fact the owner needs, not a new case.
     """
-    claimed = await _claim_token(token)
-    if claimed is None:
-        return False
+    status, claimed = await _claim_token(token)
+    if status != TokenStatus.CONFIRMED:
+        return ConfirmResult(status=status)
 
     address = claimed.pending_email
     if claimed.email is not None:
@@ -197,7 +221,7 @@ async def confirm_email(token: str) -> bool:
         updated = await db_users.promote_pending_email(conn, claimed.id, address)
     if updated is None:
         log.info(f"candidate of user {claimed.id} moved on before its link was opened")
-        return False
+        return ConfirmResult(status=TokenStatus.EXPIRED)
     log.info(f"confirmed the address of {updated}")
 
     if await _mirror_to_controller(address):
@@ -208,15 +232,21 @@ async def confirm_email(token: str) -> bool:
                 "Messages about your shard arrive here from now on.",
             ],
         )
-    return True
+    return ConfirmResult(status=TokenStatus.CONFIRMED, email=address)
 
 
-async def _claim_token(token: str) -> User | None:
+async def _claim_token(token: str) -> tuple[TokenStatus, User | None]:
     """Find the user whose token this is and spend it, in that order.
 
     The digest is matched in Python with a constant-time comparison rather than
     looked up in SQL, so the match itself is not a timing oracle; the spending
     is then a single conditional UPDATE, which is what makes it single-use.
+
+    UNKNOWN (no stored digest matches) and EXPIRED (one did, but the UPDATE's
+    own expiry/candidate guard rejected it) are deliberately told apart here —
+    matching a digest at all already requires the real token, so a guesser
+    gets nothing from the distinction that a 256-bit random value didn't
+    already deny them.
     """
     digest = hash_token(token)
     async with db_conn() as conn:
@@ -226,9 +256,10 @@ async def _claim_token(token: str) -> User | None:
                 continue
             claimed = await db_users.claim_email_token(conn, user.id, digest)
             if claimed is None:
-                log.info(f"rejected a spent or expired confirmation token for {user}")
-            return claimed
-    return None
+                log.info(f"rejected an expired confirmation token for {user}")
+                return TokenStatus.EXPIRED, None
+            return TokenStatus.CONFIRMED, claimed
+    return TokenStatus.UNKNOWN, None
 
 
 def _require_send_budget():

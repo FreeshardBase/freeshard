@@ -234,7 +234,8 @@ async def test_setting_a_second_address_replaces_the_first_candidate(
     owner = await get_owner()
     assert owner.pending_email == "second@example.org"
     r = await app_client.post(CONFIRM, json={"token": first_token})
-    assert r.status_code == 204
+    assert r.status_code == 200
+    assert r.json()["status"] == "unknown", "the superseded token's digest is gone, not just dead"
     assert (await get_owner()).email is None, "the superseded token still worked"
 
 
@@ -341,7 +342,8 @@ async def test_confirming_promotes_the_candidate(
 
     response = await app_client.post(CONFIRM, json={"token": token})
 
-    assert response.status_code == 204
+    assert response.status_code == 200
+    assert response.json() == {"status": "confirmed", "email": NEW_ADDRESS}
     owner = await get_owner()
     assert owner.email == NEW_ADDRESS
     assert owner.pending_email is None
@@ -405,7 +407,8 @@ async def test_confirming_survives_a_controller_that_cannot_send_mail(
 
     response = await app_client.post(CONFIRM, json={"token": token})
 
-    assert response.status_code == 204
+    assert response.status_code == 200
+    assert response.json()["status"] == "confirmed"
     assert (await get_owner()).email == NEW_ADDRESS
 
 
@@ -426,7 +429,8 @@ async def test_confirming_survives_a_controller_that_cannot_mirror(
 
     response = await app_client.post(CONFIRM, json={"token": token})
 
-    assert response.status_code == 204
+    assert response.status_code == 200
+    assert response.json()["status"] == "confirmed"
     assert (await get_owner()).email == NEW_ADDRESS
     assert len(calls_to(requests_mock, RELAY_PATH)) == 1
 
@@ -435,16 +439,19 @@ async def test_a_candidate_set_while_a_link_was_in_flight_survives(
     requests_mock, app_client: AsyncClient
 ):
     """The confirmation promotes the address its own link was sent to, or
-    nothing — it must never clear a candidate it knows nothing about."""
+    nothing — it must never clear a candidate it knows nothing about. The
+    stale link's own token was overwritten by the second set_address, so it
+    reports UNKNOWN here, not EXPIRED — there is no digest left in the
+    database for it to have matched in the first place."""
     await pair_new_terminal(app_client)
     await set_address(app_client, "first@example.org")
     stale_token = sent_token(requests_mock)
     await set_address(app_client, "second@example.org")
     fresh_token = sent_token(requests_mock)
 
-    assert (
-        await app_client.post(CONFIRM, json={"token": stale_token})
-    ).status_code == 204
+    stale_response = await app_client.post(CONFIRM, json={"token": stale_token})
+    assert stale_response.status_code == 200
+    assert stale_response.json() == {"status": "unknown", "email": None}
 
     owner = await get_owner()
     assert owner.email is None
@@ -453,7 +460,33 @@ async def test_a_candidate_set_while_a_link_was_in_flight_survives(
     assert (await get_owner()).email == "second@example.org"
 
 
-async def test_an_unknown_token_changes_nothing_and_says_nothing(
+async def test_a_candidate_that_moved_on_between_claim_and_promote_reports_expired(
+    requests_mock, app_client: AsyncClient, monkeypatch
+):
+    """The one path TokenStatus.EXPIRED covers besides outright TTL expiry: the
+    token's own digest genuinely matched and was claimed, but promote_pending_email's
+    guard then lost to a concurrent change to pending_email. Simulated directly —
+    a real race needs two overlapping transactions a black-box HTTP call can't
+    construct — by making the promotion fail the way that race would."""
+    await pair_new_terminal(app_client)
+    await set_address(app_client)
+    token = sent_token(requests_mock)
+
+    async def moved_on(conn, id, address):
+        return None
+
+    monkeypatch.setattr(db_users, "promote_pending_email", moved_on)
+
+    response = await app_client.post(CONFIRM, json={"token": token})
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "expired", "email": None}
+    owner = await get_owner()
+    assert owner.email is None
+    assert owner.email_token_hash is None, "the digest was genuinely spent"
+
+
+async def test_an_unknown_token_changes_nothing_and_reports_unknown(
     requests_mock, app_client: AsyncClient
 ):
     await pair_new_terminal(app_client)
@@ -461,7 +494,8 @@ async def test_an_unknown_token_changes_nothing_and_says_nothing(
 
     response = await app_client.post(CONFIRM, json={"token": "not-the-token"})
 
-    assert response.status_code == 204, "a miss must look exactly like a hit"
+    assert response.status_code == 200
+    assert response.json() == {"status": "unknown", "email": None}
     owner = await get_owner()
     assert owner.email is None
     assert owner.pending_email == NEW_ADDRESS
@@ -483,11 +517,15 @@ async def test_an_expired_token_does_not_promote(
 
     response = await app_client.post(CONFIRM, json={"token": token})
 
-    assert response.status_code == 204
+    assert response.status_code == 200
+    assert response.json() == {"status": "expired", "email": None}
     assert (await get_owner()).email is None
 
 
 async def test_a_token_works_only_once(requests_mock, app_client: AsyncClient):
+    """The first confirm clears the stored digest as part of spending it, so a
+    replay of the same link has nothing left to match — it reports UNKNOWN,
+    not EXPIRED, the same as a token that was never real in the first place."""
     await pair_new_terminal(app_client)
     await set_address(app_client)
     token = sent_token(requests_mock)
@@ -499,7 +537,8 @@ async def test_a_token_works_only_once(requests_mock, app_client: AsyncClient):
 
     response = await app_client.post(CONFIRM, json={"token": token})
 
-    assert response.status_code == 204
+    assert response.status_code == 200
+    assert response.json() == {"status": "unknown", "email": None}
     assert (await get_owner()).email == NEW_ADDRESS
 
 
@@ -527,13 +566,62 @@ async def test_a_flood_of_guesses_cannot_lock_the_owner_out(
     await set_address(app_client)
     token = sent_token(requests_mock)
     for _ in range(20):
-        assert (
-            await app_client.post(CONFIRM, json={"token": "guess"})
-        ).status_code == 204
+        guess_response = await app_client.post(CONFIRM, json={"token": "guess"})
+        assert guess_response.status_code == 200
+        assert guess_response.json()["status"] == "unknown"
     assert (await app_client.post(CONFIRM, json={"token": "guess"})).status_code == 429
 
-    assert (await app_client.post(CONFIRM, json={"token": token})).status_code == 204
+    confirm_response = await app_client.post(CONFIRM, json={"token": token})
+    assert confirm_response.status_code == 200
+    assert confirm_response.json()["status"] == "confirmed"
     assert (await get_owner()).email == NEW_ADDRESS
+
+
+async def test_replaying_an_expired_token_is_also_rate_limited(
+    requests_mock, app_client: AsyncClient
+):
+    """EXPIRED has no self-limiting property the way CONFIRMED does (claiming
+    clears the digest; an expired one just sits there, matchable forever) —
+    so it must share the miss limiter with UNKNOWN, not be exempt from it."""
+    await pair_new_terminal(app_client)
+    await set_address(app_client)
+    token = sent_token(requests_mock)
+    async with db_conn() as conn:
+        await db_users.update(
+            conn,
+            (await get_owner()).id,
+            {"email_token_expires": datetime.now(timezone.utc) - timedelta(minutes=1)},
+        )
+    for _ in range(20):
+        response = await app_client.post(CONFIRM, json={"token": token})
+        assert response.status_code == 200
+        assert response.json()["status"] == "expired"
+    assert (await app_client.post(CONFIRM, json={"token": token})).status_code == 429
+
+
+async def test_an_expired_token_is_told_apart_from_an_unknown_one(
+    requests_mock, app_client: AsyncClient
+):
+    """A token that once matched a digest and a string that never did must not
+    collapse onto the same status — that distinction, not the plain 200, is
+    the actual behavior this feature exists to add."""
+    await pair_new_terminal(app_client)
+    await set_address(app_client)
+    token = sent_token(requests_mock)
+    owner = await get_owner()
+    async with db_conn() as conn:
+        await db_users.update(
+            conn,
+            owner.id,
+            {"email_token_expires": datetime.now(timezone.utc) - timedelta(minutes=1)},
+        )
+
+    expired = await app_client.post(CONFIRM, json={"token": token})
+    unknown = await app_client.post(CONFIRM, json={"token": "never-issued"})
+
+    assert expired.json()["status"] == "expired"
+    assert unknown.json()["status"] == "unknown"
+    assert expired.json()["status"] != unknown.json()["status"]
 
 
 # --- resending and discarding ----------------------------------------------------
@@ -550,7 +638,8 @@ async def test_resending_replaces_the_token(requests_mock, app_client: AsyncClie
     second_token = sent_token(requests_mock)
     assert second_token != first_token
     r = await app_client.post(CONFIRM, json={"token": first_token})
-    assert r.status_code == 204
+    assert r.status_code == 200
+    assert r.json()["status"] == "unknown", "the replaced token's digest is gone, not just dead"
     assert (await get_owner()).email is None, "the replaced token still worked"
     await app_client.post(CONFIRM, json={"token": second_token})
     assert (await get_owner()).email == NEW_ADDRESS
