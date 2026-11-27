@@ -89,7 +89,7 @@ async def store_language(language: str | None):
 
 
 @pytest.fixture
-def owner_user_updates(mocker):
+def owner_user_updates(app_client, mocker):
     """The payloads of every owner_user_update broadcast, in order."""
     spy = mocker.spy(websocket.ws_worker, "broadcast_message")
 
@@ -1091,6 +1091,7 @@ async def test_the_push_carries_exactly_the_output_user_fields(app_client: Async
 
     signals.on_owner_user_changed.send(user)
 
+    assert websocket.ws_worker.outgoing_messages.qsize() == 1
     message = json.loads(
         websocket.ws_worker.outgoing_messages.get_nowait().model_dump_json()
     )

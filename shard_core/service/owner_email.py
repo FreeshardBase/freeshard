@@ -106,9 +106,9 @@ async def set_email(user: User, address: str) -> User:
             updated = await db_users.update(
                 conn, user.id, {"email": address, **_CLEARED_PENDING}
             )
+        signals.on_owner_user_changed.send(updated)
         await _mirror_to_controller(address)
         log.info(f"set the address of {updated} without verification")
-        signals.on_owner_user_changed.send(updated)
         return updated
 
     _require_send_budget()
@@ -204,9 +204,9 @@ async def clear_email(user: User) -> User:
         updated = await db_users.update(
             conn, user.id, {"email": None, **_CLEARED_PENDING}
         )
+    signals.on_owner_user_changed.send(updated)
     await _mirror_to_controller(None)
     log.info(f"cleared the address of {updated}")
-    signals.on_owner_user_changed.send(updated)
     return updated
 
 
