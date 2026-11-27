@@ -25,6 +25,7 @@ from shard_core.database import users as db_users
 from shard_core.database.connection import db_conn
 from shard_core.service import freeshard_controller
 from shard_core.settings import settings
+from shard_core.util import signals
 from shard_core.util.misc import SlidingWindow
 
 log = logging.getLogger(__name__)
@@ -101,6 +102,7 @@ async def set_email(user: User, address: str) -> User:
             )
         await _mirror_to_controller(address)
         log.info(f"set the address of {updated} without verification")
+        signals.on_owner_user_changed.send(updated)
         return updated
 
     _require_send_budget()
@@ -115,6 +117,7 @@ async def set_email(user: User, address: str) -> User:
                 "email_token_expires": datetime.now(timezone.utc) + TOKEN_LIFETIME,
             },
         )
+    signals.on_owner_user_changed.send(updated)
     await _deliver_verification(address, token, await _stored_language(user.id))
     return updated
 
@@ -147,7 +150,9 @@ async def resend_verification(user: User) -> None:
 
 async def discard_pending(user: User) -> User:
     async with db_conn() as conn:
-        return await db_users.update(conn, user.id, dict(_CLEARED_PENDING))
+        updated = await db_users.update(conn, user.id, dict(_CLEARED_PENDING))
+    signals.on_owner_user_changed.send(updated)
+    return updated
 
 
 async def clear_email(user: User) -> User:
@@ -181,6 +186,7 @@ async def clear_email(user: User) -> User:
         )
     await _mirror_to_controller(None)
     log.info(f"cleared the address of {updated}")
+    signals.on_owner_user_changed.send(updated)
     return updated
 
 
@@ -223,6 +229,7 @@ async def confirm_email(token: str) -> ConfirmResult:
         log.info(f"candidate of user {claimed.id} moved on before its link was opened")
         return ConfirmResult(status=TokenStatus.EXPIRED)
     log.info(f"confirmed the address of {updated}")
+    signals.on_owner_user_changed.send(updated)
 
     if await _mirror_to_controller(address):
         await _notify(
