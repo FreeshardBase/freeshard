@@ -90,7 +90,6 @@ async def store_language(language: str | None):
 
 @pytest.fixture
 def owner_user_updates(app_client, mocker):
-    """The payloads of every owner_user_update broadcast, in order."""
     spy = mocker.spy(websocket.ws_worker, "broadcast_message")
 
     def payloads() -> list[dict]:
@@ -861,9 +860,6 @@ async def test_without_verification_clearing_sends_no_notification(
 
 
 # --- the owner's language in courtesy notices -------------------------------------
-#
-# The relay sends subject and body verbatim, so unlike the verification mail
-# these are localized on the shard. Anything but a stored "de" gets English.
 
 
 @pytest.mark.parametrize("language", [None, "en", "fr"])
@@ -941,9 +937,8 @@ async def test_the_removal_notice_is_german_for_a_german_owner(
 
 # --- live updates over the websocket ---------------------------------------------
 #
-# Every change to email/pending_email is pushed to all connected terminals as
-# owner_user_update, carrying the same OutputUser shape GET /me returns, so a
-# client can treat a push and a fetch of the row interchangeably.
+# Clients use a push and a GET /me interchangeably, so the payload must equal
+# the fetched row.
 
 
 async def test_setting_an_address_pushes_the_new_row(
