@@ -901,6 +901,7 @@ async def test_the_change_notices_are_german_for_a_german_owner(
     assert confirmed["body"][0] == (
         "Diese Adresse ist jetzt die Kontaktadresse deines Shards."
     )
+    assert "Freeshard" not in json.dumps([changing, confirmed])
 
 
 @pytest.mark.parametrize("language", [None, "en", "fr"])
@@ -935,6 +936,7 @@ async def test_the_removal_notice_is_german_for_a_german_owner(
     assert removing["body"][0].startswith(
         "Die Kontaktadresse deines Shards wurde gerade entfernt."
     )
+    assert "Freeshard" not in json.dumps(removing)
 
 
 # --- live updates over the websocket ---------------------------------------------
@@ -1059,8 +1061,9 @@ async def test_clearing_an_already_empty_address_pushes_nothing(
     await app_client.delete(PENDING)
     before = len(owner_user_updates())
 
-    await app_client.patch(ME, json={"email": None})
+    response = await app_client.patch(ME, json={"email": None})
 
+    assert response.status_code == 200
     assert len(owner_user_updates()) == before
 
 
