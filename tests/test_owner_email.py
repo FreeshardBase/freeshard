@@ -76,6 +76,18 @@ def sent_token(requests_mock) -> str:
     return json.loads(calls[-1].request.body)["token"]
 
 
+def relayed(requests_mock) -> list[dict]:
+    return [json.loads(c.request.body) for c in calls_to(requests_mock, RELAY_PATH)]
+
+
+async def store_language(language: str | None):
+    if language is not None:
+        async with db_conn() as conn:
+            await db_preferences.put(
+                conn, (await get_owner()).id, {"language": language}
+            )
+
+
 @pytest.fixture
 def owner_user_updates(mocker):
     """The payloads of every owner_user_update broadcast, in order."""
@@ -409,7 +421,7 @@ async def test_a_first_confirmation_does_not_warn_about_a_change(
 
     assert len(calls_to(requests_mock, RELAY_PATH)) == 1
     body = json.loads(calls_to(requests_mock, RELAY_PATH)[0].request.body)
-    assert body["subject"] == "Your Freeshard contact address is confirmed"
+    assert body["subject"] == "Your Shard contact address is confirmed"
 
 
 async def test_confirming_survives_a_controller_that_cannot_send_mail(
@@ -846,6 +858,83 @@ async def test_without_verification_clearing_sends_no_notification(
     assert response.status_code == 200
     assert (await get_owner()).email is None
     assert calls_to(requests_mock, RELAY_PATH) == []
+
+
+# --- the owner's language in courtesy notices -------------------------------------
+#
+# The relay sends subject and body verbatim, so unlike the verification mail
+# these are localized on the shard. Anything but a stored "de" gets English.
+
+
+@pytest.mark.parametrize("language", [None, "en", "fr"])
+async def test_the_change_notices_default_to_english(
+    requests_mock, app_client: AsyncClient, language
+):
+    await pair_new_terminal(app_client)
+    await store_language(language)
+    await set_confirmed_email_directly("old@example.org")
+    await set_address(app_client)
+
+    await app_client.post(CONFIRM, json={"token": sent_token(requests_mock)})
+
+    changing, confirmed = relayed(requests_mock)
+    assert changing["subject"] == "The contact address for your Shard is changing"
+    assert NEW_ADDRESS in changing["body"][0]
+    assert confirmed["subject"] == "Your Shard contact address is confirmed"
+    assert "Freeshard" not in json.dumps([changing, confirmed])
+
+
+async def test_the_change_notices_are_german_for_a_german_owner(
+    requests_mock, app_client: AsyncClient
+):
+    await pair_new_terminal(app_client)
+    await store_language("de")
+    await set_confirmed_email_directly("old@example.org")
+    await set_address(app_client)
+
+    await app_client.post(CONFIRM, json={"token": sent_token(requests_mock)})
+
+    changing, confirmed = relayed(requests_mock)
+    assert changing["subject"] == "Die Kontaktadresse deines Shards ändert sich"
+    assert NEW_ADDRESS in changing["body"][0]
+    assert confirmed["subject"] == "Die Kontaktadresse deines Shards ist bestätigt"
+    assert confirmed["body"][0] == (
+        "Diese Adresse ist jetzt die Kontaktadresse deines Shards."
+    )
+
+
+@pytest.mark.parametrize("language", [None, "en", "fr"])
+async def test_the_removal_notice_defaults_to_english(
+    requests_mock, app_client: AsyncClient, language
+):
+    await pair_new_terminal(app_client)
+    await store_language(language)
+    await set_confirmed_email_directly("old@example.org")
+
+    await app_client.patch(ME, json={"email": None})
+
+    (removing,) = relayed(requests_mock)
+    assert removing["subject"] == (
+        "The contact address for your Shard is being removed"
+    )
+    assert "about your shard" in removing["body"][0]
+    assert "Freeshard" not in json.dumps(removing)
+
+
+async def test_the_removal_notice_is_german_for_a_german_owner(
+    requests_mock, app_client: AsyncClient
+):
+    await pair_new_terminal(app_client)
+    await store_language("de")
+    await set_confirmed_email_directly("old@example.org")
+
+    await app_client.patch(ME, json={"email": None})
+
+    (removing,) = relayed(requests_mock)
+    assert removing["subject"] == "Die Kontaktadresse deines Shards wird entfernt"
+    assert removing["body"][0].startswith(
+        "Die Kontaktadresse deines Shards wurde gerade entfernt."
+    )
 
 
 # --- live updates over the websocket ---------------------------------------------

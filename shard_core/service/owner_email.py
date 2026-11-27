@@ -18,6 +18,7 @@ import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from enum import Enum
+from typing import NamedTuple
 
 from shard_core.data_model.user import User
 from shard_core.database import preferences as db_preferences
@@ -81,6 +82,11 @@ class TokenStatus(str, Enum):
 class ConfirmResult:
     status: TokenStatus
     email: str | None = None
+
+
+class _Notice(NamedTuple):
+    subject: str
+    body: list[str]
 
 
 def hash_token(token: str) -> str:
@@ -172,13 +178,27 @@ async def clear_email(user: User) -> User:
 
     if settings().email.enabled:
         await _notify(
-            "The contact address for your Freeshard is being removed",
-            [
-                "The contact address for your Freeshard was just removed, so we can "
-                "no longer reach you about your shard — storage warnings, billing "
-                "notices and service messages included.",
-                "If this was not you, open your terminal and set an address again.",
-            ],
+            await _stored_language(user.id),
+            english=_Notice(
+                "The contact address for your Shard is being removed",
+                [
+                    "The contact address for your Shard was just removed, so we can "
+                    "no longer reach you about your shard — storage warnings, billing "
+                    "notices and service messages included.",
+                    "If this was not you, open your terminal and set an address again.",
+                ],
+            ),
+            german=_Notice(
+                "Die Kontaktadresse deines Shards wird entfernt",
+                [
+                    "Die Kontaktadresse deines Shards wurde gerade entfernt. Deshalb "
+                    "können wir dich nicht mehr erreichen, wenn es um deinen Shard "
+                    "geht, auch nicht für Speicherwarnungen, Hinweise zur Abrechnung "
+                    "oder Servicemitteilungen.",
+                    "Falls du das nicht warst, öffne deinen Shard und hinterlege "
+                    "wieder eine Adresse.",
+                ],
+            ),
         )
     async with db_conn() as conn:
         updated = await db_users.update(
@@ -213,14 +233,27 @@ async def confirm_email(token: str) -> ConfirmResult:
         return ConfirmResult(status=status)
 
     address = claimed.pending_email
+    language = await _stored_language(claimed.id)
     if claimed.email is not None:
         await _notify(
-            "The contact address for your Freeshard is changing",
-            [
-                f"The contact address for your Freeshard was just changed to "
-                f"{address}. This is the last message going to this address.",
-                "If this was not you, open your terminal and set the address back.",
-            ],
+            language,
+            english=_Notice(
+                "The contact address for your Shard is changing",
+                [
+                    f"The contact address for your Shard was just changed to "
+                    f"{address}. This is the last message going to this address.",
+                    "If this was not you, open your terminal and set the address back.",
+                ],
+            ),
+            german=_Notice(
+                "Die Kontaktadresse deines Shards ändert sich",
+                [
+                    f"Die Kontaktadresse deines Shards wurde gerade auf {address} "
+                    f"geändert. Das ist die letzte Nachricht an diese Adresse.",
+                    "Falls du das nicht warst, öffne deinen Shard und trage die "
+                    "alte Adresse wieder ein.",
+                ],
+            ),
         )
 
     async with db_conn() as conn:
@@ -233,11 +266,21 @@ async def confirm_email(token: str) -> ConfirmResult:
 
     if await _mirror_to_controller(address):
         await _notify(
-            "Your Freeshard contact address is confirmed",
-            [
-                "This address is now the contact address for your Freeshard.",
-                "Messages about your shard arrive here from now on.",
-            ],
+            language,
+            english=_Notice(
+                "Your Shard contact address is confirmed",
+                [
+                    "This address is now the contact address for your Shard.",
+                    "Messages about your shard arrive here from now on.",
+                ],
+            ),
+            german=_Notice(
+                "Die Kontaktadresse deines Shards ist bestätigt",
+                [
+                    "Diese Adresse ist jetzt die Kontaktadresse deines Shards.",
+                    "Nachrichten zu deinem Shard kommen ab jetzt hier an.",
+                ],
+            ),
         )
     return ConfirmResult(status=TokenStatus.CONFIRMED, email=address)
 
@@ -303,9 +346,13 @@ async def _mirror_to_controller(address: str | None) -> bool:
     return True
 
 
-async def _notify(subject: str, body: list[str]):
-    """Best effort: a failed courtesy message must not block the change."""
+async def _notify(language: str | None, english: _Notice, german: _Notice):
+    """Best effort: a failed courtesy message must not block the change.
+
+    The relay sends subject and body verbatim, so the shard picks the language.
+    """
+    notice = german if language == "de" else english
     try:
-        await freeshard_controller.relay_email_to_owner(subject, body)
+        await freeshard_controller.relay_email_to_owner(notice.subject, notice.body)
     except Exception as e:
         log.error(f"could not notify the owner about an address change: {e}")
