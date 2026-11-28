@@ -10,13 +10,17 @@ import json
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
+import pytest
 import responses
 from httpx import AsyncClient
 
+from shard_core.data_model.user import Role, User
 from shard_core.database import preferences as db_preferences
 from shard_core.database import users as db_users
 from shard_core.database.connection import db_conn
+from shard_core.service import websocket
 from shard_core.settings import settings
+from shard_core.util import signals
 from tests.conftest import settings_override
 from tests.util import pair_new_terminal
 
@@ -70,6 +74,30 @@ def sent_token(requests_mock) -> str:
     calls = calls_to(requests_mock, VERIFY_PATH)
     assert calls, "no verification email was requested"
     return json.loads(calls[-1].request.body)["token"]
+
+
+def relayed(requests_mock) -> list[dict]:
+    return [json.loads(c.request.body) for c in calls_to(requests_mock, RELAY_PATH)]
+
+
+async def store_language(language: str | None):
+    if language is not None:
+        async with db_conn() as conn:
+            await db_preferences.put(
+                conn, (await get_owner()).id, {"language": language}
+            )
+
+
+@pytest.fixture
+def owner_user_updates(app_client, mocker):
+    spy = mocker.spy(websocket.ws_worker, "broadcast_message")
+
+    def payloads() -> list[dict]:
+        return [
+            c.args[1] for c in spy.call_args_list if c.args[0] == "owner_user_update"
+        ]
+
+    return payloads
 
 
 # --- reading the user ------------------------------------------------------------
@@ -392,7 +420,7 @@ async def test_a_first_confirmation_does_not_warn_about_a_change(
 
     assert len(calls_to(requests_mock, RELAY_PATH)) == 1
     body = json.loads(calls_to(requests_mock, RELAY_PATH)[0].request.body)
-    assert body["subject"] == "Your Freeshard contact address is confirmed"
+    assert body["subject"] == "Your Shard contact address is confirmed"
 
 
 async def test_confirming_survives_a_controller_that_cannot_send_mail(
@@ -829,3 +857,251 @@ async def test_without_verification_clearing_sends_no_notification(
     assert response.status_code == 200
     assert (await get_owner()).email is None
     assert calls_to(requests_mock, RELAY_PATH) == []
+
+
+# --- the owner's language in courtesy notices -------------------------------------
+
+
+@pytest.mark.parametrize("language", [None, "en", "fr"])
+async def test_the_change_notices_default_to_english(
+    requests_mock, app_client: AsyncClient, language
+):
+    await pair_new_terminal(app_client)
+    await store_language(language)
+    await set_confirmed_email_directly("old@example.org")
+    await set_address(app_client)
+
+    await app_client.post(CONFIRM, json={"token": sent_token(requests_mock)})
+
+    changing, confirmed = relayed(requests_mock)
+    assert changing["subject"] == "The contact address for your Shard is changing"
+    assert NEW_ADDRESS in changing["body"][0]
+    assert confirmed["subject"] == "Your Shard contact address is confirmed"
+    assert "Freeshard" not in json.dumps([changing, confirmed])
+
+
+async def test_the_change_notices_are_german_for_a_german_owner(
+    requests_mock, app_client: AsyncClient
+):
+    await pair_new_terminal(app_client)
+    await store_language("de")
+    await set_confirmed_email_directly("old@example.org")
+    await set_address(app_client)
+
+    await app_client.post(CONFIRM, json={"token": sent_token(requests_mock)})
+
+    changing, confirmed = relayed(requests_mock)
+    assert changing["subject"] == "Die Kontaktadresse deines Shards ändert sich"
+    assert NEW_ADDRESS in changing["body"][0]
+    assert confirmed["subject"] == "Die Kontaktadresse deines Shards ist bestätigt"
+    assert confirmed["body"][0] == (
+        "Diese Adresse ist jetzt die Kontaktadresse deines Shards."
+    )
+    assert "Freeshard" not in json.dumps([changing, confirmed])
+
+
+@pytest.mark.parametrize("language", [None, "en", "fr"])
+async def test_the_removal_notice_defaults_to_english(
+    requests_mock, app_client: AsyncClient, language
+):
+    await pair_new_terminal(app_client)
+    await store_language(language)
+    await set_confirmed_email_directly("old@example.org")
+
+    await app_client.patch(ME, json={"email": None})
+
+    (removing,) = relayed(requests_mock)
+    assert removing["subject"] == (
+        "The contact address for your Shard is being removed"
+    )
+    assert "about your shard" in removing["body"][0]
+    assert "Freeshard" not in json.dumps(removing)
+
+
+async def test_the_removal_notice_is_german_for_a_german_owner(
+    requests_mock, app_client: AsyncClient
+):
+    await pair_new_terminal(app_client)
+    await store_language("de")
+    await set_confirmed_email_directly("old@example.org")
+
+    await app_client.patch(ME, json={"email": None})
+
+    (removing,) = relayed(requests_mock)
+    assert removing["subject"] == "Die Kontaktadresse deines Shards wird entfernt"
+    assert removing["body"][0].startswith(
+        "Die Kontaktadresse deines Shards wurde gerade entfernt."
+    )
+    assert "Freeshard" not in json.dumps(removing)
+
+
+# --- live updates over the websocket ---------------------------------------------
+#
+# Clients use a push and a GET /me interchangeably, so the payload must equal
+# the fetched row.
+
+
+async def test_setting_an_address_pushes_the_new_row(
+    requests_mock, app_client: AsyncClient, owner_user_updates
+):
+    await pair_new_terminal(app_client)
+    before = len(owner_user_updates())
+
+    await set_address(app_client)
+
+    assert len(owner_user_updates()) == before + 1
+    assert owner_user_updates()[-1] == (await app_client.get(ME)).json()
+    assert owner_user_updates()[-1]["pending_email"] == NEW_ADDRESS
+
+
+async def test_a_failed_delivery_still_pushes_the_kept_candidate(
+    requests_mock, app_client: AsyncClient, owner_user_updates
+):
+    """The candidate is written before delivery is attempted and survives its
+    failure, so the row other terminals show has changed either way."""
+    await pair_new_terminal(app_client)
+    requests_mock.replace(
+        responses.POST, controller_url(VERIFY_PATH), status=500, body="nope"
+    )
+    before = len(owner_user_updates())
+
+    response = await app_client.patch(ME, json={"email": NEW_ADDRESS})
+
+    assert response.status_code == 502
+    assert len(owner_user_updates()) == before + 1
+    assert owner_user_updates()[-1]["pending_email"] == NEW_ADDRESS
+
+
+async def test_setting_an_address_without_verification_pushes_the_new_row(
+    requests_mock, app_client: AsyncClient, owner_user_updates
+):
+    await pair_new_terminal(app_client)
+    before = len(owner_user_updates())
+
+    with settings_override({"email": {"enabled": False}}):
+        await set_address(app_client)
+
+    assert len(owner_user_updates()) == before + 1
+    assert owner_user_updates()[-1] == (await app_client.get(ME)).json()
+    assert owner_user_updates()[-1]["email"] == NEW_ADDRESS
+
+
+async def test_confirming_pushes_the_promoted_row(
+    requests_mock, app_client: AsyncClient, owner_user_updates
+):
+    await pair_new_terminal(app_client)
+    await set_address(app_client)
+    before = len(owner_user_updates())
+
+    await app_client.post(CONFIRM, json={"token": sent_token(requests_mock)})
+
+    assert len(owner_user_updates()) == before + 1
+    assert owner_user_updates()[-1] == (await app_client.get(ME)).json()
+    assert owner_user_updates()[-1]["email"] == NEW_ADDRESS
+    assert owner_user_updates()[-1]["pending_email"] is None
+
+
+async def test_a_candidate_that_moved_on_pushes_nothing(
+    requests_mock, app_client: AsyncClient, owner_user_updates, monkeypatch
+):
+    await pair_new_terminal(app_client)
+    await set_address(app_client)
+    token = sent_token(requests_mock)
+
+    async def moved_on(conn, id, address):
+        return None
+
+    monkeypatch.setattr(db_users, "promote_pending_email", moved_on)
+    before = len(owner_user_updates())
+
+    response = await app_client.post(CONFIRM, json={"token": token})
+
+    assert response.json()["status"] == "expired"
+    assert len(owner_user_updates()) == before
+
+
+async def test_discarding_the_candidate_pushes_the_new_row(
+    requests_mock, app_client: AsyncClient, owner_user_updates
+):
+    await pair_new_terminal(app_client)
+    await set_address(app_client)
+    before = len(owner_user_updates())
+
+    await app_client.delete(PENDING)
+
+    assert len(owner_user_updates()) == before + 1
+    assert owner_user_updates()[-1] == (await app_client.get(ME)).json()
+    assert owner_user_updates()[-1]["pending_email"] is None
+
+
+async def test_clearing_pushes_the_new_row(
+    requests_mock, app_client: AsyncClient, owner_user_updates
+):
+    await pair_new_terminal(app_client)
+    await set_confirmed_email_directly("old@example.org")
+    before = len(owner_user_updates())
+
+    await app_client.patch(ME, json={"email": None})
+
+    assert len(owner_user_updates()) == before + 1
+    assert owner_user_updates()[-1] == (await app_client.get(ME)).json()
+    assert owner_user_updates()[-1]["email"] is None
+    assert owner_user_updates()[-1]["pending_email"] is None
+
+
+async def test_clearing_an_already_empty_address_pushes_nothing(
+    requests_mock, app_client: AsyncClient, owner_user_updates
+):
+    await pair_new_terminal(app_client)
+    await app_client.delete(PENDING)
+    before = len(owner_user_updates())
+
+    response = await app_client.patch(ME, json={"email": None})
+
+    assert response.status_code == 200
+    assert len(owner_user_updates()) == before
+
+
+async def test_resending_pushes_nothing(
+    requests_mock, app_client: AsyncClient, owner_user_updates
+):
+    await pair_new_terminal(app_client)
+    await set_address(app_client)
+    before = len(owner_user_updates())
+
+    assert (await app_client.post(RESEND)).status_code == 204
+
+    assert len(owner_user_updates()) == before
+
+
+async def test_the_push_carries_exactly_the_output_user_fields(app_client: AsyncClient):
+    """The sundial client hard-codes this message type and shape."""
+    user = User(
+        id=7,
+        username="owner",
+        display_name="Owner",
+        email="old@example.org",
+        pending_email=NEW_ADDRESS,
+        email_token_hash="digest",
+        email_token_expires=datetime.now(timezone.utc),
+        role=Role.OWNER,
+    )
+
+    signals.on_owner_user_changed.send(user)
+
+    assert websocket.ws_worker.outgoing_messages.qsize() == 1
+    message = json.loads(
+        websocket.ws_worker.outgoing_messages.get_nowait().model_dump_json()
+    )
+    assert message == {
+        "message_type": "owner_user_update",
+        "message": {
+            "id": 7,
+            "username": "owner",
+            "display_name": "Owner",
+            "email": "old@example.org",
+            "pending_email": NEW_ADDRESS,
+            "pending_email_sent": True,
+            "role": "owner",
+        },
+    }

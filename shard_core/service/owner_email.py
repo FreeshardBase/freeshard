@@ -25,6 +25,7 @@ from shard_core.database import users as db_users
 from shard_core.database.connection import db_conn
 from shard_core.service import freeshard_controller
 from shard_core.settings import settings
+from shard_core.util import signals
 from shard_core.util.misc import SlidingWindow
 
 log = logging.getLogger(__name__)
@@ -82,6 +83,12 @@ class ConfirmResult:
     email: str | None = None
 
 
+@dataclass(frozen=True)
+class _Notice:
+    subject: str
+    body: list[str]
+
+
 def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
@@ -96,9 +103,8 @@ async def set_email(user: User, address: str) -> User:
     """
     if not settings().email.enabled:
         async with db_conn() as conn:
-            updated = await db_users.update(
-                conn, user.id, {"email": address, **_CLEARED_PENDING}
-            )
+            updated = await db_users.update(conn, user.id, {"email": address, **_CLEARED_PENDING})
+        signals.on_owner_user_changed.send(updated)
         await _mirror_to_controller(address)
         log.info(f"set the address of {updated} without verification")
         return updated
@@ -115,6 +121,7 @@ async def set_email(user: User, address: str) -> User:
                 "email_token_expires": datetime.now(timezone.utc) + TOKEN_LIFETIME,
             },
         )
+    signals.on_owner_user_changed.send(updated)
     await _deliver_verification(address, token, await _stored_language(user.id))
     return updated
 
@@ -140,14 +147,14 @@ async def resend_verification(user: User) -> None:
                 "email_token_expires": datetime.now(timezone.utc) + TOKEN_LIFETIME,
             },
         )
-    await _deliver_verification(
-        user.pending_email, token, await _stored_language(user.id)
-    )
+    await _deliver_verification(user.pending_email, token, await _stored_language(user.id))
 
 
 async def discard_pending(user: User) -> User:
     async with db_conn() as conn:
-        return await db_users.update(conn, user.id, dict(_CLEARED_PENDING))
+        updated = await db_users.update(conn, user.id, dict(_CLEARED_PENDING))
+    signals.on_owner_user_changed.send(updated)
+    return updated
 
 
 async def clear_email(user: User) -> User:
@@ -166,19 +173,10 @@ async def clear_email(user: User) -> User:
         return user
 
     if settings().email.enabled:
-        await _notify(
-            "The contact address for your Freeshard is being removed",
-            [
-                "The contact address for your Freeshard was just removed, so we can "
-                "no longer reach you about your shard — storage warnings, billing "
-                "notices and service messages included.",
-                "If this was not you, open your terminal and set an address again.",
-            ],
-        )
+        await _notify(_removal_notice(await _stored_language(user.id)))
     async with db_conn() as conn:
-        updated = await db_users.update(
-            conn, user.id, {"email": None, **_CLEARED_PENDING}
-        )
+        updated = await db_users.update(conn, user.id, {"email": None, **_CLEARED_PENDING})
+    signals.on_owner_user_changed.send(updated)
     await _mirror_to_controller(None)
     log.info(f"cleared the address of {updated}")
     return updated
@@ -207,31 +205,20 @@ async def confirm_email(token: str) -> ConfirmResult:
         return ConfirmResult(status=status)
 
     address = claimed.pending_email
+    language = await _stored_language(claimed.id)
     if claimed.email is not None:
-        await _notify(
-            "The contact address for your Freeshard is changing",
-            [
-                f"The contact address for your Freeshard was just changed to "
-                f"{address}. This is the last message going to this address.",
-                "If this was not you, open your terminal and set the address back.",
-            ],
-        )
+        await _notify(_change_notice(language, address))
 
     async with db_conn() as conn:
         updated = await db_users.promote_pending_email(conn, claimed.id, address)
     if updated is None:
         log.info(f"candidate of user {claimed.id} moved on before its link was opened")
         return ConfirmResult(status=TokenStatus.EXPIRED)
+    signals.on_owner_user_changed.send(updated)
     log.info(f"confirmed the address of {updated}")
 
     if await _mirror_to_controller(address):
-        await _notify(
-            "Your Freeshard contact address is confirmed",
-            [
-                "This address is now the contact address for your Freeshard.",
-                "Messages about your shard arrive here from now on.",
-            ],
-        )
+        await _notify(_confirmed_notice(language))
     return ConfirmResult(status=TokenStatus.CONFIRMED, email=address)
 
 
@@ -296,9 +283,81 @@ async def _mirror_to_controller(address: str | None) -> bool:
     return True
 
 
-async def _notify(subject: str, body: list[str]):
+async def _notify(notice: _Notice):
     """Best effort: a failed courtesy message must not block the change."""
     try:
-        await freeshard_controller.relay_email_to_owner(subject, body)
+        await freeshard_controller.relay_email_to_owner(notice.subject, notice.body)
     except Exception as e:
         log.error(f"could not notify the owner about an address change: {e}")
+
+
+# Each notice falls back to "en" for an unrecognised or missing language
+# (None included), matching the convention the controller already applies to
+# the verification mail's own `language` field.
+
+
+def _removal_notice(language: str | None) -> _Notice:
+    notices = {
+        "en": _Notice(
+            "The contact address for your Shard is being removed",
+            [
+                "The contact address for your Shard was just removed, so we can "
+                "no longer reach you about your shard — storage warnings, billing "
+                "notices and service messages included.",
+                "If this was not you, open your terminal and set an address again.",
+            ],
+        ),
+        "de": _Notice(
+            "Die Kontaktadresse deines Shards wird entfernt",
+            [
+                "Die Kontaktadresse deines Shards wurde gerade entfernt. Deshalb "
+                "können wir dich nicht mehr erreichen, wenn es um deinen Shard "
+                "geht, auch nicht für Speicherwarnungen, Hinweise zur Abrechnung "
+                "oder Servicemitteilungen.",
+                "Falls du das nicht warst, öffne deinen Shard und hinterlege wieder eine Adresse.",
+            ],
+        ),
+    }
+    return notices.get(language, notices["en"])
+
+
+def _change_notice(language: str | None, address: str) -> _Notice:
+    notices = {
+        "en": _Notice(
+            "The contact address for your Shard is changing",
+            [
+                f"The contact address for your Shard was just changed to "
+                f"{address}. This is the last message going to this address.",
+                "If this was not you, open your terminal and set the address back.",
+            ],
+        ),
+        "de": _Notice(
+            "Die Kontaktadresse deines Shards ändert sich",
+            [
+                f"Die Kontaktadresse deines Shards wurde gerade auf {address} "
+                f"geändert. Das ist die letzte Nachricht an diese Adresse.",
+                "Falls du das nicht warst, öffne deinen Shard und trage die alte Adresse wieder ein.",
+            ],
+        ),
+    }
+    return notices.get(language, notices["en"])
+
+
+def _confirmed_notice(language: str | None) -> _Notice:
+    notices = {
+        "en": _Notice(
+            "Your Shard contact address is confirmed",
+            [
+                "This address is now the contact address for your Shard.",
+                "Messages about your shard arrive here from now on.",
+            ],
+        ),
+        "de": _Notice(
+            "Die Kontaktadresse deines Shards ist bestätigt",
+            [
+                "Diese Adresse ist jetzt die Kontaktadresse deines Shards.",
+                "Nachrichten zu deinem Shard kommen ab jetzt hier an.",
+            ],
+        ),
+    }
+    return notices.get(language, notices["en"])

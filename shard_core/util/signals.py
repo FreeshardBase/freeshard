@@ -4,6 +4,7 @@ on_terminals_update = Signal()
 async_on_first_terminal_add = Signal()
 on_terminal_add = Signal()
 on_terminal_auth = Signal()
+on_owner_user_changed = Signal()
 
 on_apps_update = Signal()
 on_identity_update = Signal()

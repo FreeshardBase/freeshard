@@ -12,6 +12,7 @@ from shard_core.database import terminals as db_terminals
 from shard_core.database import installed_apps as db_installed_apps
 from shard_core.data_model.app_meta import InstalledApp
 from shard_core.data_model.terminal import Terminal
+from shard_core.data_model.user import OutputUser, User
 from shard_core.service import terminal_lockouts
 from shard_core.service.app_tools import enrich_installed_app_with_meta
 from shard_core.service.disk import DiskUsage
@@ -138,6 +139,13 @@ async def send_unpaired_terminals_update(_):
 @signals.on_terminal_add.connect
 def send_terminal_add(terminal: Terminal):
     ws_worker.broadcast_message("terminal_add", terminal.model_dump())
+
+
+@signals.on_owner_user_changed.connect
+def send_owner_user_update(user: User):
+    ws_worker.broadcast_message(
+        "owner_user_update", OutputUser.from_user(user).model_dump()
+    )
 
 
 @signals.on_apps_update.connect
