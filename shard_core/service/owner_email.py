@@ -284,22 +284,16 @@ async def _mirror_to_controller(address: str | None) -> bool:
 
 
 async def _notify(notice: _Notice):
-    """Best effort: a failed courtesy message must not block the change.
-
-    The caller has already picked the language — this only relays the result,
-    it does not choose between them.
-    """
+    """Best effort: a failed courtesy message must not block the change."""
     try:
         await freeshard_controller.relay_email_to_owner(notice.subject, notice.body)
     except Exception as e:
         log.error(f"could not notify the owner about an address change: {e}")
 
 
-# One dict per notice, keyed by language code, so a third language is a line
-# added to each dict rather than a new positional slot threaded through every
-# call site. An unrecognised or missing language (None included) falls back
-# to "en", the same convention the controller applies to the verification
-# mail's own `language` field.
+# Each notice falls back to "en" for an unrecognised or missing language
+# (None included), matching the convention the controller already applies to
+# the verification mail's own `language` field.
 
 
 def _removal_notice(language: str | None) -> _Notice:
